@@ -1,0 +1,4 @@
+*.psd
+
+msc/
+python/.idea/
