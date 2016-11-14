@@ -2,6 +2,9 @@ from __future__ import print_function
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import json
+import sys
+import sqlite3
 
 # https://github.com/opencv/opencv/issues/6055
 cv2.ocl.setUseOpenCL(False)
@@ -21,14 +24,106 @@ showTheStuff = 1
 
 font = cv2.FONT_HERSHEY_SIMPLEX
 
-# want to add coverted videos to the dictionary
-# want to have a option to add tacking vids, priority of ones that havent got it yet.
+# want to add converted videos to the dictionary
+# want to have a option to add tacking vids, priority of ones that haven't got it yet.
 
+# select competition
+#     choose to add meta data
+#         add skill level
+#         add trampoline top/crop region
+#         add routines
+#         track cog
+
+
+dictPath = 'C:/Users/psdco/Documents/Project Code/dictionary.json'
+dbPath = 'C:/Users/psdco/Documents/Project Code/videos.db'
+comps = [
+    'Trainings',
+    'Inhouse'
+]
+levels = [
+    'Novice',
+    'Intermediate',
+    'Intervanced',
+    'Advanced',
+    'Elite',
+    'idk',
+    "All"
+]
+
+def skillLevel():
+    dictionary = json.load(open(dictPath, 'r'))
+    for vid in dictionary:
+        if 'level' not in vid:
+            cap = cv2.VideoCapture("C:/Users/psdco/Videos/"+vid['video_name'])
+            ret, frame = cap.read()
+            cv2.imshow(vid['video_name'], frame)
+            cv2.waitKey(1)
+
+            print('\nChoose a level:')
+            for i, l in enumerate(levels):
+                print('%d) %s' % (i + 1, l))
+
+            levelChoice = readNum(len(levels)) - 1
+            vid['level'] = levels[levelChoice]
+
+            json.dump(dictionary, open(dictPath, 'w'))
+            cap.release()
+            cv2.destroyAllWindows()
+
+
+def readNum(limitMax, limitMin=0):
+    while (1):
+        print('> ', end="")
+        num = sys.stdin.readline()
+        try:
+            num = int(num)
+        except Exception:
+            print('Enter a number. \'%s\' is not an int' % (num[0:-1]))
+            continue
+
+        if (num < 0 or num > limitMax):
+            print('Enter a number between 1 and %s. \'%d\' is out of bounds' % (limitMax, num))
+        else:
+            break
+
+    return num
 
 
 def main():
-    trampolineTop = 320  # take2 720x480 = 310, day2take3 720x480 = 295, colm 350
-    vidPath = "C:/Users/psdco/Videos/Inhouse/480p/VID_20161106_112413_720x480.mp4"
+    db = sqlite3.connect(dbPath)
+    db.row_factory = sqlite3.Row
+
+    print('\nChoose a comp:')
+    for i, c in enumerate(comps):
+        print('%d) %s' % (i + 1, c))
+    compChoice = 0
+    compChoice = comps[compChoice] # comps[readNum(len(comps)) - 1]
+
+    print('\nChoose a level:')
+    for i, l in enumerate(levels):
+        print('%d) %s' % (i + 1, l))
+    levelChoice = 6 #readNum(len(levels)) - 1
+    levelChoice = levels[levelChoice]
+
+    selectedVids = None
+    if levelChoice == 'All':
+        selectedVids = db.execute('SELECT * FROM videos WHERE name LIKE ?', ('%'+compChoice+'%',))
+    else:
+        selectedVids = db.execute('SELECT * FROM videos WHERE name LIKE ? AND level=?', ('%'+compChoice+'%', levelChoice,))
+    selectedVids = selectedVids.fetchall()  # copy everything pointed to by the cursor into an object.
+
+    print('\nChoose a video:')
+    for i, v in enumerate(selectedVids):
+        str = "{} - {}".format(v['name'], v['level'])
+        print('%d) %s' % (i + 1, str))
+    vidChoice = 0  # readNum(len(selectedVids)) - 1
+    vidChoice = selectedVids[vidChoice]
+
+    #
+    # Open the video
+    vidPath = "C:/Users/psdco/Videos/{}".format(vidChoice['name'])
+
     cap = cv2.VideoCapture(vidPath)
     if not cap.isOpened():
         print("Unable to open video file: %s", vidPath)
@@ -38,12 +133,41 @@ def main():
     resizeWidth = int(capWidth * scalingFactor)
     resizeHeight = int(capHeight * scalingFactor)
 
+    #
+    # Do trampoline top stuff
+    trampoline = json.loads(vidChoice['trampoline'])
+
+    if True: # trampoline['top'] == -1:
+        print("Warning: Trampoline Top has not yet been set!")
+        cap = cv2.VideoCapture(vidPath)
+
+        trampoline['top'] = 305
+        while(1):
+            _ret, frame = cap.read()
+            maskAroundTrampoline = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
+            maskAroundTrampoline[0:trampoline['top'], int(capWidth * 0.3):int(capWidth * 0.7)] = 255  # [y1:y2, x1:x2]
+            frameCropped = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
+            cv2.line(frame, (0, trampoline['top']), (capWidth, trampoline['top']), (255, 0, 0), 1)
+            cv2.line(frame, (trampoline['center'], 0), (trampoline['center'], capHeight), (0, 255, 0), 1)
+            cv2.imshow(vidChoice['name'], frame)
+            cv2.imshow("frameCropped", frameCropped)
+
+            k = cv2.waitKey(100)
+            print(k)
+            if k == ord('u'):
+                trampoline['top'] += 1
+            elif k == ord('d'):
+                trampoline['top'] -= 1
+            elif k == ord('q') or k == 27: # ESC
+                break
+        print("Trampoline Top has been set to {}".format(trampoline['top']))
+
     # Create windows
     KNNImages = np.zeros(shape=(resizeHeight * 3, resizeWidth, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
 
     # Create mask around trampoline
     maskAroundTrampoline = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)  # cv2.CV_8U
-    maskAroundTrampoline[0:trampolineTop, int(capWidth * 0.3):int(capWidth * 0.7)] = 255  # [y1:y2, x1:x2]
+    maskAroundTrampoline[0:trampoline['top'], int(capWidth * 0.3):int(capWidth * 0.7)] = 255  # [y1:y2, x1:x2]
 
     pKNN = cv2.createBackgroundSubtractorKNN()
     pKNN.setShadowValue(0)
@@ -52,7 +176,7 @@ def main():
     centroids = []
     elipseoids = []
     # plt.ion()
-    # plt.axhline(y=capHeight-trampolineTop, xmin=0, xmax=1000, hold=None)
+    # plt.axhline(y=capHeight-trampoline['top'], xmin=0, xmax=1000, hold=None)
 
     # Average background
     print("Averaging background, please wait...")
@@ -113,7 +237,7 @@ def main():
                     cv2.ellipse(frame, ellipse, (0, 255, 0), 2)
                     # plt.scatter(cap.get(cv2.CAP_PROP_POS_FRAMES), cx)  # angle ellipse[2]
 
-                # plt.pause(0.005)
+                    # plt.pause(0.005)
 
         #
         # End hard stuff
@@ -152,6 +276,6 @@ def erodeDilate(input):
 
 if __name__ == '__main__':
     main()
-
+    # skillLevel()
 
 # Save a video http://docs.opencv.org/3.1.0/dd/d43/tutorial_py_video_display.html
