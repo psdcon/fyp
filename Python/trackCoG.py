@@ -154,7 +154,7 @@ def findBlue(img, mask):
         x1 = blueAreas[i][2]
         x2 = blueAreas[i][3]
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 1)
-    cv2.imshow("Best Guess", img)
+    cv2.imshow("Best Guess ", img)
 
     # Find the largest area and assume that is the trampoline
     biggestArea = 0
@@ -182,13 +182,13 @@ def main():
     print('\nChoose a comp:')
     for i, c in enumerate(comps):
         print('%d) %s' % (i + 1, c))
-    compChoice = 2  # readNum(len(comps))
+    compChoice = 1  # readNum(len(comps))
     compChoice = comps[compChoice - 1]
 
     print('\nChoose a level:')
     for i, l in enumerate(levels):
         print('%d) %s' % (i + 1, l))
-    levelChoice = 5 #readNum(len(levels))
+    levelChoice = 7 #readNum(len(levels))
     levelChoice = levels[levelChoice - 1]
 
     if levelChoice == 'All':
@@ -201,13 +201,12 @@ def main():
     for i, v in enumerate(selectedVids):
         str = "{} - {}".format(v['name'], v['level'])
         print('%d) %s' % (i + 1, str))
-    vidChoice = 4 # readNum(len(selectedVids))
+    vidChoice = 1# readNum(len(selectedVids))
     vidChoice = selectedVids[vidChoice-1]
 
     #
-    # Open the video
+    # Open the video file
     vidPath = "C:/Users/psdco/Videos/{}".format(vidChoice['name'])
-
     cap = cv2.VideoCapture(vidPath)
     if not cap.isOpened():
         print("Unable to open video file: %s", vidPath)
@@ -236,11 +235,11 @@ def main():
             maskAroundTrampoline[0:trampoline['top'], int(capWidth * 0.3):int(capWidth * 0.7)] = 255  # [y1:y2, x1:x2]
             frameCropped = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
 
-            cv2.line(frame, (0, trampoline['top']), (capWidth, trampoline['top']), (255, 0, 0), 1)
+            cv2.line(frame, (0, trampoline['top']), (capWidth, trampoline['top']), (0, 255, 0), 1)
             cv2.line(frame, (trampoline['center'], 0), (trampoline['center'], capHeight), (0, 255, 0), 1)
 
-            cv2.imshow(vidChoice['name'], frame)
-            cv2.imshow(vidChoice['name']+" frameCropped", frameCropped)
+            cv2.imshow(vidChoice['name']+' ', frame)
+            cv2.imshow(vidChoice['name']+" frameCropped ", frameCropped)
 
             k = cv2.waitKey(100)
             if k == 2490368:  # up
@@ -263,6 +262,10 @@ def main():
                 print("Exiting...")
                 exit()
 
+            # Loop until keypress
+            if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, startFrame)
+
         cv2.destroyAllWindows()
 
     #
@@ -272,8 +275,8 @@ def main():
     ellipses = []
     if vidChoice['center_points'] != "[]":
         print("Track points found, do you want to continue to track anyway? [y/n]")
-        track = "y" # raw_input('> ')  # in python 2, input = eval(raw_input)
-        track = track == 'y'
+        track = "n"  # raw_input('> ')  # in python 2, input = eval(raw_input)
+        track = (track == 'y')
         dontSavePoints = True
         if not track:
             centerPoints = json.loads(vidChoice['center_points'])
@@ -284,7 +287,7 @@ def main():
         track = True
 
     if track:
-        print("Press s to toggle visuals, 'c' to contiue without saving, and ESC/'q' to quit")
+        print("Press s to toggle visuals, 'c' to continue without saving, and ESC/'q' to quit")
 
         # Create windows
         KNNImages = np.zeros(shape=(resizeHeight, resizeWidth * 3, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
@@ -328,7 +331,7 @@ def main():
 
                 fgMaskKNNSmall = cv2.resize(fgMaskKNN, (resizeWidth, resizeHeight))
                 KNNImages[0:resizeHeight, resizeWidth:resizeWidth*2] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
-                cv2.putText(KNNImages, 'Subtracted', (10, 20 + resizeHeight), font, 0.4, (255, 255, 255))
+                cv2.putText(KNNImages, 'Subtracted', (10+resizeWidth, 20), font, 0.4, (255, 255, 255))
 
                 # this has moved down below
                 # KNNErodeDilatedSmall = cv2.resize(KNNErodeDilated, (resizeWidth, resizeHeight))
@@ -352,6 +355,7 @@ def main():
 
                 area = cv2.contourArea(contours[0])
                 # print(area)
+                # If contour is less than given area, replace it with previous contour
                 if area < 800 and lastContours is not None:
                     contours = lastContours
                 else:
@@ -360,14 +364,16 @@ def main():
                 if showTheStuff:
                     # KNNErodeDilated has all the contours of interest
                     biggestContour = cv2.cvtColor(KNNErodeDilated, cv2.COLOR_GRAY2RGB)
+                    personMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
+                    cv2.drawContours(personMask, contours, 0, 255, cv2.FILLED)
                     # Draw the biggest one in red
                     cv2.drawContours(biggestContour, contours, 0, (0, 0, 255), cv2.FILLED)
                     # Resize and show it
                     biggestContourSmaller = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
                     KNNImages[0:resizeHeight, resizeWidth*2:resizeWidth*3] = biggestContourSmaller
-                    cv2.putText(KNNImages, 'ErodeDilated', (10, 20 + resizeHeight * 2), font, 0.4, (255, 255, 255))
+                    cv2.putText(KNNImages, 'ErodeDilated', (10 + resizeWidth * 2, 20), font, 0.4, (255, 255, 255))
 
-                    cv2.imshow('frame masked', KNNImages)
+                    cv2.imshow('KNNImages', KNNImages)
 
 
                 M = cv2.moments(contours[0])
@@ -383,18 +389,37 @@ def main():
                     if len(contours[0]) > 5:
                         ellipse = cv2.fitEllipse(contours[0])
                         ellipses.append([int(cap.get(cv2.CAP_PROP_POS_FRAMES))] + list(ellipse))
+                        frameNoEllipse = deepcopy(frame)
                         cv2.ellipse(frame, ellipse, (0, 255, 0), 2)
                         # plt.scatter(cap.get(cv2.CAP_PROP_POS_FRAMES), cx)  # angle ellipse[2]
-
                         # plt.pause(0.005)
+
+                if showTheStuff:
+                    padding = 100
+                    y1 = cy - padding
+                    y2 = cy + padding
+                    x1 = cx - padding
+                    x2 = cx + padding
+                    if y2 > capHeight:
+                        y2 = capHeight
+                    if y1 < 0:
+                        y1 = 0
+                    if x2 > capWidth:
+                        x2 = capWidth
+                    if x1 < 0:
+                        x1 = 0
+                    finerPersonMask = cv2.bitwise_and(fgMaskKNN, fgMaskKNN, mask=personMask)
+                    personMasked = cv2.bitwise_and(frameNoEllipse, frameNoEllipse, mask=finerPersonMask)
+                    trackPerson = personMasked[y1:y2, x1:x2]
+                    cv2.imshow('track', trackPerson)
 
             #
             # End stuff
             #
             if showTheStuff:
-                cv2.imshow('frame', frame)
-                frameCropped = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
-                cv2.imshow('frameCropped', frameCropped)
+                cv2.imshow('frame ', frame)
+                # frameCropped = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
+                # cv2.imshow('frameCropped ', frameCropped)
 
             k = cv2.waitKey(waitTime) & 0xff
             if k == ord('s'):
@@ -462,17 +487,18 @@ def main():
     peaksy = [pt['y'] for pt in peaks]
 
     # Two subplots, the axes array is 1-d
-    axarr[0].set_title("<0 in bounces,  0 tap,  >0 skills,  >10 out bounce.  red = body landing")
+    # axarr[0].set_title("<0 in bounces,  0 tap,  >0 skills,  >10 out bounce.  red = body landing")
+    axarr[0].set_title("Height")
     axarr[0].plot(x, y, color="g")
     axarr[0].plot(peaksx, peaksy, 'r+')
     axarr[0].set_ylabel('Height (Pixels)')
     axarr[0].axhline(y=trampoline['top'], xmin=0, xmax=1000, c="blue")
-    for bounce in bounces:
-        c = "r" if bounce['isBodyLanding'] else "black"
-        c = c if (bounce['index'] >= 1 and bounce['index'] <= 10) else "grey"
-        axarr[0].annotate(bounce['index'],
-                          xy=(bounce['maxHeight'][0], bounce['maxHeight'][1]),
-                          xytext=(bounce['maxHeight'][0], bounce['maxHeight'][1] + 10), color=c)
+    # for bounce in bounces:
+    #     c = "r" if bounce['isBodyLanding'] else "black"
+    #     c = c if (bounce['index'] >= 1 and bounce['index'] <= 10) else "grey"
+    #     axarr[0].annotate(bounce['index'],
+    #                       xy=(bounce['maxHeight'][0], bounce['maxHeight'][1]),
+    #                       xytext=(bounce['maxHeight'][0], bounce['maxHeight'][1] + 10), color=c)
 
     #
     # Plot bounce travel
@@ -480,7 +506,7 @@ def main():
     x = npCenterPoints[:, 0]
     y = npCenterPoints[:, 1]
 
-    axarr[1].set_title("Travel in x direction")
+    axarr[1].set_title("Travel")
     axarr[1].set_ylabel('Rightwardness (Pixels)')
     axarr[1].scatter(x, y, color="g")
     axarr[1].axhline(y=trampoline['center'], xmin=0, xmax=1000, c="blue")
@@ -488,21 +514,40 @@ def main():
     axarr[1].axhline(y=trampoline['center'] - 80, xmin=0, xmax=1000, c="red")
 
     #
-    # Plot ellipsoids
+    # Plot ellipsoid's angles
     #
     x = np.array([pt[0] for pt in ellipses])
     y = np.array([pt[3] for pt in ellipses])
+    # Changes angles
     y += 90
     y %= 180
+    y = np.unwrap(y, discont=90, axis=0)
 
     axarr[2].scatter(x, y)
-    axarr[2].set_title("0deg Ground plane. 90deg is standing up.")
+    # axarr[2].set_title("0deg Ground plane. 90deg is standing up.")
+    axarr[2].set_title("Angle")
     axarr[2].set_ylabel('Angle (deg)')
 
-    axarr[2].set_xlabel('Frame Number')
+    axarr[2].set_xlabel('Time (s)')
+
+    axarr[0].set_xlim(xmin=-10)
+    axarr[1].set_xlim(xmin=-10)
+    axarr[2].set_xlim(xmin=-10)
+
+    f.canvas.draw()
+
+    labels = [num(item.get_text()) for item in axarr[2].get_xticklabels()]
+    labels = np.array(labels)/ 25
+    axarr[2].set_xticklabels(labels)
+
+
     plt.show()
 
-
+def num(s):
+    try:
+        return int(s)
+    except ValueError:
+        return 0
 
 def erodeDilate(input):
     kernel = np.ones((2, 2), np.uint8)
