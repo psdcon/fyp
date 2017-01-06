@@ -1,9 +1,5 @@
-<?php
-require_once ('includes/db.php');
-?>
-
 <!DOCTYPE html>
-<html lang="en" ng-app="skillselect">
+<html lang="en" ng-app="fyp">
 
 <head>
   <meta charset="utf-8">
@@ -14,7 +10,7 @@ require_once ('includes/db.php');
   <meta name="author" content="">
   <!-- <link rel="shortcut icon" href="images/main_icon.jpg"> -->
 
-  <title>Skill Select</title>
+  <title>FYP</title>
 
   <!-- Bootstrap core CSS -->
   <link href="node_modules/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -28,26 +24,24 @@ require_once ('includes/db.php');
 </head>
 
 <body>
-  <nav class="navbar navbar-full navbar-dark bg-inverse">
-    <div class="container">
-      <a class="navbar-brand" href="#/">
-        Skill Select
-      </a>
-      <button class="navbar-toggler hidden-sm-up pull-right" type="button" data-toggle="collapse" data-target="#collapsingNavbar" aria-controls="exCollapsingNavbar2" aria-expanded="false" aria-label="Toggle navigation">
-        <!-- Hamburger icon -->
-        &#9776;
-      </button>
 
-      <div class="collapse navbar-toggleable-xs" id="collapsingNavbar">
-        <ul class="nav navbar-nav">
-          <li class="nav-item">
-            <a class="nav-link" href="#/">Home</a>
+  <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse">
+    <div class="container">
+      <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#collapsingNavbar" aria-controls="collapsingNavbar" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <a class="navbar-brand" href="#!/" style="Final Year Project">FYP</a>
+
+      <div class="collapse navbar-collapse" id="collapsingNavbar">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#!/">Home <span class="sr-only">(current)</span></a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#videos">Videos</a>
+            <a class="nav-link" href="#!/videos">Videos</a>
           </li>
         </ul>
-      </div><!-- /.collapse -->
+      </div>
     </div>
   </nav>
 
@@ -67,7 +61,7 @@ require_once ('includes/db.php');
   ================================================== -->
   <!-- Placed at the end of the document so the pages load faster -->
   <script src="node_modules/jquery/dist/jquery.js"></script>
-  <script src="node_modules/bootstrap/node_modules/tether/dist/js/tether.min.js"></script>
+  <script src="node_modules/tether/dist/js/tether.min.js"></script>
   <script src="node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
 
   <!-- Angular
@@ -78,8 +72,7 @@ require_once ('includes/db.php');
 
   <!-- Mine & MSC
   ======================================================= -->
-  <script src="js/skillselect.js"></script>
-
+  <script src="js/main.js"></script>
   <script src="node_modules/select2/dist/js/select2.min.js"></script>
 
   <script>

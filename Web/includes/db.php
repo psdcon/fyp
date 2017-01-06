@@ -1,5 +1,6 @@
 <?php
-$db = new mysqli("localhost", "root", "", "skillselect");
+$dbPath = dirname(__FILE__).'\videos.sqlite3'; // No matter where script is included from
+$db = new SQLite3($dbPath) or die('Unable to open database: '.$db->lastErrorMsg());
 
 
 // Sets the title on page load
@@ -34,8 +35,8 @@ function getAllSkillNamesJSON(){
 
   // Get the sql data into an assoc array grouped by level
   $groupedSkills = array();
-  $skills = mysqli_query($db, "SELECT name,level FROM skills ORDER BY id ASC");
-  while($selectSkill = mysqli_fetch_assoc($skills)){
+  $skills = $db->query("SELECT name,level FROM skills ORDER BY id ASC");
+  while($selectSkill = $skills->fetchArray(SQLITE3_ASSOC)){
     // Group by making assoc arrays with level as the key
     $groupedSkills[$selectSkill['level']][] = $selectSkill;
   }

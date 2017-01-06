@@ -3,11 +3,20 @@
 */
 body {
   /* Nice UX */
-  padding-bottom: 3rem;
+  padding-bottom: 5rem;
 }
 .main {
   /* Padding from the nvabar */
   margin-top: 1rem;
+}
+/* Hotfix for bootstrap alpha-6 issue */
+@media (max-width: 991px) {
+  .navbar-toggleable-md>.container {
+    margin: 0;
+  }
+}
+.navbar-toggler-right {
+    right: 0;
 }
 
 /* Animations for when changing page */
@@ -83,20 +92,17 @@ body {
 /*
   Videos list
 */
-.vids{
-  margin-bottom: 1rem;
-}
 .vid-row{
   padding: .75rem;
   vertical-align: top;
   border-top: 1px solid #eceeef;
 }
 .vid-row-hover:hover {
-  cursor: pointer;
+  /* cursor: pointer; */
   background-color: rgba(0,0,0,.075);
 }
-/* For edit link with pencil icon */
-a .fa {
+a .fa, .btn-link .fa {
+  /* Underline icon if child of link */
   text-decoration: inherit;
 }
 
@@ -106,4 +112,7 @@ a .fa {
   display: inline-block;
   min-width: 1.4rem;
   text-align: right;
+}
+.select2-container--default .select2-results>.select2-results__options {
+  min-height: 400px;
 }

@@ -1,24 +1,34 @@
 <?php
 require_once('../includes/db.php');
 
-$videoQuery = mysqli_query($db, "SELECT * FROM videos WHERE id=".$_GET['video_id']." LIMIT 1");
-$video = mysqli_fetch_assoc($videoQuery);
-
+$videoQuery = $db->query("SELECT * FROM videos WHERE id=".$_GET['video_id']." LIMIT 1");
+$video = $videoQuery->fetchArray(SQLITE3_ASSOC);
 $bounceJSON = json_decode($video['bounces'], true);
 
-setTitle('Video Select Skills');
+setTitle('Label Video');
 ?>
 
-<h4><?=$video['name']?></h4>
+<h4>
+  <?=$video['name']?>
+  <small><?=$video['level']?></small>
+</h4>
+
 <div class="row">
   <div class="col-md-6">
     <video src="videos/<?=$video['name']?>" controls style="max-width:100%"></video>
-    <div class="js-current-loop-index">No bounce looping</div>
+    <div class="js-current-loop-index" style="text-align:right">No bounce looping</div>
 
-    <button class="btn btn-primary js-save">Save</button>
-    <div class="pull-right">
-      <button class="btn btn-secondary js-stop-loop">Stop Looping</button>
-      <button class="btn btn-secondary js-loop-next">Loop Next</button>
+    <p class="clearfix">
+      <button class="btn btn-primary js-save">Save</button>
+        <button class="float-right btn btn-secondary js-loop-next">Loop Next</button>
+        <button class="float-right btn btn-secondary js-stop-loop" style="margin-right: 0.3rem;">No Loop</button>
+    </p>
+
+    <div class="alert alert-success alert-dismissible" style="display:none" role="alert">
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+      <strong>Saved!</strong> Thank you mucho.
     </div>
   </div>
   <div class="col-md-6">
@@ -31,8 +41,8 @@ setTitle('Video Select Skills');
           <!-- Index -->
           <span class="index"><?=($i+1)?>.</span>
           <!-- Loop button -->
-          <button class="btn-link js-loop-btn" data-index="<?=$i?>" data-start="<?=$bounce['end'][0]?>" data-end="<?=$bounce['start'][0]?>">
-            <i class="fa fa-repeat" aria-hidden="true"></i> Loop
+          <button class="btn-link btn-sm js-loop-btn" data-index="<?=$i?>" data-start="<?=$bounce['end'][0]?>" data-end="<?=$bounce['start'][0]?>">
+            <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
           </button>
           <!-- Select skill -->
           <select class="js-select2" style="width:80%"></select>
@@ -53,7 +63,7 @@ setTitle('Video Select Skills');
     vid: null,
     loopStartTime: 0,
     loopEndTime: 0,
-    refreshRate: 25,
+    intervalRate: 28,
     lastBtnClicked: 0,
     bounces: <?=$video['bounces']?>,
     skillNames: <?=getAllSkillNamesJSON()?>,
@@ -62,9 +72,33 @@ setTitle('Video Select Skills');
     loopingFalse: "No bounce looping",
 
     go: function() {
+      this.vid = $('video')[0];
       this.select2Setup();
       this.bindUIActions();
-      this.vid = $('video')[0];
+
+      $(".alert").alert()
+
+      // Preload selects with the names for each skill
+      for (var i = 0; i < $(".js-select2").length; i++) {
+        $(".js-select2")[i].value = Engine.bounces[i].title;
+      }
+      $(".js-select2").trigger('change');
+
+    },
+    select2Setup: function(){
+      // Set up select2 inputs
+      $(".js-select2")
+        .select2({
+          data: Engine.skillNames,
+          placeholder: "Select a skill"
+        })
+        // Any time the select2 dropdown is closed, give it focus. otherwise focus disappears, which sucks
+        .on("select2:close", function (e) {
+          $(this).focus();
+        });
+    },
+    bindUIActions: function(){
+      // Push.pushButton.addEventListener('change', function () {});
 
       setInterval(function(){
         // Do looping if skill set to loop
@@ -73,24 +107,8 @@ setTitle('Video Select Skills');
         }
 
         // Highlight background
-        $('.js-bounce');
-      }, this.refreshRate);
-
-      // Get the names for each skill
-      for (var i = 0; i < $(".js-select2").length; i++) {
-        $(".js-select2")[i].value = Engine.bounces[i].title;
-        $(".js-select2").eq(i).trigger('change');
-      }
-
-    },
-    select2Setup: function(){
-      // Set up select2 inputs
-      $(".js-select2").select2({
-        data: Engine.skillNames
-      });
-    },
-    bindUIActions: function(){
-      // Push.pushButton.addEventListener('change', function () {});
+        // $('.js-bounce');
+      }, Engine.intervalRate);
 
       $('.js-loop-btn').click(function () {
         var start = $(this).data('start');
@@ -115,7 +133,6 @@ setTitle('Video Select Skills');
       });
 
       $('.js-save').click(function(){
-        console.log("Saving")
         $('.js-save').text('Saving...');
 
         // Get the names for each skill
@@ -131,8 +148,11 @@ setTitle('Video Select Skills');
             "&bounces=" + JSON.stringify(Engine.bounces),
           dataType: "text",
           success: function (data) {
-            console.log(data)
             $('.js-save').text('Save');
+            $('.alert').show();
+            if (data !== "") {
+              $('.alert').html("<strong>Something went wrong:</strong> "+data)
+            }
           }
         });
       });
