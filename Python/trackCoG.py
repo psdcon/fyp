@@ -28,7 +28,7 @@ waitTime = 20
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 # want to add converted videos to the dictionary
-# want to have a option to add tacking vids, priority of ones that haven't got it yet.
+# want to have a option to add tacking vids, priority to vids not yet tracked
 
 # select competition
 #     choose to add meta data
@@ -38,8 +38,8 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 #         track cog
 
 
-dictPath = 'C:/Users/psdco/Documents/Project Code/dictionary.json'
-dbPath = 'C:/Users/psdco/Documents/Project Code/videos.db'
+dictPath = 'C:/Users/psdco/Documents/ProjectCode/dictionary.json'
+dbPath = 'C:/Users/psdco/Documents/ProjectCode/videos.db'
 comps = [
     'Trainings',
     'Inhouse'
@@ -269,15 +269,14 @@ def main():
         cv2.destroyAllWindows()
 
     #
-    # Do background detection
+    # Do background subtraction
     #
     centerPoints = []
     ellipses = []
     if vidChoice['center_points'] != "[]":
-        print("Track points found, do you want to continue to track anyway? [y/n]")
-        track = "n"  # raw_input('> ')  # in python 2, input = eval(raw_input)
+        print("Track points found, do you want to track anyway? [y/n]")
+        track = 'y' # raw_input('> ')  # in python 2, input = eval(raw_input("> "))
         track = (track == 'y')
-        dontSavePoints = True
         if not track:
             centerPoints = json.loads(vidChoice['center_points'])
             ellipses = json.loads(vidChoice['ellipses'])
@@ -287,7 +286,7 @@ def main():
         track = True
 
     if track:
-        print("Press s to toggle visuals, 'c' to continue without saving, and ESC/'q' to quit")
+        print("Press s to toggle visuals, and ESC/'q' to quit")
 
         # Create windows
         KNNImages = np.zeros(shape=(resizeHeight, resizeWidth * 3, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
@@ -304,11 +303,10 @@ def main():
         # plt.ion()
         # plt.axhline(y=capHeight-trampoline['top'], xmin=0, xmax=1000, hold=None)
 
-        dontSavePoints = False
         showTheStuff = True
 
         # Average background
-        print("Averaging background, please wait...")
+        print("Averaging frames {:.0f} - {:.0f}, please wait...".format(cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5, cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5 + framesToAverage))
         cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5)
         for i in range(framesToAverage):
             ret, frame = cap.read()
@@ -317,6 +315,7 @@ def main():
         cap.set(cv2.CAP_PROP_POS_FRAMES, startFrame)
         print("Starting video at frame {}".format(startFrame))
         print("Press s to toggle showing stuff")
+        print("Press c to continue tracking without saving")
         lastContours = None
         while 1:
             ret, frame = cap.read()
@@ -408,10 +407,37 @@ def main():
                         x2 = capWidth
                     if x1 < 0:
                         x1 = 0
-                    finerPersonMask = cv2.bitwise_and(fgMaskKNN, fgMaskKNN, mask=personMask)
-                    personMasked = cv2.bitwise_and(frameNoEllipse, frameNoEllipse, mask=finerPersonMask)
-                    trackPerson = personMasked[y1:y2, x1:x2]
+                    # finerPersonMask = cv2.bitwise_and(fgMaskKNN, fgMaskKNN, mask=personMask)
+                    # personMasked = cv2.bitwise_and(frameNoEllipse, frameNoEllipse, mask=finerPersonMask)
+
+                    trackPerson = frameNoEllipse[y1:y2, x1:x2] # was personMasked. now it's not
+                    posePath = "C:/Users/psdco/Videos/{}/frame {:.0f}_pose.npz".format(vidChoice['name'][:-4], cap.get(cv2.CAP_PROP_POS_FRAMES))
+                    thisFramePose = np.load(posePath)['pose']
+                    # thisFramePose = thisFramePose
+                    # colours = [red, green, blue, yellow, purple, cyan,  red, green, blue, cyan, purple, yellow, red, green] bgr
+                    # [rfoot, rknee, rhip, lfoot, lknee, lhip, rhand, rerbow, rshoulder, lshoulder, lelbow, lhand, neck, head top]
+                    colours = [(0, 0, 255), (0, 255, 0), (255, 0, 0), (0, 255, 255), (255, 0, 255), (255, 255, 0), (0, 0, 255),
+                               (0, 255, 0), (255, 0, 0), (255, 255, 0), (255, 0, 255), (0, 255, 255), (0, 0, 255), (0, 255, 0)]
+                    for p_idx in range(14):
+                        cv2.circle(trackPerson, (int(thisFramePose[0, p_idx]), int(thisFramePose[1, p_idx])), 5, colours[p_idx], thickness=-1)
+                    # Lines between points
+
+                    #  Could loop in pairs and link skipping ones that shouldnt be linked.
+                    # cv2.line(trackPerson,
+                    #          (int(thisFramePose[0, 0]), int(thisFramePose[1, 0])),
+                    #          (int(thisFramePose[0, 1]), int(thisFramePose[1, 1])),
+                    #          colours[0], 4)
+
                     cv2.imshow('track', trackPerson)
+
+                    # Save every 5th frame
+                    # if cap.get(cv2.CAP_PROP_POS_FRAMES) % 5 == 0:
+                    # imgName = "C:/Users/psdco/Videos/{}/frame {:.0f}.png".format(vidChoice['name'][:-4], cap.get(cv2.CAP_PROP_POS_FRAMES))
+                    # print("Writing frame to {}".format(imgName))
+                    # ret = cv2.imwrite(imgName, trackPerson)
+                    # if not ret:
+                    #     print("Couldn't write image {}\nAbort!".format(imgName))
+                    #     exit()
 
             #
             # End stuff
@@ -426,21 +452,23 @@ def main():
                 showTheStuff = not showTheStuff
                 if not showTheStuff:  # destroy any open windows
                     cv2.destroyAllWindows()
-            elif k == ord('c'):  # ESC
-                print("Trampoline data not updated, continuing to graphing")
-                dontSavePoints = True
-                break
             elif k == ord('q') or k == 27:  # ESC
                 print("Exiting...")
                 exit()
 
+            # Finish playing the video when we get to the end.
             if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
                 # cap.set(cv2.CAP_PROP_POS_FRAMES, startFrame)
                 break
         cap.release()
         cv2.destroyAllWindows()
 
-        if not dontSavePoints:
+        savePoints = True
+        if vidChoice['center_points'] != "[]":
+            print("Track points found, do you want to overwrite? [y/n]")
+            savePoints = raw_input('> ')  # in python 2, input = eval(raw_input("> "))
+            savePoints = (savePoints == 'y')
+        if savePoints:
             print("Saving points...")
             db.execute("UPDATE `videos` SET `center_points`=?, `ellipses`=? WHERE id=?", (json.dumps(centerPoints), json.dumps(ellipses), vidChoice['id'],))
             db.commit()
@@ -558,7 +586,16 @@ def erodeDilate(input):
     # opening = cv2.dilate(opening, np.ones((3, 3), np.uint8), iterations=10)
     return opening
 
-# def drawBoundingBox():
+def _npcircle(image, cx, cy, radius, color):
+    """Draw a circle on an image using only numpy methods."""
+    radius = int(radius)
+    cx = int(cx)
+    cy = int(cy)
+    y, x = np.ogrid[-radius: radius, -radius: radius]
+    index = x**2 + y**2 <= radius**2
+    image[cy-radius:cy+radius, cx-radius:cx+radius][index] = (
+        image[cy-radius:cy+radius, cx-radius:cx+radius][index].astype('float32') * 0.4 +
+        np.array(color).astype('float32') * 0.6).astype('uint8')
 
 if __name__ == '__main__':
     main()
