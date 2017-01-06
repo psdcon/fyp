@@ -1,5 +1,5 @@
 <?php
-$dbPath = dirname(__FILE__).'\videos.sqlite3'; // No matter where script is included from
+$dbPath = dirname(__FILE__).DIRECTORY_SEPARATOR.'videos.sqlite3'; // No matter where script is included from
 $db = new SQLite3($dbPath) or die('Unable to open database: '.$db->lastErrorMsg());
 
 
