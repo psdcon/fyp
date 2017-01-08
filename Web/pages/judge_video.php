@@ -46,14 +46,14 @@ setTitle('Judge Routines');
     <?php
       $count = 1;
       foreach ($bounceJSON as $bounce) {
-        if ($bounce['title'] == 'In/Out Bounce')
+        if ($bounce['name'] == 'In/Out Bounce')
           continue;
         ?>
 
         <div class="row js-bounce">
           <div class="col-8">
             <span class="index"><?=$count?>.</span>
-            <?=$bounce['title']?></div>
+            <?=$bounce['name']?></div>
           <div class="col-4" style="text-align:center">
             <label for="number-input-<?=$count?>">0.</label>
             <input id="number-input-<?=$count?>" class="js-deduction" type="number" min="0" max="5" step="1" value="3" maxlength="1" size="1" style="max-width:2rem; border: 1px solid rgba(0,0,0,.15); border-radius: .25rem;">
@@ -73,24 +73,22 @@ setTitle('Judge Routines');
   var Engine = {
     // Static vars
     vid: null,
-    bounces: <?=$video['bounces']?>,
-
     start: function() {
       this.vid = $('video')[0];
       this.bindUIActions();
 
-      $('.js-deduction')[0].focus()
+      $('.js-deduction')[0].focus();
 
-      $(".alert").alert()
+      $(".alert").alert();
     },
     calculateScore: function(){
-      numBounces = $('.js-deduction').length
+      numBounces = $('.js-deduction').length;
       if (numBounces > 10) numBounces = 10;
       totalDeductions = 0;
       for (var i = 0; i < numBounces; i++) {
-        totalDeductions += parseInt($('.js-deduction')[i].value)/10
+        totalDeductions += parseInt($('.js-deduction')[i].value)/10;
       }
-      score = 10 - totalDeductions
+      score = 10 - totalDeductions;
       $('.js-score').text(score.toFixed(1));
     },
     bindUIActions: function(){
@@ -98,20 +96,20 @@ setTitle('Judge Routines');
       $('.js-deduction').on('input', function(){
         // leave empty if nan
         if (isNaN($(this).val())){
-          $(this).val("0")
+          $(this).val("0");
         }
         else if ($(this).val() < 0){
-          $(this).val("0")
+          $(this).val("0");
         }
         else if ($(this).val() > 5){
-          $(this).val("5")
+          $(this).val("5");
         }
 
-        Engine.calculateScore()
-      })
+        Engine.calculateScore();
+      });
 
       $('.js-deduction').on('focus', function(){
-        this.select()
+        this.select();
       });
 
 
@@ -136,7 +134,7 @@ setTitle('Judge Routines');
             $('.js-save').text('Save');
             $('.alert').show();
             if (data !== "") {
-              $('.alert').html("<strong>Something went wrong:</strong> "+data)
+              $('.alert').html("<strong>Something went wrong:</strong> "+data);
             }
           }
         });

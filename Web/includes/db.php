@@ -46,6 +46,9 @@ function getAllSkillNamesJSON(){
     {
       "id": "In/Out Bounce",
       "text": "In/Out Bounce"
+    },{
+      "id": "Broken",
+      "text": "Broken"
     },';
   foreach ($groupedSkills as $level => $skills) {
     $spitOutJSONSkills .= '{

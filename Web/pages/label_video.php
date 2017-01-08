@@ -41,7 +41,7 @@ setTitle('Label Video');
           <!-- Index -->
           <span class="index"><?=($i+1)?>.</span>
           <!-- Loop button -->
-          <button class="btn-link btn-sm js-loop-btn" data-index="<?=$i?>" data-start="<?=$bounce['end'][0]?>" data-end="<?=$bounce['start'][0]?>">
+          <button class="btn-link btn-sm js-loop-btn" data-index="<?=$i?>" data-start="<?=$bounce['startTime']?>" data-end="<?=$bounce['endTime']?>">
             <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
           </button>
           <!-- Select skill -->
@@ -59,7 +59,6 @@ setTitle('Label Video');
 
   var Engine = {
     // Static vars
-    fps: 30,
     vid: null,
     loopStartTime: 0,
     loopEndTime: 0,
@@ -76,11 +75,12 @@ setTitle('Label Video');
       this.select2Setup();
       this.bindUIActions();
 
-      $(".alert").alert()
+      $(".alert").alert();
 
       // Preload selects with the names for each skill
       for (var i = 0; i < $(".js-select2").length; i++) {
-        $(".js-select2")[i].value = Engine.bounces[i].title;
+        if (Engine.bounces[i].name)
+          $(".js-select2")[i].value = Engine.bounces[i].name;
       }
       $(".js-select2").trigger('change');
 
@@ -89,8 +89,7 @@ setTitle('Label Video');
       // Set up select2 inputs
       $(".js-select2")
         .select2({
-          data: Engine.skillNames,
-          placeholder: "Select a skill"
+          data: Engine.skillNames
         })
         // Any time the select2 dropdown is closed, give it focus. otherwise focus disappears, which sucks
         .on("select2:close", function (e) {
@@ -118,8 +117,8 @@ setTitle('Label Video');
         Engine.lastBtnClicked = thisBtnIndex;
          $('.js-current-loop-index').text(Engine.loopingTrue+(thisBtnIndex+1));
 
-        Engine.loopStartTime = start/Engine.fps;
-        Engine.loopEndTime = end/Engine.fps;
+        Engine.loopStartTime = start;
+        Engine.loopEndTime = end;
         Engine.vid.currentTime = Engine.loopStartTime;
       });
 
@@ -137,7 +136,7 @@ setTitle('Label Video');
 
         // Get the names for each skill
         for (var i = 0; i < $(".js-select2").length; i++) {
-          Engine.bounces[i].title = $(".js-select2")[i].value;
+          Engine.bounces[i].name = $(".js-select2")[i].value;
         }
 
         // Send to server
@@ -151,7 +150,7 @@ setTitle('Label Video');
             $('.js-save').text('Save');
             $('.alert').show();
             if (data !== "") {
-              $('.alert').html("<strong>Something went wrong:</strong> "+data)
+              $('.alert').html("<strong>Something went wrong:</strong> "+data);
             }
           }
         });

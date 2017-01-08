@@ -1,4 +1,4 @@
-# file stuff in main
+from __future__ import print_function
 from os import listdir
 from os.path import isfile, join
 from subprocess import check_output
@@ -11,7 +11,7 @@ def main():
   for f in files:
     size = "720x480"
     command = 'ffmpeg.exe -i {3}/{0} -an -s {1} "480p/{2}_{1}.mp4"'.format(f, size, f[0:-4], source)
-    print command
+    print(command)
 
     # command = "ffmpeg -i {} -f ffmetadata metadata.txt".format(f)
     output = check_output(command)
@@ -28,7 +28,7 @@ def main():
 def other():
   # folder to search
   dictionary = json.load(open("dictionary.json", "r"))
-  print dictionary
+  print(dictionary)
 
   source = "Inhouse/480p/"
   files = [f for f in listdir(source) if isfile(join(source, f)) and ".mp4" in f]
@@ -40,25 +40,16 @@ def other():
         exists = 1
         break
     if exists == 1:
-      continue
+        continue
+  dictionary.append({
+    "video_name": source+f,
+    "trampoline": {},
+    "bounces" : [],
+    "center_points": [],
+    "ellipses": []
+  })
 
-    dictionary.append({
-      "video_name": source+f,
-      "trampoline": {
-        "top": -1,
-        "center": -1
-      },
-      "bounces" : [],
-      "ellipses": {
-        "frame": [],
-        "point1": [],
-        "point2": [],
-        "angle": []
-      },
-      "center_points": []
-    })
-
-  print dictionary
+  print(dictionary)
   json.dump(dictionary, open('dictionary.json', 'w'), indent=2)
 
 if __name__ == '__main__':
