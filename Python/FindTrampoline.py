@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 
-def findTrampolineIfNone(cap, vidRow):
+def findTrampolineIfNone(cap, routine):
     capWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     capHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     maskLeftBorder = int(capWidth * 0.3)
@@ -28,8 +28,8 @@ def findTrampolineIfNone(cap, vidRow):
         cv2.line(frame, (0, trampoline['top']), (capWidth, trampoline['top']), (0, 255, 0), 1)
         cv2.line(frame, (trampoline['center'], 0), (trampoline['center'], capHeight), (0, 255, 0), 1)
 
-        cv2.imshow(vidRow['name'] + ' ', frame)
-        cv2.imshow(vidRow['name'] + " frameCropped ", frameCropped)
+        cv2.imshow(routine['name'] + ' ', frame)
+        cv2.imshow(routine['name'] + " frameCropped ", frameCropped)
 
         k = cv2.waitKey(100)
         if k == 2490368:  # up

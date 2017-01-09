@@ -25,7 +25,7 @@ cv2.ocl.setUseOpenCL(False)
 #         add routines
 #         track cog
 
-videosPath = 'C:/Users/psdco/Videos/'
+videoPath = 'C:/Users/psdco/Videos/'
 dbPath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/videos.sqlite3'
 comps = [
     'Trainings',
@@ -71,67 +71,67 @@ def main():
     db = sqlite3.connect(dbPath)
     db.row_factory = sqlite3.Row
 
-    # Ask the user to select video from database
-    videos = askWhichVideoFromDb(db)
+    # Ask the user to select routine from database
+    routines = askWhichRoutineFromDb(db)
 
-    for i, video in enumerate(videos):
+    for i, routine in enumerate(routines):
 
-        # Open the video file
-        cap = openVideo(video['name'])
+        # Open the routine file
+        cap = openVideo(routine['name'])
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         # Do trampoline top stuff
-        video['trampoline'] = json.loads(video['trampoline'])
-        if not video['trampoline']:
-            video['trampoline'] = FindTrampoline.findTrampolineIfNone(cap, video)
+        routine['trampoline'] = json.loads(routine['trampoline'])
+        if not routine['trampoline']:
+            routine['trampoline'] = FindTrampoline.findTrampolineIfNone(cap, routine)
 
-            db.execute("UPDATE videos SET trampoline=? WHERE id=?", (json.dumps(video['trampoline']), video['id'],))
+            db.execute("UPDATE routines SET trampoline=? WHERE id=?", (json.dumps(routine['trampoline']), routine['id'],))
             db.commit()
-            print("Trampoline Top has been set to {}".format(json.dumps(video['trampoline'])))
+            print("Trampoline Top has been set to {}".format(json.dumps(routine['trampoline'])))
 
         # Do background subtraction
-        video['center_points'] = json.loads(video['center_points'])
-        video['ellipses'] = json.loads(video['ellipses'])
-        if askToTrackGymnast(video['center_points']):
-            centerPoints, ellipses = trackGymnast(cap, video)
+        routine['center_points'] = json.loads(routine['center_points'])
+        routine['ellipses'] = json.loads(routine['ellipses'])
+        if askToTrackGymnast(routine['center_points']):
+            centerPoints, ellipses = trackGymnast(cap, routine)
 
-            savePoints = askToOverwriteTrackingData(video['center_points'])
+            savePoints = askToOverwriteTrackingData(routine['center_points'])
             if savePoints:
                 print("Saving points...")
-                video['center_points'] = centerPoints
-                video['ellipses'] = json.loads(json.dumps(ellipses), parse_float=lambda x: int(float(x)))
-                db.execute("UPDATE videos SET center_points=?, ellipses=? WHERE id=?", (json.dumps(video['center_points']), json.dumps(video['ellipses']), video['id'],))
+                routine['center_points'] = centerPoints
+                routine['ellipses'] = json.loads(json.dumps(ellipses), parse_float=lambda x: int(float(x)))
+                db.execute("UPDATE routines SET center_points=?, ellipses=? WHERE id=?", (json.dumps(routine['center_points']), json.dumps(routine['ellipses']), routine['id'],))
                 db.commit()
             else:
                 print("Data not saved")
 
         # Calculate bounces
-        video['bounces'] = calculateBounces(video, fps)
-        db.execute("UPDATE videos SET bounces=? WHERE id=?", (json.dumps(video['bounces']), video['id'],))
+        routine['bounces'] = calculateBounces(routine, fps)
+        db.execute("UPDATE routines SET bounces=? WHERE id=?", (json.dumps(routine['bounces']), routine['id'],))
         db.commit()
 
         # Create plot
-        plotData(video, fps)
+        plotData(routine, fps)
 
-        print("Finished video {} of {}".format(i + 1, len(videos)))
+        print("Finished routine {} of {}".format(i + 1, len(routines)))
 
     db.close()
     print("Done")
 
 
-def visualisePose(cap, video, padding=100):
+def visualisePose(cap, routine, padding=100):
     # colours = [red, green, blue, yellow, purple, cyan,  red, green, blue, cyan, purple, yellow, red, green] bgr
     # [rfoot, rknee, rhip, lfoot, lknee, lhip, rhand, rerbow, rshoulder, lshoulder, lelbow, lhand, neck, head top]
     colours = [(0, 0, 255), (0, 255, 0), (255, 0, 0), (0, 255, 255), (255, 0, 255), (255, 255, 0), (0, 0, 255),
                (0, 255, 0), (255, 0, 0), (255, 255, 0), (255, 0, 255), (0, 255, 255), (0, 0, 255), (0, 255, 0)]
 
     # TODO this assumes there is a file with all poses for each frame in it
-    posePath = videosPath + video['name'][:-4] + "/pose.npz"
+    posePath = videoPath + routine['name'][:-4] + "/pose.npz"
     poses = np.load(posePath)['poses']
     while 1:
         ret, frame = cap.read()
         frameNo = cap.get(cv2.CAP_PROP_POS_FRAMES)
-        centerPoints = video['center_points'][frameNo]
+        centerPoints = routine['center_points'][frameNo]
         pose = poses[frameNo]
         # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
         # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
@@ -151,7 +151,7 @@ def visualisePose(cap, video, padding=100):
         cv2.imshow('frame', frame)
 
 
-def trackGymnast(cap, video):
+def trackGymnast(cap, routine):
     def erodeDilate(image):
         kernel = np.ones((2, 2), np.uint8)
         # erosion = cv2.erode(input, kernel, iterations=1)
@@ -185,7 +185,7 @@ def trackGymnast(cap, video):
 
     # Create mask around trampoline
     maskAroundTrampoline = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)  # cv2.CV_8U
-    maskAroundTrampoline[0:video['trampoline']['top'], maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
+    maskAroundTrampoline[0:routine['trampoline']['top'], maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
 
     # Background extractor. Exclude shadow
     pKNN = cv2.createBackgroundSubtractorKNN()
@@ -292,7 +292,7 @@ def trackGymnast(cap, video):
 
                 # Save frames
                 if saveCroppedFrames:
-                    imgName = "C:/Users/psdco/Videos/{}/frame {:.0f}.png".format(video['name'][:-4], cap.get(cv2.CAP_PROP_POS_FRAMES))
+                    imgName = "C:/Users/psdco/Videos/{}/frame {:.0f}.png".format(routine['name'][:-4], cap.get(cv2.CAP_PROP_POS_FRAMES))
                     print("Writing frame to {}".format(imgName))
                     ret = cv2.imwrite(imgName, trackPerson)
                     if not ret:
@@ -347,18 +347,18 @@ def boundingSquare(capHeight, capWidth, cx, cy):
     return x1, x2, y1, y2
 
 
-def plotData(video, fps):
+def plotData(routine, fps):
     print("\nStarting plotting...")
     f, axarr = plt.subplots(3, sharex=True)
 
     # Plot bounces
     # center_points consists of [frame num, x, y]
-    x_frames = [pt[0]/fps for pt in video['center_points']]
-    y_travel = [pt[1] for pt in video['center_points']]
-    y_height = [pt[2] for pt in video['center_points']]
+    x_frames = [pt[0] / fps for pt in routine['center_points']]
+    y_travel = [pt[1] for pt in routine['center_points']]
+    y_height = [pt[2] for pt in routine['center_points']]
 
-    peaks_x = [[bounce['startFrame']/fps, bounce['maxHeightFrame']/fps] for bounce in video['bounces']]
-    peaks_y = [[bounce['startHeightInPixels'], bounce['maxHeightInPixels']] for bounce in video['bounces']]
+    peaks_x = [[bounce['startFrame']/fps, bounce['maxHeightFrame']/fps] for bounce in routine['bounces']]
+    peaks_y = [[bounce['startHeightInPixels'], bounce['maxHeightInPixels']] for bounce in routine['bounces']]
 
     axarr[0].set_title("Height")
     axarr[0].plot(x_frames, y_height, color="g")
@@ -371,15 +371,15 @@ def plotData(video, fps):
     axarr[1].set_title("Travel")
     axarr[1].set_ylabel('Rightwardness (Pixels)')
     axarr[1].scatter(x_frames, y_travel, color="g")
-    axarr[1].axhline(y=video['trampoline']['center'], xmin=0, xmax=1000, c="blue")
-    axarr[1].axhline(y=video['trampoline']['center'] + 80, xmin=0, xmax=1000, c="red")
-    axarr[1].axhline(y=video['trampoline']['center'] - 80, xmin=0, xmax=1000, c="red")
+    axarr[1].axhline(y=routine['trampoline']['center'], xmin=0, xmax=1000, c="blue")
+    axarr[1].axhline(y=routine['trampoline']['center'] + 80, xmin=0, xmax=1000, c="red")
+    axarr[1].axhline(y=routine['trampoline']['center'] - 80, xmin=0, xmax=1000, c="red")
 
     #
     # Plot ellipsoid's angles
     #
-    x_frames = np.array([pt[0]/fps for pt in video['ellipses']])
-    y_angle = np.array([pt[3] for pt in video['ellipses']])
+    x_frames = np.array([pt[0] / fps for pt in routine['ellipses']])
+    y_angle = np.array([pt[3] for pt in routine['ellipses']])
     # Changes angles
     y_angle += 90
     y_angle %= 180
@@ -395,8 +395,8 @@ def plotData(video, fps):
     plt.show()
 
 
-def calculateBounces(video, fps):
-    npCenterPoints = np.array(video['center_points'])
+def calculateBounces(routine, fps):
+    npCenterPoints = np.array(routine['center_points'])
 
     # npCenterPoints consists of [frame num, x, y]
     x = npCenterPoints[:, 0]
@@ -423,7 +423,7 @@ def calculateBounces(video, fps):
     return bounces
 
 
-def askWhichVideoFromDb(db):
+def askWhichRoutineFromDb(db):
     def dict_gen(result):
         dictItems = []
         for item in result:
@@ -433,13 +433,13 @@ def askWhichVideoFromDb(db):
     print('\nTrack all untracked videos? [y/n]')
     if inputWasYes():
         # videos = db.execute("SELECT * FROM videos WHERE center_points='[]'")
-        videos = db.execute("SELECT * FROM videos WHERE bounces='[]'")
-        return dict_gen(videos.fetchall())  # copy everything pointed to by the cursor into an object.
+        routines = db.execute("SELECT * FROM routines WHERE bounces='[]'")
+        return dict_gen(routines.fetchall())  # copy everything pointed to by the cursor into an object.
 
     print('\nChoose a comp:')
     for i, c in enumerate(comps):
         print('%d) %s' % (i + 1, c))
-    compChoice = 1  # readNum(len(comps))
+    compChoice = 0  # readNum(len(comps))
     compChoice = comps[compChoice - 1]
 
     print('\nChoose a level:')
@@ -449,16 +449,17 @@ def askWhichVideoFromDb(db):
     levelChoice = levels[levelChoice - 1]
 
     if levelChoice == 'All':
-        selectedVids = db.execute("SELECT * FROM videos WHERE name LIKE ?", ('%' + compChoice + '%',))
+        selectedVids = db.execute("SELECT * FROM routines WHERE name LIKE ?", ('%' + compChoice + '%',))
     else:
-        selectedVids = db.execute("SELECT * FROM videos WHERE name LIKE ? AND level=?", ('%' + compChoice + '%', levelChoice,))
+        selectedVids = db.execute("SELECT * FROM routines WHERE name LIKE ? AND level=?", ('%' + compChoice + '%', levelChoice,))
     selectedVids = selectedVids.fetchall()  # copy everything pointed to by the cursor into an object.
 
     print('\nChoose a video:')
     for i, v in enumerate(selectedVids):
         str = "{} - {}".format(v['name'], v['level'])
         print('%d) %s' % (i + 1, str))
-    vidChoice = 1  # readNum(len(selectedVids))
+    vidChoice = readNum(len(selectedVids))
+    # vidChoice = 1  # readNum(len(selectedVids))
     vidRow = selectedVids[vidChoice - 1]
 
     return dict_gen([vidRow])
@@ -481,7 +482,7 @@ def askToOverwriteTrackingData(centerPoints):
 
 
 def openVideo(videoName):
-    pathToVideo = videosPath + videoName
+    pathToVideo = videoPath + videoName
     print("\nOpening " + pathToVideo)
     cap = cv2.VideoCapture(pathToVideo)
     if not cap.isOpened():
