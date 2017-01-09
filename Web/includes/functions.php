@@ -13,10 +13,16 @@ function addHeader() {
     include('includes/header.php');
 }
 
+function addScripts() {
+    global $db, // db connection is closed in footer
+           $theme;
+    include('includes/footer_scripts.php');
+}
+
 function addFooter() {
     global $db, // db connection is closed in footer
            $theme;
-    include('includes/footer.php');
+    include('includes/footer_html.php');
 }
 
 // Replace word boundaries with nothing

@@ -42,6 +42,7 @@ while($routine = $routines->fetchArray(SQLITE3_ASSOC)){
 
   <?php
 }
+addScripts();
 addFooter();
 ?>
 

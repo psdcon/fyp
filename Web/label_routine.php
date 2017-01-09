@@ -57,14 +57,16 @@ addHeader();
   <div class="col-md-6">
 
     <?php
+      $startEndTimes = [];
       foreach ($bouncesJSON as $i => $bounce) {
+        array_push($startEndTimes, ["start" => $bounce['startTime'], "end" => $bounce['endTime']]);
         ?>
 
-        <div class="row js-bounce" style="margin-bottom:0.3rem">
+        <div class="row js-bounce">
           <!-- Index -->
           <span class="index"><?=($i+1)?>.</span>
           <!-- Loop button -->
-          <button class="btn-link btn-sm js-loop-btn" data-index="<?=$i?>" data-start="<?=$bounce['startTime']?>" data-end="<?=$bounce['endTime']?>">
+          <button class="btn-link btn-sm js-loop-btn">
             <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
           </button>
           <!-- Select skill -->
@@ -80,187 +82,23 @@ addHeader();
 
 
 <?php
-addFooter();
+addScripts();
 ?>
 
 <script>
 
-  var Engine = {
-    // Static vars
-    vid: null,
-    loopStartTime: 0,
-    loopEndTime: 0,
-    intervalRate: 28,
+  VideoControls.init(
+    $('video')[0],
+    <?=json_encode($startEndTimes)?>,
+    $('.js-bounce')
+  );
 
-    currentlyLoopingIndex: -1, // set -1 so that when 'l' is pressed it starts looping at 0
-    previousHighlightedRow: -1,
-
-    bounces: <?=$routine['bounces']?>,
-    skillNames: select2SkillNameData,
-
-    loopingTrue: "Looping bounce ",
-    loopingFalse: "No bounce looping",
-
-    go: function() {
-      this.vid = $('video')[0];
-      this.select2Setup();
-      this.bindUIActions();
-
-      $(".alert").alert();
-
-      // Preload selects with the names for each skill
-      for (var i = 0; i < Engine.bounces.length; i++) {
-        if (Engine.bounces[i].name)
-          $(".js-select2")[i].value = Engine.bounces[i].name;
-      }
-      $(".js-select2").trigger('change');
-
-    },
-    select2Setup: function(){
-      // Set up select2 inputs
-      $(".js-select2")
-        .select2({
-          data: Engine.skillNames
-        })
-        // Any time the select2 dropdown is closed, give it focus. otherwise focus disappears, which sucks
-        .on("select2:close", function (e) {
-          $(this).focus();
-        });
-    },
-    bindUIActions: function(){
-      // Push.pushButton.addEventListener('change', function () {});
-      // Play pause vid when 'k' pressed
-      document.addEventListener('keyup', function (e) {
-        if (e.ctrlKey) {
-          if (e.keyCode == 13){
-          // Ctrl+Enter
-            Engine.save();
-          }
-          return
-        }
-
-        // Ignore keypress if inside select2 input
-        if ($(":focus").is($(".select2-search__field")))
-          return;
-        console.log(e.keyCode)
-        if (e.keyCode == 75){ // k
-          if (Engine.vid.paused)
-            Engine.vid.play();
-          else {
-            Engine.vid.pause();
-          }
-        }
-        else if (e.keyCode == 74){ // j, next bounce
-          // Engine.previousBounce()
-          nextLoopIndex = Engine.currentlyLoopingIndex-1
-          if (nextLoopIndex < 0)
-            nextLoopIndex = Engine.bounces.length-1;
-          $('.js-loop-btn').eq(nextLoopIndex).trigger("click");
-        }
-        else if (e.keyCode == 76){ // l, previous bounce
-          // Engine.nextBounce()
-          nextLoopIndex = Engine.currentlyLoopingIndex+1
-          if (nextLoopIndex > Engine.bounces.length-1)
-            nextLoopIndex = 0;
-          $('.js-loop-btn').eq(nextLoopIndex).trigger("click");
-        }
-        else if (e.keyCode == 73){ // i, stop looping
-          $('.js-current-loop-index').text(Engine.loopingFalse);
-          Engine.loopEndTime = 0;
-        }
-        else if (e.keyCode == 188){ // ',', slow down
-          Engine.videoSpeed(-0.25);
-        }
-        else if (e.keyCode == 190){ // '.', speed up
-          Engine.videoSpeed(+0.25);
-        }
-        else if (e.keyCode == 78){ // 'n', label next
-          $('.js-label-next').text('Going...');
-          $('.js-label-next')[0].click();
-        }
-      }, false);
-
-      setInterval(function(){
-        // Do looping if skill set to loop
-        if (Engine.loopEndTime > 0 // acts as an enable
-            && Engine.vid.currentTime >= Engine.loopEndTime){
-          Engine.vid.currentTime = Engine.loopStartTime;
-        }
-
-        // Highlight background
-        // $('.js-bounce');
-        for (var i = 0; i < $('.js-loop-btn').length; i++) {
-            var start = $('.js-loop-btn').eq(i).data('start');
-            var end = $('.js-loop-btn').eq(i).data('end');
-
-            // Update the current move to the one being shown. Happens every 25 ms.
-            ct = Engine.vid.currentTime;
-            if (ct >= start && ct < end && i != Engine.previousHighlightedRow){
-              // Remove highlightSkill from any old rows and add it to the current row element. Old happens when current skill changes.
-                $('.highlightSkill').removeClass('highlightSkill');
-                // $rows.eq(i).addClass('highlightSkill');
-                $('.js-loop-btn').eq(i).parent().addClass('highlightSkill')
-                Engine.previousHighlightedRow = i;
-                break; // leave the loop
-            }
-        }
-      }, Engine.intervalRate);
-
-      $('.js-loop-btn').click(function () {
-        var start = $(this).data('start');
-        var end = $(this).data('end');
-        var thisBtnIndex = $(this).data('index');
-
-        Engine.currentlyLoopingIndex = thisBtnIndex;
-         $('.js-current-loop-index').text(Engine.loopingTrue+(thisBtnIndex+1));
-
-        Engine.loopStartTime = start;
-        Engine.loopEndTime = end;
-        Engine.vid.currentTime = Engine.loopStartTime;
-        if (Engine.vid.paused)
-          Engine.vid.play();
-      });
-
-      $('.js-save').click(Engine.save);
-    },
-    videoSpeed:function(amount){
-      newPbr = this.vid.playbackRate + amount;
-      if (newPbr > 2){
-        newPbr = 2
-      }
-      else if (newPbr < 0.25){
-        newPbr = 0.25
-      }
-      console.log(newPbr);
-      this.vid.playbackRate = newPbr;
-      $('.js-current-playback-speed').text('Playback Speed: '+newPbr);
-    },
-    save: function(){
-      $('.js-save').text('Saving...');
-
-      // Get the names for each skill
-      for (var i = 0; i < $(".js-select2").length; i++) {
-        Engine.bounces[i].name = $(".js-select2")[i].value;
-      }
-
-      // Send to server
-      $.post({
-        url: "includes/ajax.db.php",
-        data: "action=updateBounces" +
-          "&id=<?=$_GET['routine_id']?>"+
-          "&bounces=" + JSON.stringify(Engine.bounces),
-        dataType: "text",
-        success: function (data) {
-          $('.js-save').text('Save');
-          $('.alert').show();
-          if (data !== "") {
-            $('.alert').html("<strong>Something went wrong:</strong> "+data);
-          }
-        }
-      });
-    }
-  };
-
-  Engine.go();
+  Label.init(
+    <?=$routine['bounces']?>
+  );
 
 </script>
+
+<?php
+addFooter();
+?>
