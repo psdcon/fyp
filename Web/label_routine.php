@@ -32,6 +32,7 @@ addHeader();
   <strong>.</strong> Speed up video.
   <strong>,</strong> Slow down video.
 </p>
+
 <div class="row">
   <div class="col-md-6">
     <video src="videos/<?=$routine['name']?>" controls autobuffer style="max-width:100%"></video>
@@ -218,11 +219,6 @@ addFooter();
         Engine.vid.currentTime = Engine.loopStartTime;
         if (Engine.vid.paused)
           Engine.vid.play();
-      });
-
-      $('.js-stop-loop').click(function(){
-        $('.js-current-loop-index').text(Engine.loopingFalse);
-        Engine.loopEndTime = 0;
       });
 
       $('.js-save').click(Engine.save);

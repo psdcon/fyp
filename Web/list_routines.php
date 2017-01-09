@@ -6,7 +6,9 @@ addHeader();
 ?>
 
 <p>
-  Each row is a video of a routine. Label: Name the skills in a routine. Judge: Score each of the routines.
+  Each row is a video of a routine. <br>
+  <strong>Label</strong>: Name the skills in a routine. <br>
+  <strong>Judge</strong>: Score each of the routines.
 </p>
 
 <div class="row vid-row" style="font-weight:bold;font-size:1.1rem">
@@ -23,7 +25,7 @@ while($routine = $routines->fetchArray(SQLITE3_ASSOC)){
   $isLabelled = ($bouncesJSON[0]['name'] != ""); // not the most fool proof way
   ?>
 
-  <div class="row vid-row vid-row-hover">
+  <div class="row vid-row">
     <div class="col-md-7 col-8" style="word-break: break-word;"><?=$routine['name']?></div>
     <div class="col-md-2 col-4"><?=$routine['level']?></div>
     <div class="col-md-2 col-8">

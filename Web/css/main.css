@@ -97,6 +97,9 @@ body {
   vertical-align: top;
   border-top: 1px solid #eceeef;
 }
+.vid-row:nth-of-type(even) {
+  background-color: rgba(0,0,0,.05);
+}
 .vid-row-hover:hover {
   /* cursor: pointer; */
   background-color: rgba(0,0,0,.075);
