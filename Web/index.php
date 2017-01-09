@@ -1,111 +1,77 @@
-<!DOCTYPE html>
-<html lang="en" ng-app="fyp">
+<?php
+include_once 'includes/functions.php';
+$title = 'FYP';
+$navIndex = 0;
+addHeader();
+?>
 
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
-  <meta name="description" content="">
-  <meta name="author" content="">
-  <!-- <link rel="shortcut icon" href="images/main_icon.jpg"> -->
-
-  <title>FYP</title>
-
-  <!-- Bootstrap core CSS -->
-  <link href="node_modules/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <!-- Styles -->
-  <link href="css/main.css" rel="stylesheet">
-  <link href="node_modules/select2/dist/css/select2.min.css" rel="stylesheet">
-
-  <!-- Icons - For the return to top arrow -->
-  <link rel="stylesheet" href="node_modules/font-awesome/css/font-awesome.min.css">
-</head>
-
-<body>
-
-  <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse">
-    <div class="container">
-      <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#collapsingNavbar" aria-controls="collapsingNavbar" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <a class="navbar-brand" href="#!/" style="Final Year Project">FYP</a>
-
-      <div class="collapse navbar-collapse" id="collapsingNavbar">
-        <ul class="navbar-nav mr-auto">
-          <li class="nav-item active">
-            <a class="nav-link" href="#!/">Home <span class="sr-only">(current)</span></a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="#!/videos">Videos</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
-
-  <div class="container main">
-
-      <!-- Return to top arrow -->
-      <a href="javascript:" id="return-to-top"><i class="fa fa-chevron-up" aria-hidden="true"></i></a>
-
-      <div class="page" ng-view>
-
-        <!-- Content goes here -->
-
-    </div>
+<div class="jumbotron jumbotron-fluid">
+  <div class="container">
+    <h1 style="font-weight: 300;">Final Year Project</h1>
+    <p class="lead">This website was made to help label and judge trampoline routine videos</p>
+    <div>Click the Routines link to get to the action.</div>
   </div>
+</div>
 
-  <!-- Bootstrap core JavaScript
-  ================================================== -->
-  <!-- Placed at the end of the document so the pages load faster -->
-  <script src="node_modules/jquery/dist/jquery.js"></script>
-  <script src="node_modules/tether/dist/js/tether.min.js"></script>
-  <script src="node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+<h3>Tally</h3>
+<?php
+  $routines = $db->query("SELECT * FROM routines WHERE bounces!='[]' ORDER BY id ASC");
+  $allBounceNames = [];
+  $isLabelledCount = 0;
+  while($routine = $routines->fetchArray(SQLITE3_ASSOC)){
+    $bouncesJSON = json_decode($routine['bounces'], true);
+    $isLabelled = ($bouncesJSON[0]['name'] != ""); // not the most fool proof way
+    if ($isLabelled){
+      $isLabelledCount+=1;
+    }
 
-  <!-- Angular
-  ======================================================= -->
-  <script src="node_modules/angular/angular.js"></script>
-  <script src="node_modules/angular-route/angular-route.js"></script>
-  <script src="node_modules/angular-animate/angular-animate.js"></script>
-
-  <!-- Mine & MSC
-  ======================================================= -->
-  <script src="js/main.js"></script>
-  <script src="node_modules/select2/dist/js/select2.min.js"></script>
-
-  <script>
-    // Add .active to nav item on click
-    $("nav .navbar-nav .nav-item").click(function() {
-      $("nav .navbar-nav .nav-item").removeClass('active');
-      $(this).addClass('active');
-    });
-
-
-    // ===== Scroll to Top Arrow ====
-    var scrollTrigger = 150; // px
-    var returnToTopElement = $('#return-to-top');
-    backToTop = function () {
-        var scrollTop = $(window).scrollTop();
-        if (scrollTop > scrollTrigger) {
-            $('#return-to-top').addClass('show');
-        } else {
-            $('#return-to-top').removeClass('show');
+    foreach ($bouncesJSON as $bounce) {
+      array_push($allBounceNames, $bounce['name']);
+    }
+  }
+  var_dump(array_count_values($allBounceNames));
+  foreach (array_count_values($allBounceNames) as $name => $count) { ?>
+    <!-- <canvas id="myChart" width="400" height="400"></canvas>
+    <script>
+    var ctx = document.getElementById("myChart");
+    var myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ["Red", "Blue", "Yellow", "Green", "Purple", "Orange"],
+            datasets: [{
+                label: '# of Votes',
+                data: [12, 19, 3, 5, 2, 3],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(54, 162, 235, 0.2)',
+                    'rgba(255, 206, 86, 0.2)',
+                    'rgba(75, 192, 192, 0.2)',
+                    'rgba(153, 102, 255, 0.2)',
+                    'rgba(255, 159, 64, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(255,99,132,1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero:true
+                    }
+                }]
+            }
         }
-    };
-    backToTop();
-    $(window).on('scroll', function () {
-        backToTop();
     });
-    $('#return-to-top').on('click', function (e) {
-        e.preventDefault();
-        $('html,body').animate({
-            scrollTop: 0
-        }, 700);
-    });
-  </script>
-
-</body>
-
-</html>
+    </script> -->
+<?php
+  }
+addFooter();
+?>

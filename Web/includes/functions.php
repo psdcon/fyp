@@ -1,17 +1,23 @@
 <?php
+date_default_timezone_set('Europe/Dublin');
 $dbPath = dirname(__FILE__).DIRECTORY_SEPARATOR.'videos.sqlite3'; // No matter where script is included from
 $db = new SQLite3($dbPath) or die('Unable to open database: '.$db->lastErrorMsg());
 
 
-// Sets the title on page load
-function setTitle($title){
-  echo '
-    <script>
-      window.document.title = "'.$title.'";
-    </script>
-  ';
+function addHeader() {
+    // These variables are used in the header.php file.
+    // They're given values before addHeader function call in all other php files
+    global $title,
+           $navIndex;
+
+    include('includes/header.php');
 }
 
+function addFooter() {
+    global $db, // db connection is closed in footer
+           $theme;
+    include('includes/footer.php');
+}
 
 // Replace word boundaries with nothing
 function string2SafeID($level) {

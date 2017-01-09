@@ -90,7 +90,7 @@ body {
 
 
 /*
-  Videos list
+  Routines list
 */
 .vid-row{
   padding: .75rem;
@@ -107,7 +107,7 @@ a .fa, .btn-link .fa {
 }
 
 
-/* Video details */
+/* */
 .index {
   display: inline-block;
   min-width: 1.4rem;
@@ -115,4 +115,10 @@ a .fa, .btn-link .fa {
 }
 .select2-container--default .select2-results>.select2-results__options {
   min-height: 400px;
+}
+.highlightSkill,
+.table-striped>tbody>tr:nth-of-type(odd).highlightSkill {
+  color: #3c763d;
+  background-color: #dff0d8;
+  border-color: #d6e9c6;
 }
