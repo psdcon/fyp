@@ -61,7 +61,7 @@ addHeader();
     </div>
 
     <?php
-      $count = 1;
+      $count = 0;
       foreach ($bouncesJSON as $bounce) {
         if ($bounce['name'] == 'In/Out Bounce')
           continue;
@@ -69,7 +69,7 @@ addHeader();
 
         <div class="row js-bounce">
           <div class="col-9">
-            <span class="index"><?=$count?>.</span>
+            <span class="index"><?=$count+1?>.</span>
 
             <!-- Loop button -->
             <button class="btn-link btn-sm js-loop-btn" data-index="<?=$count?>" data-start="<?=$bounce['startTime']?>" data-end="<?=$bounce['endTime']?>">
@@ -102,9 +102,46 @@ addFooter();
   var Engine = {
     // Static vars
     vid: null,
+    loopStartTime: 0,
+    loopEndTime: 0,
+    intervalRate: 28,
+
+    currentlyLoopingIndex: -1, // set -1 so that when 'l' is pressed it starts looping at 0
+    previousHighlightedRow: -1,
+
+    bounces: <?=$routine['bounces']?>,
+
     start: function() {
       this.vid = $('video')[0];
       this.bindUIActions();
+
+
+      setInterval(function(){
+        // Do looping if skill set to loop
+        if (Engine.loopEndTime > 0 // acts as an enable
+            && Engine.vid.currentTime >= Engine.loopEndTime){
+          Engine.vid.currentTime = Engine.loopStartTime;
+        }
+
+        // Highlight background
+        // $('.js-bounce');
+        for (var i = 0; i < $('.js-loop-btn').length; i++) {
+            var start = $('.js-loop-btn').eq(i).data('start');
+            var end = $('.js-loop-btn').eq(i).data('end');
+
+            // Update the current move to the one being shown. Happens every 25 ms.
+            ct = Engine.vid.currentTime;
+            if (ct >= start && ct < end && i != Engine.previousHighlightedRow){
+              // Remove highlightSkill from any old rows and add it to the current row element. Old happens when current skill changes.
+                $('.highlightSkill').removeClass('highlightSkill');
+                // $rows.eq(i).addClass('highlightSkill');
+                $('.js-loop-btn').eq(i).parent().addClass('highlightSkill')
+                Engine.previousHighlightedRow = i;
+                break; // leave the loop
+            }
+        }
+      }, Engine.intervalRate);
+
 
       $('.js-deduction')[0].focus();
 
