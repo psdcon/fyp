@@ -27,9 +27,9 @@ addHeader();
   <strong>Ctrl+Enter</strong> Save.
   <strong>n</strong> Label Next.
   <strong>k</strong> Play/pause the video.
-  <strong>l</strong> Loop next bounce.
-  <strong>j</strong> Loop previous bounce.
-  <strong>i</strong> Stop looping.
+  <strong>l</strong> Play next bounce.
+  <strong>j</strong> Play previous bounce.
+  <strong>i</strong> Toggle looping.
   <strong>.</strong> Speed up video.
   <strong>,</strong> Slow down video.
 </p>

@@ -29,11 +29,11 @@ addHeader();
 <p>
   Tab will move along skills. Use Up and Down arrow keys to change the deduction. If you're a bit rusty on the judging, check out the <a href="http://www.fig-gymnastics.com/publicdir/rules/files/tra/TRA-CoP_2017-2020-e.pdf">2017 - 2020 Code Of Points</a>, page 36 and on. <br>
   <strong>Ctrl+Enter</strong> Save.
-  <!-- <strong>n</strong> Label Next. -->
+  <strong>n</strong> Label Next.
   <strong>k</strong> Play/pause the video.
-  <strong>l</strong> Loop next bounce.
-  <strong>j</strong> Loop previous bounce.
-  <strong>i</strong> Stop looping.
+  <strong>l</strong> Play next bounce.
+  <strong>j</strong> Play previous bounce.
+  <strong>i</strong> Toggle looping.
   <strong>.</strong> Speed up video.
   <strong>,</strong> Slow down video.
 </p>

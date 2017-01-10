@@ -6,7 +6,7 @@ var VideoControls = {
   intervalRate: 28,
   intervalInstance: null,
 
-  loopedBounceIdx: -1, // set -1 so that when 'l' is pressed it starts looping at 0
+  bounceLoopedIdx: -1, // set -1 so that when 'l' is pressed it starts looping at 0
   highlightedRowIndex: -1,
 
   loopingTrueStr: "Looping bounce ",
@@ -37,10 +37,11 @@ var VideoControls = {
 
     // Bind 'Loop' button
     this.$loopBtns.click(function () {
-      // that.loopBounce($(this).data('index'));
-
+      // Get current index of this button to give it's index in the list of skills
       thisIndex = that.$loopBtns.index($(this));
+      // Setup loop and explicitly play the video.
       that.loopBounce(thisIndex);
+      that.playBounce(thisIndex);
     });
 
     // Bind keyboard shortcuts
@@ -49,19 +50,20 @@ var VideoControls = {
     }, false);
 
   },
-  loopBounce: function (index) {
-    this.isLooping = true;
-    this.loopedBounceIdx = index;
-    this.updateLoopingMsg();
-
-    this.loopStartTime = this.startEndTimes[index].start;
-    this.loopEndTime = this.startEndTimes[index].end;
-
-    this.video.currentTime = this.loopStartTime;
+  playBounce: function (index) {
+    this.video.currentTime = this.startEndTimes[index].start;
 
     if (this.video.paused){
       this.video.play();
     }
+  },
+  loopBounce: function (index) {
+    this.isLooping = true;
+    this.bounceLoopedIdx = index;
+    this.updateLoopingMsg();
+
+    this.loopStartTime = this.startEndTimes[index].start;
+    this.loopEndTime = this.startEndTimes[index].end;
   },
   stopLooping: function () {
     this.isLooping = false;
@@ -69,7 +71,7 @@ var VideoControls = {
   },
   updateLoopingMsg: function () {
     if (this.isLooping)
-      this.$loopBtnIndex.text(this.loopingTrueStr+(this.loopedBounceIdx+1));
+      this.$loopBtnIndex.text(this.loopingTrueStr+(this.bounceLoopedIdx+1));
     else
       this.$loopBtnIndex.text(this.loopingFalseStr);
   },
@@ -99,23 +101,32 @@ var VideoControls = {
     }
     // j = loop next bounce
     else if (e.keyCode == 74){ // j
-      nextLoopIndex = this.loopedBounceIdx-1;
+      nextLoopIndex = this.highlightedRowIndex-1;
       if (nextLoopIndex < 0){
         nextLoopIndex = this.startEndTimes.length-1;
       }
-      this.loopBounce(nextLoopIndex);
+      if (this.isLooping)
+        this.loopBounce(nextLoopIndex);
+      else
+        this.playBounce(nextLoopIndex);
     }
     // l = loop previous bounce
     else if (e.keyCode == 76){ // l
-      nextLoopIndex = this.loopedBounceIdx+1;
+      nextLoopIndex = this.highlightedRowIndex+1;
       if (nextLoopIndex >= this.startEndTimes.length-1){
         nextLoopIndex = 0;
       }
-      this.loopBounce(nextLoopIndex);
+      if (this.isLooping)
+        this.loopBounce(nextLoopIndex);
+      else
+        this.playBounce(nextLoopIndex);
     }
     //  i = stop looping
     else if (e.keyCode == 73){ // i
-      this.stopLooping();
+      if (this.isLooping)
+        this.stopLooping();
+      else
+        this.loopBounce(this.highlightedRowIndex);
     }
     // ',' = slow down
     else if (e.keyCode == 188){ // ','
