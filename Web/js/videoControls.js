@@ -105,10 +105,10 @@ var VideoControls = {
       if (nextLoopIndex < 0){
         nextLoopIndex = this.startEndTimes.length-1;
       }
-      if (this.isLooping)
+      this.playBounce(nextLoopIndex);
+      if (this.isLooping){
         this.loopBounce(nextLoopIndex);
-      else
-        this.playBounce(nextLoopIndex);
+      }
     }
     // l = loop previous bounce
     else if (e.keyCode == 76){ // l
@@ -116,10 +116,10 @@ var VideoControls = {
       if (nextLoopIndex >= this.startEndTimes.length-1){
         nextLoopIndex = 0;
       }
-      if (this.isLooping)
+      this.playBounce(nextLoopIndex);
+      if (this.isLooping){
         this.loopBounce(nextLoopIndex);
-      else
-        this.playBounce(nextLoopIndex);
+      }
     }
     //  i = stop looping
     else if (e.keyCode == 73){ // i
