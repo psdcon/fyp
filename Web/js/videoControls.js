@@ -7,7 +7,7 @@ var VideoControls = {
   intervalInstance: null,
 
   loopedBounceIdx: -1, // set -1 so that when 'l' is pressed it starts looping at 0
-  previousHighlightedRow: -1,
+  highlightedRowIndex: -1,
 
   loopingTrueStr: "Looping bounce ",
   loopingFalseStr: "No bounce looping",
@@ -20,7 +20,7 @@ var VideoControls = {
     this.$playBackSpeed = $('.js-current-playback-speed');
     this.$loopBtns = $('.js-loop-btn');
     this.$loopBtnIndex = $('.js-current-loop-index');
-    this.$goNextBtn = $('.js-label-next');
+    this.$doNextBtn = $('.js-do-next');
 
     this.bindUIActions();
   },
@@ -127,8 +127,8 @@ var VideoControls = {
     }
     // n = label next
     else if (e.keyCode == 78){ // n
-      this.$goNextBtn.text('Going...');
-      this.$goNextBtn[0].click();
+      this.$doNextBtn.text('Going...');
+      this.$doNextBtn[0].click();
     }
   },
   doIntervalLoop: function() {
@@ -143,12 +143,12 @@ var VideoControls = {
       // Update the current move to the one being shown. Happens every 25 ms.
       if (that.video.currentTime >= that.startEndTimes[i].start &&
           that.video.currentTime < that.startEndTimes[i].end &&
-          i != that.previousHighlightedRow){
+          i != that.highlightedRowIndex){
 
         // Remove highlightSkill from any old rows and add it to the current row element. Old happens when current skill changes.
         $('.highlightSkill').removeClass('highlightSkill');
         that.$rowsToHighlight.eq(i).addClass('highlightSkill');
-        that.previousHighlightedRow = i;
+        that.highlightedRowIndex = i;
 
         break; // leave the loop, the row has been found
       }
@@ -157,7 +157,7 @@ var VideoControls = {
     // If the video is 3 seconds after the last skill, remove highlighting (It's probably finished).
     if (that.video.currentTime > that.startEndTimes[that.startEndTimes.length-1].end){
         $('.highlightSkill').removeClass('highlightSkill');
-        that.previousHighlightedRow = -1;
+        that.highlightedRowIndex = -1;
     }
 
   },
@@ -168,12 +168,8 @@ var VideoControls = {
     else
       newPbr = this.video.playbackRate - step;
 
-    if (newPbr > 2){
-      newPbr = 2;
-    }
-    else if (newPbr < step){
-      newPbr = step;
-    }
+    newPbr = Math.min(newPbr, 2);
+    newPbr = Math.max(newPbr, step);
 
     this.video.playbackRate = newPbr;
     this.$playBackSpeed.text('Playback Speed: '+newPbr);

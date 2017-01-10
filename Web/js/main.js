@@ -26,15 +26,15 @@ var Label = {
   bounces: [],
   skillNames: select2SkillNameData,
 
-  init: function(bounces) {
+  init: function(routineId, bounces) {
     this.bounces = bounces;
+    this.routineId = routineId;
 
     this.select2Setup();
     this.select2Preload();
 
     this.bindUIActions();
 
-    $(".alert").alert();
   },
   select2Setup: function(){
     var that = this;
@@ -66,7 +66,7 @@ var Label = {
 
   },
   save: function(){
-    var that = this;
+    var that = Label;
 
     $('.js-save').text('Saving...');
 
@@ -79,14 +79,17 @@ var Label = {
     $.post({
       url: "includes/ajax.db.php",
       data: "action=updateBounces" +
-        "&id=<?=$_GET['routine_id']?>"+
+        "&id=" + that.routineId +
         "&bounces=" + JSON.stringify(that.bounces),
       dataType: "text",
       success: function (data) {
-        $('.js-save').text('Save');
-        $('.alert').show();
-        if (data !== "") {
-          $('.alert').html("<strong>Something went wrong:</strong> "+data);
+        if (data.length === 0) {
+          $('.js-save').text('Saved!');
+        }
+        else {
+          $('.js-save').text('Not Saved');
+
+          console.log(data);
         }
       }
     });
@@ -96,13 +99,17 @@ var Label = {
 
 
 var Judge = {
-  init: function() {
+  bounces: [],
+
+  init: function(routineId, bounces) {
+    this.bounces = bounces;
+    this.routineId = routineId;
+
     this.bindUIActions();
 
     // Autofocus the first input
     $('.js-deduction')[0].focus();
 
-    $(".alert").alert();
   },
   bindUIActions: function(){
     that = this;
@@ -115,56 +122,122 @@ var Judge = {
 
     $('.js-save').click(that.save);
   },
-  validateNumber: function($this) {
-    val = $this.val();
-    if (!$.isNumeric(val)){
-      $this.val("");
+  validateNumber: function($thatNumberInput) {
+    val = $thatNumberInput.val();
+
+    if (val.includes('.')){
+      val = parseInt(val);
+      val = (isNaN(val))? "0": val; // is NaN is val<1, i.e. '0.4'
+      $thatNumberInput.val(val);
     }
     else if (val < 0){
-      $this.val("0");
+      $thatNumberInput.val("0");
     }
     else if (val > 5){
-      $this.val("5");
+      $thatNumberInput.val("5");
     }
   },
   calculateScore: function(){
-    numBounces = $('.js-deduction').length;
-    if (numBounces > 10)
-      numBounces = 10;
-
-    totalDeductions = 0;
+    var numBounces = $('.js-deduction').length;
+    numBounces = Math.min(numBounces, 10);
+    var totalDeductions = 0;
     for (var i = 0; i < numBounces; i++) {
-      totalDeductions += parseInt($('.js-deduction')[i].value)/10;
+      totalDeductions += parseInt($('.js-deduction')[i].value)/numBounces;
     }
 
-    score = 10 - totalDeductions;
+    var score = numBounces - totalDeductions;
     $('.js-score').text(score.toFixed(1));
   },
   save: function(){
-    $('.js-save').text('Saving...');
+    var that = Judge;
+     $('.js-save').text('Saving...');
 
     // Get the deductions for all skills
-    deductions = [];
-    for (var i = 0; i < $(".js-deduction").length; i++) {
-      deductions.push($(".js-deduction")[i].value);
+    var deductionsIndex = 0; // separate index thanks to the ...
+    var deductions = [];
+    for (var i = 0; i < that.bounces.length; i++) {
+      var bounce = that.bounces[i];
+      var score = null;
+      if (bounce.name != "In/Out Bounce" && bounce.name != "Broken") {
+        score = ($(".js-deduction")[deductionsIndex].value/10).toFixed(1);
+        deductionsIndex++;
+      }
+      deductions.push(score);
     }
 
     // Send to server
     $.post({
       url: "includes/ajax.db.php",
       data: "action=judge" +
-        "&id=<?=$_GET['routine_id']?>"+
+        "&id=" + that.routineId +
         "&deductions=" + JSON.stringify(deductions),
       dataType: "text",
       success: function (data) {
-        $('.js-save').text('Save');
-        $('.alert').show();
-        if (data !== "") {
-          $('.alert').html("<strong>Something went wrong:</strong> "+data);
+        if (data.length === 0) {
+          $('.js-save').text('Saved!');
+        }
+        else {
+          $('.js-save').text('Not Saved');
+
+          console.log(data);
         }
       }
     });
   }
-
 };
 
+// Chart stuff
+var Tally = {
+  labels: ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5"],
+  backgroundColors: [
+    'rgba(255, 99, 132, 0.2)',
+    'rgba(54, 162, 235, 0.2)',
+    'rgba(255, 206, 86, 0.2)',
+    'rgba(75, 192, 192, 0.2)',
+    'rgba(153, 102, 255, 0.2)',
+    'rgba(255, 159, 64, 0.2)'
+  ],
+  borderColors: [
+    'rgba(255,99,132,1)',
+    'rgba(54, 162, 235, 1)',
+    'rgba(255, 206, 86, 1)',
+    'rgba(75, 192, 192, 1)',
+    'rgba(153, 102, 255, 1)',
+    'rgba(255, 159, 64, 1)'
+  ],
+  options: {
+      scales: {
+          yAxes: [{
+              ticks: {
+                  beginAtZero:true,
+                  stepSize: 1,
+                  suggestedMax: 5
+              }
+          }]
+      },
+      legend: {
+        display: false
+      }
+  },
+  init: function() {
+    var that = this;
+
+    $('canvas').each(function( index ) {
+      thisData = $(this).data('chart-data');
+      new Chart(this, {
+          type: 'bar',
+          data: {
+              labels: that.labels,
+              datasets: [{
+                  data: thisData,
+                  backgroundColor: that.backgroundColors,
+                  borderColor: that.borderColors,
+                  borderWidth: 1
+              }]
+          },
+          options: that.options
+      });
+    });
+
+  }
+};

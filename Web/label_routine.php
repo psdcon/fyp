@@ -1,20 +1,21 @@
 <?php
 include_once 'includes/functions.php';
+$routineId = $db->escapeString($_GET['routine_id']);
 
-$routineQuery = $db->query("SELECT * FROM routines WHERE id=".$_GET['routine_id']." LIMIT 1");
+$routineQuery = $db->query("SELECT * FROM routines WHERE id=$routineId LIMIT 1");
 $routine = $routineQuery->fetchArray(SQLITE3_ASSOC);
 $bouncesJSON = json_decode($routine['bounces'], true);
 
 // Create link to next unlabelled routine
-$nextLabelIdQuery = $db->query("SELECT * FROM routines WHERE id>".$_GET['routine_id']." AND bounces LIKE '%\"name\": \"\"%' LIMIT 1");
-$nextLabelId = $nextLabelIdQuery->fetchArray(SQLITE3_ASSOC);
-$labelNextBtn = ($nextLabelId)?
-  '<a href="label_routine.php?routine_id='.$nextLabelId['id'].'" class="btn btn-secondary js-label-next" title="'.$nextLabelId['name'].'">Label Next</a>':
-  '<a href="list_routines.php" class="btn btn-secondary js-label-next" title="None left to label">Back to Routines</a>';
+$nextIdQuery = $db->query("SELECT * FROM routines WHERE id>$routineId AND bounces LIKE '%\"name\": \"\"%' LIMIT 1");
+$nextId = $nextIdQuery->fetchArray(SQLITE3_ASSOC);
+$nextBtn = ($nextId)?
+  '<a href="label_routine.php?routine_id='.$nextId['id'].'" class="float-right btn btn-secondary js-do-next" title="Label the next routine: '.$nextId['name'].'">Label Next</a>':
+  '<a href="list_routines.php" class="float-right btn btn-secondary js-do-next" title="None left to label">Back to Routines</a>';
 
 
 $title = 'Label Routine';
-$navIndex = 1;
+// $navIndex = 1;
 addHeader();
 ?>
 
@@ -36,24 +37,14 @@ addHeader();
 <div class="row">
   <div class="col-md-6">
     <video src="videos/<?=$routine['name']?>" controls autobuffer style="max-width:100%"></video>
-    <div class="row">
-      <div class="col-sm">
-        <?=$labelNextBtn?>
-        <button class="btn btn-primary js-save">Save</button>
-      </div>
-      <div class="col-sm" style="text-align:right">
-        <div class="js-current-playback-speed">Playback Speed: 1</div>
-        <div class="js-current-loop-index">No bounce looping</div>
-      </div>
+
+    <div class="col-sm" style="text-align:right">
+      <div class="js-current-playback-speed">Playback Speed: 1</div>
+      <div class="js-current-loop-index">No bounce looping</div>
     </div>
 
-    <div class="alert alert-success alert-dismissible" style="display:none" role="alert">
-      <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-        <span aria-hidden="true">&times;</span>
-      </button>
-      <strong>Saved!</strong> Thank you mucho.
-    </div>
   </div>
+
   <div class="col-md-6">
 
     <?php
@@ -62,7 +53,7 @@ addHeader();
         array_push($startEndTimes, ["start" => $bounce['startTime'], "end" => $bounce['endTime']]);
         ?>
 
-        <div class="row js-bounce">
+        <div class="js-bounce" style="display:flex">
           <!-- Index -->
           <span class="index"><?=($i+1)?>.</span>
           <!-- Loop button -->
@@ -70,13 +61,20 @@ addHeader();
             <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
           </button>
           <!-- Select skill -->
-          <select class="js-select2" style="width:80%"></select>
+          <span style="flex-grow:1">
+            <select class="js-select2" style="width:100%"></select>
+          </span>
         </div>
 
         <?php
       }
     ?>
 
+   <div style="padding-top: 0.5em;">
+      <button class="btn btn-primary js-save">Save</button>
+      <a href="judge_routine.php?routine_id=<?=$routineId?>" class="float-right btn btn-secondary js-do-next" style="margin-left: 0.3rem;" title="Judge this Routine">Judge This</a>
+      <?=$nextBtn?>
+   </div>
   </div>
 </div>
 
@@ -94,6 +92,7 @@ addScripts();
   );
 
   Label.init(
+    <?=$routine['id']?>,
     <?=$routine['bounces']?>
   );
 

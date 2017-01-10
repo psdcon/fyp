@@ -31,10 +31,10 @@ while($routine = $routines->fetchArray(SQLITE3_ASSOC)){
     <div class="col-md-2 col-8">
       <?php if ($isLabelled){?>
         <span style="padding-right:1em; color:#aaa;" title="Already labelled">Labelled</span>
-        <a href="judge_routine.php?routine_id=<?=$routine['id']?>"><i class="fa fa-star-half-o" aria-hidden="true"></i> Judge</a>
+        <a href="judge_routine.php?routine_id=<?=$routine['id']?>" style="white-space: nowrap"><i class="fa fa-star-half-o" aria-hidden="true"></i> Judge</a>
       <?php } else { ?>
-        <a href="label_routine.php?routine_id=<?=$routine['id']?>" style="padding-right:1em"><i class="fa fa-tag" aria-hidden="true"></i> Label</a>
-        <span style="padding-right:1em; color:#aaa;" title="Label first"><i class="fa fa-star-half-o" aria-hidden="true"></i> Judge</span>
+        <a href="label_routine.php?routine_id=<?=$routine['id']?>" style="white-space: nowrap;padding-right:1rem;"><i class="fa fa-tag" aria-hidden="true"></i> Label</a>
+        <span style="padding-right:1em; color:#aaa; white-space: nowrap;" title="Label first"><i class="fa fa-star-half-o" aria-hidden="true"></i> Judge</span>
       <?php }?>
     </div>
     <div class="col-md-1 col-4" title="No score yet" style="text-align:center"><span>N/A</span></div>

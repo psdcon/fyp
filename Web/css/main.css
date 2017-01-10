@@ -10,7 +10,7 @@ body {
   margin-top: 1rem;
 }
 /* Hotfix for bootstrap alpha-6 issue */
-@media (max-width: 991px) {
+@media (max-width: 576px) {
   .navbar-toggleable-md>.container {
     margin: 0;
   }
