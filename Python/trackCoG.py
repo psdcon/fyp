@@ -7,10 +7,15 @@ from copy import deepcopy
 
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
+from scipy import signal
 
 import FindTrampoline
 from libs.peakdetect import peakdetect
+
+from os import listdir
+from os.path import isfile, join
 
 # https://github.com/opencv/opencv/issues/6055
 cv2.ocl.setUseOpenCL(False)
@@ -66,6 +71,132 @@ levels = [
 #             cap.release()
 #             cv2.destroyAllWindows()
 
+def createVideo():
+    import re
+
+    def atoi(text):
+        return int(text) if text.isdigit() else text
+
+    def natural_keys(text):
+        '''
+        alist.sort(key=natural_keys) sorts in human order
+        http://nedbatchelder.com/blog/200712/human_sorting.html
+        (See Toothy's implementation in the comments)
+        '''
+        return [atoi(c) for c in re.split('(\d+)', text)]
+
+    cap = cv2.VideoCapture(0)
+    mypath = 'C:/Users/psdco/Videos/Trainings/480p/0 day1 rout2 720x480/'
+    videoFramesPaths = [mypath+f for f in listdir(mypath) if (isfile(join(mypath, f)) and '_vis' in f)]
+    print(videoFramesPaths.sort(key=natural_keys))
+
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('C:/Users/psdco/Videos/Trainings/480p/output.avi', fourcc, 30.0, (200, 200))
+
+    for vfp in videoFramesPaths:
+        frame = cv2.imread(vfp)
+        out.write(frame)
+        # cv2.imshow('frame', frame)
+        # if cv2.waitKey(10) & 0xFF == ord('q'):
+        #     break
+
+    # Release everything if job is finished
+    out.release()
+    cv2.destroyAllWindows()
+
+def judgeRealBasic():
+    # Started 22:54
+    # Open the database and find all the straddle jumps
+    db = sqlite3.connect(dbPath)
+    db.row_factory = sqlite3.Row
+
+    # Get all the routines with straddle jumps
+    routines = db.execute("SELECT * FROM routines WHERE bounces LIKE '%Straddle%'")
+    routines = routines.fetchall()  # copy everything pointed to by the cursor into an object.
+
+    deductionCats = {
+        "0.0": {"x": [], "y": []},
+        "0.1": {"x": [], "y": []},
+        "0.2": {"x": [], "y": []},
+        "0.3": {"x": [], "y": []},
+        "0.4": {"x": [], "y": []},
+        "0.5": {"x": [], "y": []}
+    }
+
+    # For each one, get the frame no for midpoint, its major and minor ellipse axis at that frame, it's deduction
+    for routine in routines:
+        deductionsQuery = db.execute("SELECT * FROM judgements WHERE routine_id=? ORDER BY id ASC LIMIT 1", (routine['id'],))
+        deductionsQuery = deductionsQuery.fetchone()
+
+        deductions = json.loads(deductionsQuery[2])
+        bounces = json.loads(routine['bounces'])
+        ellipses = json.loads(routine['ellipses'])
+
+        for i, bounce in enumerate(bounces):
+            if bounce['name'] == "Straddle Jump":
+                midFrame = bounce['maxHeightFrame']
+                pt1 = ellipses[midFrame + 1][1]
+                pt2 = ellipses[midFrame + 1][2]
+                major = abs(pt1[0]-pt2[0])
+                minor = abs(pt1[1]-pt2[1])
+                deduction = deductions[i]
+                deductionCats[deduction]["x"].append(major)
+                deductionCats[deduction]["y"].append(minor)
+
+    # print(deductionCats)
+    # Plot
+    colors = ['r', 'g', 'b', 'cyan', 'magenta', 'yellow']
+    handles = []
+    for i, cat in enumerate(deductionCats):
+        handles.append(mpatches.Patch(color=colors[i], label=cat))
+        thisdict = deductionCats[cat]
+        plt.scatter(thisdict['x'], thisdict['y'], color=colors[i], marker='o')
+    plt.legend(handles=handles)
+    plt.show()
+
+
+def severalFramesOfSkill(cap, routine):
+    capWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    capHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    bounces = json.loads(routine['bounces'])
+    print('\nChoose a skill:')
+    for i, b in enumerate(bounces):
+        print('%d) %s' % (i + 1, b['name']))
+    choice = 10
+    # choice = readNum(len(bounces))
+
+    bounce = bounces[choice - 1]
+    start = bounce['startFrame'] + 6
+    end = bounce['endFrame'] - 6
+    step = (end - start) / 6
+    step = int(step)
+    framesToSave = range(start, end, step)
+
+    whitespace = 4
+    width = 255
+
+    startPixel = int((capWidth * 0.55) - width / 2)
+    endPixel = startPixel + width
+    filmStrip = np.ones(shape=(capHeight * 0.8, (width * len(framesToSave)) + (whitespace * len(framesToSave) - 1), 3), dtype=np.uint8)
+
+    for i, frameNum in enumerate(framesToSave):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
+        _ret, frame = cap.read()
+
+        # possible improvement
+        trackPerson = frame[0:capHeight * 0.8, startPixel:endPixel]
+        start = ((whitespace + width) * i)
+        filmStrip[0:capHeight * 0.8, start:start + width] = trackPerson
+
+    imgName = "C:/Users/psdco/Videos/{}/{}.png".format(routine['name'][:-4], bounce['name'])
+    print("Writing frame to {}".format(imgName))
+    ret = cv2.imwrite(imgName, filmStrip)
+    if not ret:
+        print("Couldn't write image {}\nAbort!".format(imgName))
+        exit()
+
 
 def main():
     db = sqlite3.connect(dbPath)
@@ -79,6 +210,11 @@ def main():
         # Open the routine file
         cap = openVideo(routine['name'])
         fps = cap.get(cv2.CAP_PROP_FPS)
+
+        # spit out several frames of a tuck jump
+        visualisePose(cap, routine)
+        # severalFramesOfSkill(cap, routine)
+        exit()
 
         # Do trampoline top stuff
         routine['trampoline'] = json.loads(routine['trampoline'])
@@ -121,34 +257,107 @@ def main():
 
 def visualisePose(cap, routine, padding=100):
     # colours = [red, green, blue, yellow, purple, cyan,  red, green, blue, cyan, purple, yellow, red, green] bgr
-    # [rfoot, rknee, rhip, lfoot, lknee, lhip, rhand, rerbow, rshoulder, lshoulder, lelbow, lhand, neck, head top]
+    # [rfoot, rknee, rhip, lhip, lknee, lfoot, rhand, relbow, rshoulder, lshoulder, lelbow, lhand, neck, head top]
     colours = [(0, 0, 255), (0, 255, 0), (255, 0, 0), (0, 255, 255), (255, 0, 255), (255, 255, 0), (0, 0, 255),
                (0, 255, 0), (255, 0, 0), (255, 255, 0), (255, 0, 255), (0, 255, 255), (0, 0, 255), (0, 255, 0)]
 
     # TODO this assumes there is a file with all poses for each frame in it
-    posePath = videoPath + routine['name'][:-4] + "/pose.npz"
-    poses = np.load(posePath)['poses']
-    while 1:
-        ret, frame = cap.read()
-        frameNo = cap.get(cv2.CAP_PROP_POS_FRAMES)
-        centerPoints = routine['center_points'][frameNo]
-        pose = poses[frameNo]
-        # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
-        # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
-        posex = int(centerPoints[0] - padding + pose[0, p_idx])
-        posey = int(centerPoints[1] - padding + pose[1, p_idx])
+    # posePath = videoPath + routine['name'][:-4] + "/pose.npz"
+    # poses = np.load(posePath)['poses']
+    poses = {}
+    for frameNo in range(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)+1)):
+        posePath = videoPath + routine['name'][:-4] + "/frame {}_pose.npz".format(frameNo)
+        try:
+            pose = np.load(posePath)['pose']
+        except IOError:
+            continue
+        poses.update({frameNo: pose})
 
-        for p_idx in range(14):
-            cv2.circle(frame, (posex, posey), 5, colours[p_idx], thickness=-1)  # -ve thickness = filled
+    # # Filter pose
+    # frameNos = [frameNo for frameNo in poses]  # frame no
+    # x = [poses[frameNo][0, 0] for frameNo in poses]  # rfoot x
+    # y = [poses[frameNo][1, 0] for frameNo in poses]  # rfoot y
+    #
+    # b, a = signal.ellip(4, 0.01, 120, 0.055)  # Filter to be applied.
+    # xFilt = signal.filtfilt(b, a, x, method="gust")
+    # yFilt = signal.filtfilt(b, a, y, method="gust")
+    #
+    # for idx, frameNo in enumerate(frameNos):
+    #     # Save rfoot pts in rknee
+    #     poses[frameNo][0, 1] = poses[frameNo][0, 0]  # x
+    #     poses[frameNo][1, 1] = poses[frameNo][1, 0]  # y
+    #     # Overwrite rfoot with filtered sig
+    #     poses[frameNo][0, 0] = xFilt[idx]
+    #     poses[frameNo][1, 0] = yFilt[idx]
 
-        # Lines between points
-        #  Could loop in pairs and link skipping ones that shouldnt be linked.
-        # cv2.line(trackPerson,
-        #          (int(thisFramePose[0, 0]), int(thisFramePose[1, 0])),
-        #          (int(thisFramePose[0, 1]), int(thisFramePose[1, 1])),
-        #          colours[0], 4)
+    routine['center_points'] = json.loads(routine['center_points'])
+    routine['center_points'] = {cp[0]: [cp[1], cp[2]] for cp in routine['center_points']}
+    # while 1:
+    #     ret, frame = cap.read()
+    #     frameNo = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+    #     if frameNo not in routine['center_points']:
+    #         continue
+    #
+    #     cpt = routine['center_points'][frameNo]
+    #     cx = cpt[0]
+    #     cy = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) - cpt[1])
+    #
+    #     # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
+    #     # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
+    #     pose = poses[frameNo]
+    #     for p_idx in [0, 1]:  # range(14):
+    #         posex = int((cx - padding) + pose[0, p_idx])
+    #         posey = int((cy - padding) + pose[1, p_idx])
+    #         cv2.circle(frame, (posex, posey), 5, colours[p_idx], thickness=-1)  # -ve thickness = filled
+    #
+    #     # Lines between points
+    #     #  Could loop in pairs and link skipping ones that shouldnt be linked.
+    #     # cv2.line(trackPerson,
+    #     #          (int(thisFramePose[0, 0]), int(thisFramePose[1, 0])),
+    #     #          (int(thisFramePose[0, 1]), int(thisFramePose[1, 1])),
+    #     #          colours[0], 4)
+    #
+    #     cv2.imshow('frame', frame)
+    #     if cv2.waitKey(50) & 0xFF == ord('q'):
+    #         break
+    #
+    #     # Finish playing the video when we get to the end.
+    #     if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
+    #         break
 
-        cv2.imshow('frame', frame)
+    cv2.destroyAllWindows()
+    # print(poses)
+    # x = [frameNo for frameNo in poses]  # frame no
+    # y = [480-poses[frameNo][1, 0] for frameNo in poses]  # rfoot
+    #
+    # b, a = signal.ellip(4, 0.01, 120, 0.055)  # Filter to be applied.
+    # fgust = signal.filtfilt(b, a, y, method="gust")
+    #
+    # plt.plot(x, y, label="Original")
+    # plt.plot(x, fgust, label="fgust")
+
+    frameNos = [frameNo for frameNo in poses]  # frame no
+    # x = [poses[frameNo][0, 0] for frameNo in poses]  # rfoot x
+    y = [poses[frameNo][1, 0] for frameNo in poses]  # rfoot y
+    diffy = np.diff(y)
+    myDiff = []
+    newY = y
+    for i, _ in enumerate(newY[:-2]):
+        thisPt = newY[i]
+        nextPt = newY[i+1]
+        diff = nextPt-thisPt
+        myDiff.append(diff)
+        if abs(diff) > 20:
+            avg = (newY[i]+newY[i+2])/2
+            newY[i+1] = avg
+    y = np.array(y) - 10
+
+    plt.plot(frameNos, y, label="y original")
+    plt.plot(frameNos, newY, label="newY")
+    plt.plot(frameNos[:-1], diffy, label="diff y")
+    plt.plot(frameNos[:-2], myDiff, label="my diff y")
+    plt.legend(loc='best')
+    plt.show()
 
 
 def trackGymnast(cap, routine):
@@ -177,7 +386,7 @@ def trackGymnast(cap, routine):
     capHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     resizeWidth = int(capWidth * scalingFactor)
     resizeHeight = int(capHeight * scalingFactor)
-    maskLeftBorder = int(capWidth * 0.35)  # TODO user video['trampoline']['center'] +- trampoline Width
+    maskLeftBorder = int(capWidth * 0.35)  # TODO use routine['trampoline']['center'] +- trampoline Width
     maskRightBorder = int(capWidth * 0.65)
 
     # Create array for tiled window
@@ -192,12 +401,12 @@ def trackGymnast(cap, routine):
     pKNN.setShadowValue(0)
 
     # Average background
-    framesToAverageStart = cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5
-    framesToAverageEnd = cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5 + framesToAverage  # Variable only for printing purposes
+    framesToAverageStart = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) - (framesToAverage / 2)
+    framesToAverageEnd = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) + (framesToAverage / 2)  # Variable only for printing purposes
     print("Averaging frames {:.0f} - {:.0f}, please wait...".format(framesToAverageStart, framesToAverageEnd))
     cap.set(cv2.CAP_PROP_POS_FRAMES, framesToAverageStart)
     for i in range(framesToAverage):
-        ret, frame = cap.read()
+        _ret, frame = cap.read()
         pKNN.apply(frame)
 
     # Reset video to start
@@ -210,7 +419,7 @@ def trackGymnast(cap, routine):
     ellipses = []
     lastContours = None  # used to remember last contour if area goes too small
     while 1:
-        ret, frame = cap.read()
+        _ret, frame = cap.read()
 
         fgMaskKNN = pKNN.apply(frame)
         KNNErodeDilated = erodeDilate(fgMaskKNN)
@@ -271,6 +480,8 @@ def trackGymnast(cap, routine):
                 cy = int(M['m01'] / M['m00'])
 
                 cv2.circle(frame, (cx, cy), 1, (0, 0, 255), -1)
+                # TODO don't invert y axis
+                # TODO Save as dict with frame number as key
                 centerPoints.append([int(cap.get(cv2.CAP_PROP_POS_FRAMES)), cx, capHeight - cy])
 
                 # Fit ellipse
@@ -278,10 +489,11 @@ def trackGymnast(cap, routine):
                 if len(contours[0]) > 5:  # ellipse requires contour to have at least 5 points
                     ellipse = cv2.fitEllipse(contours[0])
                     # frame, major, minor, angle
+                    # TODO Save as dict with frame number as key
                     ellipses.append([int(cap.get(cv2.CAP_PROP_POS_FRAMES))] + list(ellipse))
                     cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
                 else:
-                    print("Couldn't find enough points for ellipse")
+                    print("Couldn't find enough points for ellipse. Need 5, found {}".format(len(contours[0])))
 
                 x1, x2, y1, y2 = boundingSquare(capHeight, capWidth, cx, cy)
                 if visualise:
@@ -357,7 +569,7 @@ def plotData(routine, fps):
     y_travel = [pt[1] for pt in routine['center_points']]
     y_height = [pt[2] for pt in routine['center_points']]
 
-    peaks_x = [[bounce['startFrame']/fps, bounce['maxHeightFrame']/fps] for bounce in routine['bounces']]
+    peaks_x = [[bounce['startFrame'] / fps, bounce['maxHeightFrame'] / fps] for bounce in routine['bounces']]
     peaks_y = [[bounce['startHeightInPixels'], bounce['maxHeightInPixels']] for bounce in routine['bounces']]
 
     axarr[0].set_title("Height")
@@ -404,7 +616,7 @@ def calculateBounces(routine, fps):
     maxima, minima = peakdetect(y, x, lookahead=8, delta=20)
 
     bounces = []
-    for i in range(len(minima) - 1):
+    for i in range(len(minima)):
         thisBedHit = minima[i]
         nextBedHit = minima[i + 1]
         jumpMaxHeight = maxima[i]
@@ -431,7 +643,7 @@ def askWhichRoutineFromDb(db):
         return dictItems
 
     print('\nTrack all untracked videos? [y/n]')
-    if inputWasYes():
+    if False and inputWasYes():
         # videos = db.execute("SELECT * FROM videos WHERE center_points='[]'")
         routines = db.execute("SELECT * FROM routines WHERE bounces='[]'")
         return dict_gen(routines.fetchall())  # copy everything pointed to by the cursor into an object.
@@ -439,13 +651,15 @@ def askWhichRoutineFromDb(db):
     print('\nChoose a comp:')
     for i, c in enumerate(comps):
         print('%d) %s' % (i + 1, c))
-    compChoice = 0  # readNum(len(comps))
+    compChoice = 1
+    # compChoice = readNum(len(comps))
     compChoice = comps[compChoice - 1]
 
     print('\nChoose a level:')
     for i, l in enumerate(levels):
         print('%d) %s' % (i + 1, l))
     levelChoice = 7  # readNum(len(levels))
+    # levelChoice = readNum(len(levels))
     levelChoice = levels[levelChoice - 1]
 
     if levelChoice == 'All':
@@ -458,8 +672,8 @@ def askWhichRoutineFromDb(db):
     for i, v in enumerate(selectedVids):
         str = "{} - {}".format(v['name'], v['level'])
         print('%d) %s' % (i + 1, str))
-    vidChoice = readNum(len(selectedVids))
-    # vidChoice = 1  # readNum(len(selectedVids))
+    # vidChoice = readNum(len(selectedVids))
+    vidChoice = 1
     vidRow = selectedVids[vidChoice - 1]
 
     return dict_gen([vidRow])
@@ -523,4 +737,6 @@ def parseNum(s):
 
 
 if __name__ == '__main__':
+    # judgeRealBasic()
+    # createVideo()
     main()
