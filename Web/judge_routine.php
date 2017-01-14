@@ -27,7 +27,7 @@ addHeader();
   <small><?=$routine['level']?></small>
 </h4>
 <p>
-  Tab will move along skills. Use Up and Down arrow keys to change the deduction. If you're a bit rusty on the judging, check out the <a href="http://www.fig-gymnastics.com/publicdir/rules/files/tra/TRA-CoP_2017-2020-e.pdf">2017 - 2020 Code Of Points</a>, page 36 and on. <br>
+  Tab will move along skills. Use Up and Down arrow keys to change the deduction. If you're a bit rusty on the judging, check out the <a href="http://www.fig-gymnastics.com/publicdir/rules/files/tra/TRA-CoP_2017-2020-e.pdf">2017 - 2020 Code Of Points</a>, page 36 and on. Keyboard shortcuts include:
   <strong>Ctrl+Enter</strong> Save.
   <strong>n</strong> Label Next.
   <strong>k</strong> Play/pause the video.
@@ -57,9 +57,19 @@ addHeader();
         </div>
     <?php } else { ?>
 
+    <form> <!-- form is here for autocomplete to work -->
+    <div class="row">
+      <div class="col form-inline">
+          <label for="name" class="mr-2">Your Name:</label>
+          <input type="text" id="name" autocomplete="given-name" required class="form-control js-username" style="flex-grow:1" value="<?=isset($_COOKIE['userName'])?$_COOKIE['userName']:''?>" placeholder="Name">
+      </div>
+    </div>
+    </form>
+
+
     <div class="row" style="padding-bottom:0.3rem; font-weight:bold">
-      <div class="col-9">Name</div>
-      <div class="col-3" style="text-align:center">Deduction</div>
+      <div class="col-9">Skill Name</div>
+      <div class="col-3" style="text-align:right">Deduction</div>
     </div>
 
     <?php
@@ -77,14 +87,14 @@ addHeader();
             <span class="index"><?=$count+1?>.</span>
 
             <!-- Loop button -->
-            <button class="btn-link btn-sm js-loop-btn" tabindex="-1">
+            <button class="btn-link btn-sm js-loop-btn" tabindex="-1" title="Click to loop the video on one skill. Press i to stop looping.">
               <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
             </button>
 
             <?=$bounce['name']?>
           </div>
 
-          <div class="col-3" style="text-align:center">
+          <div class="col-3" style="text-align:right">
             <!-- Don't allow judging if skill is broken -->
             <?php if ($bounce['name'] == 'Broken') { ?>
               N/A
@@ -103,7 +113,7 @@ addHeader();
     <div class="row">
       <div class="col" style="text-align:center">
         <strong>Score:</strong>
-        <span class="js-score">7.0</span>
+        <span class="js-score">0.0</span>
       </div>
     </div>
 

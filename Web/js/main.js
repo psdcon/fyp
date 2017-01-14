@@ -150,7 +150,14 @@ var Judge = {
   },
   save: function(){
     var that = Judge;
-     $('.js-save').text('Saving...');
+
+    if ($('.js-username').val().trim() === ""){
+      alert('Please enter your name before saving.');
+      $('.js-username').focus();
+      return;
+    }
+
+    $('.js-save').text('Saving...');
 
     // Get the deductions for all skills
     var deductionsIndex = 0; // separate index thanks to the ...
@@ -170,6 +177,7 @@ var Judge = {
       url: "includes/ajax.db.php",
       data: "action=judge" +
         "&id=" + that.routineId +
+        "&userName=" + $('.js-username').val().trim() +
         "&deductions=" + JSON.stringify(deductions),
       dataType: "text",
       success: function (data) {

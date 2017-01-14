@@ -117,6 +117,7 @@ addHeader();
   <?php
   foreach ($labelledBounceData as $bounceName => $bounceData) {
     // Strip ASSOC keys so that only data is left. This is picked up by Chart.datasets.data
+    $judgementsCount = array_sum(array_values($bounceData['judgements']));
     $chartData = json_encode(array_values($bounceData['judgements']));
     ?>
     <div class="col-sm-6 col-md-4 col-lg-3">
@@ -126,7 +127,7 @@ addHeader();
 
           <h6 class="card-title">
             <?=$bounceName?>
-            <small class="float-right"><?=$bounceData['count']?></small>
+            <small class="float-right"><?=$judgementsCount?>/<?=$bounceData['count']?></small>
           </h6>
 
           <canvas id="<?=$bounceName?>" data-chart-data="<?=$chartData?>" style="width:100%;"></canvas>

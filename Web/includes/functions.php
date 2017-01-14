@@ -7,7 +7,7 @@ $db = new SQLite3($dbPath) or die('Unable to open database: '.$db->lastErrorMsg(
  $userId = (isset($_COOKIE['userId']))?
   $_COOKIE['userId']:
   md5(uniqid());
- setcookie('userId', $userId, time()+60*60*24*365, '/'); // Update/Set
+setcookie('userId', $userId, time()+60*60*24*365, '/'); // Update/Set
 
 $navIndex = -1;
 function addHeader() {

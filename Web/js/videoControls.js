@@ -99,7 +99,7 @@ var VideoControls = {
         this.video.pause();
       }
     }
-    // j = loop next bounce
+    // j = previous bounce
     else if (e.keyCode == 74){ // j
       nextLoopIndex = this.highlightedRowIndex-1;
       if (nextLoopIndex < 0){
@@ -110,10 +110,10 @@ var VideoControls = {
         this.loopBounce(nextLoopIndex);
       }
     }
-    // l = loop previous bounce
+    // l = next bounce
     else if (e.keyCode == 76){ // l
       nextLoopIndex = this.highlightedRowIndex+1;
-      if (nextLoopIndex >= this.startEndTimes.length-1){
+      if (nextLoopIndex > this.startEndTimes.length-1){
         nextLoopIndex = 0;
       }
       this.playBounce(nextLoopIndex);
