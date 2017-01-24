@@ -18,7 +18,7 @@ $title = 'Label Routine';
 // $navIndex = 1;
 addHeader();
 ?>
-
+<!--
 <h4>
   <?=$routine['name']?>
   <small><?=$routine['level']?></small>
@@ -32,7 +32,7 @@ addHeader();
   <strong>i</strong> Toggle looping.
   <strong>.</strong> Speed up video.
   <strong>,</strong> Slow down video.
-</p>
+</p> -->
 
 <div class="row">
   <div class="col-md-6">

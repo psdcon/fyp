@@ -218,8 +218,8 @@ var Tally = {
           yAxes: [{
               ticks: {
                   beginAtZero:true,
-                  stepSize: 1,
-                  suggestedMax: 5
+                  stepSize: 5,
+                  suggestedMax: 30
               }
           }]
       },

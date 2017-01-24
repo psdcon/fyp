@@ -8,7 +8,7 @@ addHeader();
 <div class="jumbotron jumbotron-fluid">
   <div class="container">
     <h1 style="font-weight: 300;">Final Year Project</h1>
-    <p class="lead">This website was made to help label and judge trampoline routine videos</p>
+    <p class="lead">This website was made to help label and judge trampoline routine videos.</p>
     <div>Click the <a href="list_routines.php">Routines</a> link to get to the action.</div>
   </div>
 </div>
@@ -92,12 +92,24 @@ addHeader();
   $labelPercentComplete = (int) (($bounceLabelledCount/$bounceCount)*100);
   $judgePercentComplete = (int) (($routinesJudgedCount/$isLabelledCount)*100);
 
+  // All routines in database, included untracked
+  $totalRoutinesCountQuery = $db->query("SELECT count(1) AS c FROM routines");
+  $totalRoutinesCount = $totalRoutinesCountQuery->fetchArray(SQLITE3_ASSOC)['c'];
+  $trackedPercentComplete = (int) (($routinesCount/$totalRoutinesCount)*100)
+
 ?>
 
   <div class="row">
 
     <div class="col-md" style="padding-bottom: 1rem">
-      Labelled <?=$isLabelledCount?> of <?=$routinesCount?> routines, <?=$bounceLabelledCount?> of <?=$bounceCount?> bounces. Total of <?=count($labelledBounceData)?> individual skills.
+      Tracked <?=$routinesCount?> of <?=$totalRoutinesCount?> recorded routines.
+      <div class="progress">
+        <div class="progress-bar bg-warning" role="progressbar" style="width: <?=$trackedPercentComplete?>%" aria-valuenow="<?=$trackedPercentComplete?>" aria-valuemin="0" aria-valuemax="100"><?=$trackedPercentComplete?>%</div>
+      </div>
+    </div>
+
+    <div class="col-md" style="padding-bottom: 1rem">
+      Labelled <?=$isLabelledCount?> of <?=$routinesCount?> tracked routines.
       <div class="progress">
         <div class="progress-bar bg-success" role="progressbar" style="width: <?=$labelPercentComplete?>%" aria-valuenow="<?=$labelPercentComplete?>" aria-valuemin="0" aria-valuemax="100"><?=$labelPercentComplete?>%</div>
       </div>
@@ -111,11 +123,19 @@ addHeader();
     </div>
 
   </div>
+<!--
+  <div class="row">
+    <div class="col">
+      Labelled <?=$bounceLabelledCount?> of <?=$bounceCount?> bounces. Total of <?=count($labelledBounceData)?> individual skills
+    </div>
+  </div> -->
 
   <div class="row">
 
   <?php
   foreach ($labelledBounceData as $bounceName => $bounceData) {
+    if ($bounceName == "Broken")
+      continue;
     // Strip ASSOC keys so that only data is left. This is picked up by Chart.datasets.data
     $judgementsCount = array_sum(array_values($bounceData['judgements']));
     $chartData = json_encode(array_values($bounceData['judgements']));
@@ -131,6 +151,10 @@ addHeader();
           </h6>
 
           <canvas id="<?=$bounceName?>" data-chart-data="<?=$chartData?>" style="width:100%;"></canvas>
+
+          <div style="text-align:center">
+            <small>Deduction</small>
+          </div>
 
         </div> <!-- card block -->
       </div> <!-- card -->
