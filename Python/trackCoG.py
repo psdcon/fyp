@@ -6,6 +6,7 @@ import sys
 from copy import deepcopy
 
 import cv2
+from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
@@ -87,7 +88,7 @@ def createVideo():
 
     cap = cv2.VideoCapture(0)
     mypath = 'C:/Users/psdco/Videos/Trainings/480p/0 day1 rout2 720x480/'
-    videoFramesPaths = [mypath+f for f in listdir(mypath) if (isfile(join(mypath, f)) and '_vis' in f)]
+    videoFramesPaths = [mypath + f for f in listdir(mypath) if (isfile(join(mypath, f)) and '_vis' in f)]
     print(videoFramesPaths.sort(key=natural_keys))
 
     # Define the codec and create VideoWriter object
@@ -104,6 +105,7 @@ def createVideo():
     # Release everything if job is finished
     out.release()
     cv2.destroyAllWindows()
+
 
 def judgeRealBasic():
     # Started 22:54
@@ -123,9 +125,23 @@ def judgeRealBasic():
         "0.4": {"x": [], "y": []},
         "0.5": {"x": [], "y": []}
     }
+    colors = ['r', 'g', 'b', 'cyan', 'magenta', 'yellow']
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    deductionColors = {
+        "0.0": 'r',
+        "0.1": 'g',
+        "0.2": 'b',
+        "0.3": 'cyan',
+        "0.4": 'magenta',
+        "0.5": 'yellow'
+    }
 
     # For each one, get the frame no for midpoint, its major and minor ellipse axis at that frame, it's deduction
-    for routine in routines:
+    for ri, routine in enumerate(routines):
+        if ri == 3:
+            continue
         deductionsQuery = db.execute("SELECT * FROM judgements WHERE routine_id=? ORDER BY id ASC LIMIT 1", (routine['id'],))
         deductionsQuery = deductionsQuery.fetchone()
 
@@ -135,24 +151,39 @@ def judgeRealBasic():
 
         for i, bounce in enumerate(bounces):
             if bounce['name'] == "Straddle Jump":
-                midFrame = bounce['maxHeightFrame']
-                pt1 = ellipses[midFrame + 1][1]
-                pt2 = ellipses[midFrame + 1][2]
-                major = abs(pt1[0]-pt2[0])
-                minor = abs(pt1[1]-pt2[1])
+                startFrame = bounce['startFrame']
+                endFrame = bounce['endFrame']
+                # (frame, (cx, cy), (MA, ma), angle)
+                ellipsePts = ellipses[startFrame: endFrame]
+                cx = np.array([float(pt[1][0]) for pt in ellipsePts])
+                cx /= cx[0] # normalise
+                cy = np.array([float(pt[1][1]) for pt in ellipsePts])
+                cy /= cy[0] # normalise
+                z = range(len(ellipsePts))
+
                 deduction = deductions[i]
-                deductionCats[deduction]["x"].append(major)
-                deductionCats[deduction]["y"].append(minor)
+                color = deductionColors[deduction]
+                # deductionCats[deduction]["x"].append(major)
+                # deductionCats[deduction]["y"].append(minor)
+
+                ax.scatter(z, cx, cy, c=color)
+
+        if ri == 5:
+            break
 
     # print(deductionCats)
     # Plot
-    colors = ['r', 'g', 'b', 'cyan', 'magenta', 'yellow']
-    handles = []
-    for i, cat in enumerate(deductionCats):
-        handles.append(mpatches.Patch(color=colors[i], label=cat))
-        thisdict = deductionCats[cat]
-        plt.scatter(thisdict['x'], thisdict['y'], color=colors[i], marker='o')
-    plt.legend(handles=handles)
+
+    # handles = []
+    # for i, cat in enumerate(deductionCats):
+    #     handles.append(mpatches.Patch(color=colors[i], label=cat))
+    #     thisdict = deductionCats[cat]
+    #     plt.scatter(thisdict['x'], thisdict['y'], color=colors[i], marker='o')
+    # plt.legend(handles=handles)
+    ax.set_ylabel('Horizontal Travel')
+    ax.set_zlabel('Height')
+    ax.set_xlabel('Time (Frames)')
+
     plt.show()
 
 
@@ -264,8 +295,10 @@ def visualisePose(cap, routine, padding=100):
     # TODO this assumes there is a file with all poses for each frame in it
     # posePath = videoPath + routine['name'][:-4] + "/pose.npz"
     # poses = np.load(posePath)['poses']
+
+    # This assumes file for individual frame
     poses = {}
-    for frameNo in range(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)+1)):
+    for frameNo in range(1, int(cap.get(cv2.CAP_PROP_FRAME_COUNT) + 1)):
         posePath = videoPath + routine['name'][:-4] + "/frame {}_pose.npz".format(frameNo)
         try:
             pose = np.load(posePath)['pose']
@@ -292,39 +325,50 @@ def visualisePose(cap, routine, padding=100):
 
     routine['center_points'] = json.loads(routine['center_points'])
     routine['center_points'] = {cp[0]: [cp[1], cp[2]] for cp in routine['center_points']}
-    # while 1:
-    #     ret, frame = cap.read()
-    #     frameNo = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-    #     if frameNo not in routine['center_points']:
-    #         continue
-    #
-    #     cpt = routine['center_points'][frameNo]
-    #     cx = cpt[0]
-    #     cy = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) - cpt[1])
-    #
-    #     # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
-    #     # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
-    #     pose = poses[frameNo]
-    #     for p_idx in [0, 1]:  # range(14):
-    #         posex = int((cx - padding) + pose[0, p_idx])
-    #         posey = int((cy - padding) + pose[1, p_idx])
-    #         cv2.circle(frame, (posex, posey), 5, colours[p_idx], thickness=-1)  # -ve thickness = filled
-    #
-    #     # Lines between points
-    #     #  Could loop in pairs and link skipping ones that shouldnt be linked.
-    #     # cv2.line(trackPerson,
-    #     #          (int(thisFramePose[0, 0]), int(thisFramePose[1, 0])),
-    #     #          (int(thisFramePose[0, 1]), int(thisFramePose[1, 1])),
-    #     #          colours[0], 4)
-    #
-    #     cv2.imshow('frame', frame)
-    #     if cv2.waitKey(50) & 0xFF == ord('q'):
-    #         break
-    #
-    #     # Finish playing the video when we get to the end.
-    #     if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
-    #         break
 
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('C:/Users/psdco/Videos/Trainings/480p/posed_cropped.avi', fourcc, 30.0, (200,200))
+    # out = cv2.VideoWriter('C:/Users/psdco/Videos/Trainings/480p/posed_full.avi', fourcc, 30.0, (720,480))
+
+    while 1:
+        ret, frame = cap.read()
+        frameNo = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        if frameNo not in routine['center_points']:
+            continue
+
+        cpt = routine['center_points'][frameNo]
+        cx = cpt[0]
+        cy = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) - cpt[1])
+
+        # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
+        # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
+        frameCropped = frame[cy-100:cy+100, cx-100:cx+100]  # [y1:y2, x1:x2]
+        pose = poses[frameNo]
+        for p_idx in range(14):  # [0, 1]:
+            # posex = int((cx - padding) + pose[0, p_idx])
+            # posey = int((cy - padding) + pose[1, p_idx])
+            # cv2.circle(frame, (posex, posey), 5, colours[p_idx], thickness=-1)  # -ve thickness = filled
+            cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, colours[p_idx], thickness=-1)  # -ve thickness = filled
+
+        # Lines between points
+        #  Could loop in pairs and link skipping ones that shouldnt be linked.
+        # cv2.line(trackPerson,
+        #          (int(thisFramePose[0, 0]), int(thisFramePose[1, 0])),
+        #          (int(thisFramePose[0, 1]), int(thisFramePose[1, 1])),
+        #          colours[0], 4)
+
+        cv2.imshow('frame', frameCropped)
+        out.write(frameCropped)
+
+        if cv2.waitKey(5) & 0xFF == ord('q'):
+            break
+
+        # Finish playing the video when we get to the end.
+        if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
+            break
+
+    out.release()
     cv2.destroyAllWindows()
     # print(poses)
     # x = [frameNo for frameNo in poses]  # frame no
@@ -344,12 +388,12 @@ def visualisePose(cap, routine, padding=100):
     newY = y
     for i, _ in enumerate(newY[:-2]):
         thisPt = newY[i]
-        nextPt = newY[i+1]
-        diff = nextPt-thisPt
+        nextPt = newY[i + 1]
+        diff = nextPt - thisPt
         myDiff.append(diff)
         if abs(diff) > 20:
-            avg = (newY[i]+newY[i+2])/2
-            newY[i+1] = avg
+            avg = (newY[i] + newY[i + 2]) / 2
+            newY[i + 1] = avg
     y = np.array(y) - 10
 
     plt.plot(frameNos, y, label="y original")
@@ -366,7 +410,15 @@ def trackGymnast(cap, routine):
         # erosion = cv2.erode(input, kernel, iterations=1)
         # dilation = cv2.dilate(erosion, kernel, iterations=1)
         opening = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+
+        openingSmall = cv2.resize(opening, (resizeWidth, resizeHeight))
+        ErrodeImages[0:resizeHeight, resizeWidth:resizeWidth*2] = cv2.cvtColor(openingSmall, cv2.COLOR_GRAY2RGB)
+
         opening = cv2.dilate(opening, kernel, iterations=10)
+
+        openingSmall = cv2.resize(opening, (resizeWidth, resizeHeight))
+        ErrodeImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = cv2.cvtColor(openingSmall, cv2.COLOR_GRAY2RGB)
+
         # opening = cv2.dilate(opening, np.ones((3, 3), np.uint8), iterations=10)
         return opening
 
@@ -391,12 +443,13 @@ def trackGymnast(cap, routine):
 
     # Create array for tiled window
     KNNImages = np.zeros(shape=(resizeHeight, resizeWidth * 3, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
+    ErrodeImages = np.zeros(shape=(resizeHeight, resizeWidth * 3, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
 
     # Create mask around trampoline
     maskAroundTrampoline = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)  # cv2.CV_8U
     maskAroundTrampoline[0:routine['trampoline']['top'], maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
 
-    # Background extractor. Exclude shadow
+    # Background extractor. Ignore shadow
     pKNN = cv2.createBackgroundSubtractorKNN()
     pKNN.setShadowValue(0)
 
@@ -418,122 +471,141 @@ def trackGymnast(cap, routine):
     centerPoints = []
     ellipses = []
     lastContours = None  # used to remember last contour if area goes too small
+    paused = False
+    updateOne = False
     while 1:
-        _ret, frame = cap.read()
+        # Keep resetting back a frame to give the illusion of paused. Burning cycles.
+        if updateOne or not paused:
 
-        fgMaskKNN = pKNN.apply(frame)
-        KNNErodeDilated = erodeDilate(fgMaskKNN)
-        KNNErodeDilated = cv2.bitwise_and(KNNErodeDilated, KNNErodeDilated, mask=maskAroundTrampoline)
+            _ret, frame = cap.read()
 
-        if visualise:  # show the thing
-            KNNImages[0:resizeHeight, 0:resizeWidth] = cv2.resize(pKNN.getBackgroundImage(), (resizeWidth, resizeHeight))
-            cv2.putText(KNNImages, 'Current bg model', (10, 20), font, 0.4, (255, 255, 255))
+            fgMaskKNN = pKNN.apply(frame)
+            KNNErodeDilated = erodeDilate(fgMaskKNN)
+            KNNErodeDilated = cv2.bitwise_and(KNNErodeDilated, KNNErodeDilated, mask=maskAroundTrampoline)
 
-            fgMaskKNNSmall = cv2.resize(fgMaskKNN, (resizeWidth, resizeHeight))
-            KNNImages[0:resizeHeight, resizeWidth:resizeWidth * 2] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
-            cv2.putText(KNNImages, 'Subtracted', (10 + resizeWidth, 20), font, 0.4, (255, 255, 255))
+            if visualise:  # show the thing
+                # KNNImages[0:resizeHeight, 0:resizeWidth] = cv2.resize(pKNN.getBackgroundImage(), (resizeWidth, resizeHeight))
+                # cv2.putText(KNNImages, 'Current bg model', (10, 20), font, 0.4, (255, 255, 255))
 
-            # this has moved down below
-            # KNNErodeDilatedSmall = cv2.resize(KNNErodeDilated, (resizeWidth, resizeHeight))
-            # KNNImages[resizeHeight * 2:resizeHeight * 3, 0:resizeWidth] = cv2.cvtColor(KNNErodeDilatedSmall, cv2.COLOR_GRAY2RGB)
-            # cv2.putText(KNNImages, 'ErodeDilated', (10, 20 + resizeHeight * 2), font, 0.4, (255, 255, 255))
+                fgMaskKNNSmall = cv2.resize(fgMaskKNN, (resizeWidth, resizeHeight))
+                # KNNImages[0:resizeHeight, resizeWidth:resizeWidth * 2] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
+                # cv2.putText(KNNImages, 'Subtracted', (10 + resizeWidth, 20), font, 0.4, (255, 255, 255))
 
-        #
-        # Find contours in masked image
-        #
-        _im2, contours, _hierarchy = cv2.findContours(deepcopy(KNNErodeDilated), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        if len(contours) != 0:
-            # TODO
-            # Find the biggest contour first but when you're sure you have the person
-            # Then find the contour closest to that one and track that way. Prevent jumping around when person disappears.
-            # Also do something about combining legs. Check the distance of every point in the contour to every point int the closest contour.
-            # If the distance between then is small enough, combine them.
+                # For report
+                KNNImages[0:resizeHeight, 0:resizeWidth] = cv2.resize(frame, (resizeWidth, resizeHeight))
+                KNNImages[0:resizeHeight, resizeWidth:resizeWidth*2] = cv2.resize(pKNN.getBackgroundImage(), (resizeWidth, resizeHeight))
+                KNNImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
 
-            # Sort DESC, so biggest contour's first
-            contours = sorted(contours, key=cv2.contourArea, reverse=True)
+                # Erode dialate for report
+                ErrodeImages[0:resizeHeight, 0:resizeWidth] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
 
-            area = cv2.contourArea(contours[0])
-            # print(area)
-            # If contour is less than given area, replace it with previous contour
-            if area < 800 and lastContours is not None:
-                contours = lastContours
-            else:
-                lastContours = contours
+            #
+            # Find contours in masked image
+            #
+            _im2, contours, _hierarchy = cv2.findContours(deepcopy(KNNErodeDilated), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            if len(contours) != 0:
+                # TODO
+                # Find the biggest contour first but when you're sure you have the person
+                # Then find the contour closest to that one and track that way. Prevent jumping around when person disappears.
+                # Also do something about combining legs. Check the distance of every point in the contour to every point int the closest contour.
+                # If the distance between then is small enough, combine them.
 
-            if visualise:
-                # KNNErodeDilated has all the contours of interest
-                biggestContour = cv2.cvtColor(KNNErodeDilated, cv2.COLOR_GRAY2RGB)
-                personMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
-                cv2.drawContours(personMask, contours, 0, 255, cv2.FILLED)
-                # Draw the biggest one in red
-                cv2.drawContours(biggestContour, contours, 0, (0, 0, 255), cv2.FILLED)
-                # Resize and show it
-                biggestContourSmaller = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
-                KNNImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = biggestContourSmaller
-                cv2.putText(KNNImages, 'ErodeDilated', (10 + resizeWidth * 2, 20), font, 0.4, (255, 255, 255))
+                # Sort DESC, so biggest contour's first
+                contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-                cv2.imshow('KNNImages', KNNImages)
-
-            M = cv2.moments(contours[0])
-            if M['m00'] > 0:
-                cx = int(M['m10'] / M['m00'])
-                cy = int(M['m01'] / M['m00'])
-
-                cv2.circle(frame, (cx, cy), 1, (0, 0, 255), -1)
-                # TODO don't invert y axis
-                # TODO Save as dict with frame number as key
-                centerPoints.append([int(cap.get(cv2.CAP_PROP_POS_FRAMES)), cx, capHeight - cy])
-
-                # Fit ellipse
-                frameNoEllipse = deepcopy(frame)
-                if len(contours[0]) > 5:  # ellipse requires contour to have at least 5 points
-                    ellipse = cv2.fitEllipse(contours[0])
-                    # frame, major, minor, angle
-                    # TODO Save as dict with frame number as key
-                    ellipses.append([int(cap.get(cv2.CAP_PROP_POS_FRAMES))] + list(ellipse))
-                    cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
+                # If contour is less than given area, replace it with previous contour
+                area = cv2.contourArea(contours[0])
+                # print(area)
+                if area < 800 and lastContours is not None:
+                    contours = lastContours
                 else:
-                    print("Couldn't find enough points for ellipse. Need 5, found {}".format(len(contours[0])))
+                    lastContours = contours
 
-                x1, x2, y1, y2 = boundingSquare(capHeight, capWidth, cx, cy)
                 if visualise:
-                    # finerPersonMask = cv2.bitwise_and(fgMaskKNN, fgMaskKNN, mask=personMask)
-                    # personMasked = cv2.bitwise_and(frameNoEllipse, frameNoEllipse, mask=finerPersonMask)
-                    trackPerson = frameNoEllipse[y1:y2, x1:x2]  # was personMasked. now it's not
-                    cv2.imshow('track', trackPerson)
+                    # KNNErodeDilated has all the contours of interest
+                    biggestContour = cv2.cvtColor(KNNErodeDilated, cv2.COLOR_GRAY2RGB)
+                    personMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
+                    cv2.drawContours(personMask, contours, 0, 255, cv2.FILLED)
+                    # Draw the biggest one in red
+                    cv2.drawContours(biggestContour, contours, 0, (0, 0, 255), cv2.FILLED)
+                    # Resize and show it
+                    biggestContourSmaller = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
+                    cv2.imshow('big', biggestContour)
+                    # KNNImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = biggestContourSmaller
+                    # cv2.putText(KNNImages, 'ErodeDilated', (10 + resizeWidth * 2, 20), font, 0.4, (255, 255, 255))
+                    cv2.imshow('KNNImages', KNNImages)
+                    cv2.imshow('ErrodeImages', ErrodeImages)
 
-                # Save frames
-                if saveCroppedFrames:
-                    imgName = "C:/Users/psdco/Videos/{}/frame {:.0f}.png".format(routine['name'][:-4], cap.get(cv2.CAP_PROP_POS_FRAMES))
-                    print("Writing frame to {}".format(imgName))
-                    ret = cv2.imwrite(imgName, trackPerson)
-                    if not ret:
-                        print("Couldn't write image {}\nAbort!".format(imgName))
-                        exit()
+                M = cv2.moments(contours[0])
+                if M['m00'] > 0:
+                    cx = int(M['m10'] / M['m00'])
+                    cy = int(M['m01'] / M['m00'])
 
-            else:
-                print("Skipping center point. No moment")
+                    cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
+                    # TODO don't invert y axis
+                    # TODO Save as dict with frame number as key
+                    centerPoints.append([int(cap.get(cv2.CAP_PROP_POS_FRAMES)), cx, capHeight - cy])
 
-        #
-        # End stuff
-        #
-        if visualise:
-            cv2.imshow('frame ', frame)
-            # frameCropped = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
-            # cv2.imshow('frameCropped ', frameCropped)
+                    # Fit ellipse
+                    frameNoEllipse = deepcopy(frame)
+                    if len(contours[0]) > 5:  # ellipse requires contour to have at least 5 points
+                        # (x, y), (MA, ma), angle
+                        ellipse = cv2.fitEllipse(contours[0])
+                        # (frame, (cx, cy), (MA, ma), angle)
+                        # TODO Save as dict with frame number as key
+                        ellipses.append([int(cap.get(cv2.CAP_PROP_POS_FRAMES))] + list(ellipse))
+                        cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
+
+                    else:
+                        print("Couldn't find enough points for ellipse. Need 5, found {}".format(len(contours[0])))
+
+                    x1, x2, y1, y2 = boundingSquare(capHeight, capWidth, cx, cy)
+                    if visualise:
+                        # finerPersonMask = cv2.bitwise_and(fgMaskKNN, fgMaskKNN, mask=personMask)
+                        # personMasked = cv2.bitwise_and(frameNoEllipse, frameNoEllipse, mask=finerPersonMask)
+                        trackPerson = frameNoEllipse[y1:y2, x1:x2]  # was personMasked. now it's not
+                        cv2.imshow('track', trackPerson)
+
+                    # Save frames
+                    if saveCroppedFrames:
+                        imgName = "C:/Users/psdco/Videos/{}/frame {:.0f}.png".format(routine['name'][:-4], cap.get(cv2.CAP_PROP_POS_FRAMES))
+                        print("Writing frame to {}".format(imgName))
+                        ret = cv2.imwrite(imgName, trackPerson)
+                        if not ret:
+                            print("Couldn't write image {}\nAbort!".format(imgName))
+                            exit()
+
+                else:
+                    print("Skipping center point. No moment")
+
+            #
+            # End stuff
+            #
+            if visualise:
+                cv2.imshow('frame ', frame)
+
+            if updateOne:
+                updateOne = False
 
         k = cv2.waitKey(waitTime) & 0xff
         if k == ord('v'):
             visualise = not visualise
             if not visualise:  # destroy any open windows
                 cv2.destroyAllWindows()
+        elif k == ord('k'):  # play pause
+            paused = not paused
+        elif k == ord('j'):  # prev frame
+            updateOne = True
+            cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) - 2)
+        elif k == ord('l'):  # next frame
+            updateOne = True
+            cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) + 1)
         elif k == ord('q') or k == 27:  # q/ESC
             print("Exiting...")
             exit()
 
         # Finish playing the video when we get to the end.
         if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
-            # cap.set(cv2.CAP_PROP_POS_FRAMES, startFrame)
             break
 
     cap.release()
@@ -738,5 +810,5 @@ def parseNum(s):
 
 if __name__ == '__main__':
     # judgeRealBasic()
-    # createVideo()
     main()
+    # createVideo()
