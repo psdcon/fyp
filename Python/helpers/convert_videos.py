@@ -44,10 +44,10 @@ def main():
         # Run command
         # output = check_output(command)
 
-    addToDatabase(destination)
+    add_to_database(destination)
 
 # Adds all mp4's in path to database
-def addToDatabase(path):
+def add_to_database(path):
     # Used to strip this from the path to video.
     videosRoot = "C:/Users/psdco/Videos/"
 
