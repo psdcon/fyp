@@ -1,6 +1,7 @@
 Files
 *.psd
 *.lnk
+*.pyc
 
 msc/
 python/.idea/
