@@ -30,6 +30,23 @@ def track_and_save(db, cap, routine):
     db.commit()
 
 
+def bounding_square(capHeight, capWidth, cx, cy, padding):
+    y1 = cy - padding
+    y2 = cy + padding
+    x1 = cx - padding
+    x2 = cx + padding
+    if y2 > capHeight:
+        y2 = capHeight
+    if y1 < 0:
+        y1 = 0
+        y2 = padding*2
+    if x2 > capWidth:
+        x2 = capWidth
+    if x1 < 0:
+        x1 = 0
+    return x1, x2, y1, y2
+
+
 def track_gymnast(cap, routine):
     def erode_dilate(image):
         kernel = np.ones((2, 2), np.uint8)
@@ -47,22 +64,6 @@ def track_gymnast(cap, routine):
 
         # opening = cv2.dilate(opening, np.ones((3, 3), np.uint8), iterations=10)
         return opening
-
-    def bounding_square(capHeight, capWidth, cx, cy):
-        padding = 100
-        y1 = cy - padding
-        y2 = cy + padding
-        x1 = cx - padding
-        x2 = cx + padding
-        if y2 > capHeight:
-            y2 = capHeight
-        if y1 < 0:
-            y1 = 0
-        if x2 > capWidth:
-            x2 = capWidth
-        if x1 < 0:
-            x1 = 0
-        return x1, x2, y1, y2
 
     print("Starting to track gymnast")
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -107,6 +108,7 @@ def track_gymnast(cap, routine):
 
     # Reset video to start
     cap.set(cv2.CAP_PROP_POS_FRAMES, startFrame)
+
     print("\nStarting video at frame {}".format(startFrame))
     print("Press v to toggle showing visuals")
     print("Press ESC/'q' to quit ")
@@ -115,7 +117,6 @@ def track_gymnast(cap, routine):
     paused = False
     updateOne = False
     while 1:
-        # Keep resetting back a frame to give the illusion of paused. Burning cycles.
         if updateOne or not paused:
 
             _ret, frame = cap.read()
@@ -125,11 +126,13 @@ def track_gymnast(cap, routine):
             KNNErodeDilated = cv2.bitwise_and(KNNErodeDilated, KNNErodeDilated, mask=maskAroundTrampoline)
 
             if visualise:  # show the thing
-                KNNImages[0:resizeHeight, 0:resizeWidth] = cv2.resize(pKNN.getBackgroundImage(), (resizeWidth, resizeHeight))
+                KNNImages[0:resizeHeight, 0:resizeWidth] = cv2.resize(pKNN.getBackgroundImage(),
+                                                                      (resizeWidth, resizeHeight))
                 cv2.putText(KNNImages, 'Current bg model', (10, 20), font, 0.4, (255, 255, 255))
 
                 fgMaskKNNSmall = cv2.resize(fgMaskKNN, (resizeWidth, resizeHeight))
-                KNNImages[0:resizeHeight, resizeWidth:resizeWidth * 2] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
+                KNNImages[0:resizeHeight, resizeWidth:resizeWidth * 2] = cv2.cvtColor(fgMaskKNNSmall,
+                                                                                      cv2.COLOR_GRAY2RGB)
                 cv2.putText(KNNImages, 'Subtracted', (10 + resizeWidth, 20), font, 0.4, (255, 255, 255))
 
                 # For report
@@ -139,7 +142,7 @@ def track_gymnast(cap, routine):
                 # KNNImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = cv2.cvtColor(fgMaskKNNSmall,
                 #                                                                           cv2.COLOR_GRAY2RGB)
                 #
-                # Erode dialate for report
+                # Erode dilate for report
                 # ErrodeImages[0:resizeHeight, 0:resizeWidth] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
 
             #
@@ -242,7 +245,6 @@ def track_gymnast(cap, routine):
             cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) - 2)
         elif k == ord('l'):  # next frame
             updateOne = True
-            cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) + 1)
         elif k == ord('q') or k == 27:  # q/ESC
             print("Exiting...")
             exit()

@@ -46,6 +46,7 @@ class Frame(Base):
     ellipse_len_minor = Column(INTEGER)
     ellipse_angle = Column(INTEGER)
     pose = Column(TEXT)
+    pose_hg = Column(TEXT)
 
     routine = relationship("Routine", back_populates='frames')
 
@@ -117,6 +118,9 @@ class Deduction(Base):
     bounce = relationship("Bounce", back_populates='deductions')
     contributor = relationship("Contributor", back_populates='deductions')
 
+    def __repr__(self):
+        return "Deduction(deduction=%r)" % (self.deduction)
+
 
 class Contributor(Base):
     __tablename__ = 'contributors'
@@ -130,8 +134,8 @@ class Contributor(Base):
 
 # Create an engine that stores data in the local directory's
 # sqlalchemy_example.db file.
-engine = create_engine('sqlite:///sqlalchemy_example.db')
+# engine = create_engine('sqlite:///sqlalchemy_example.db')
 
 # Create all tables in the engine. This is equivalent to "Create Table"
 # statements in raw SQL.
-Base.metadata.create_all(engine)
+# Base.metadata.create_all(engine)
