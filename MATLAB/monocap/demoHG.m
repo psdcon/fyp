@@ -15,12 +15,10 @@
 clear
 startup
 
-warning('off','all');
-warning;
-
 %%
 
-datapath = 'C:\Users\psdco\Videos\Trainings\480p\1 day2 rout3 720x480';
+datapath = 'C:\Users\psdco\Videos\Trainings\720x480\0 day2 rout3';
+% datapath = 'C:\Users\psdco\Videos\Inhouse\720x480\VID_20161106_112900';
 
 % read images
 filelist = dir([datapath '/*.png']);

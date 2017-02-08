@@ -32,7 +32,7 @@ def import_pose(db, routine):
     # poses = np.load(posePath)['poses']
 
     for frame in routine.frames:
-        posePath = consts.videoPath + routine.path[:-4] + "/frame {}_pose.npz".format(frame.frame_num)
+        posePath = consts.videosRootPath + routine.path[:-4] + "/frame {}_pose.npz".format(frame.frame_num)
         try:
             pose = np.load(posePath)['pose']
         except IOError:
@@ -57,7 +57,7 @@ def crop_video(cap, routine, db):
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(consts.videoPath+outPath, fourcc, 30.0, (padding*2, padding*2))
+    out = cv2.VideoWriter(consts.videosRootPath + outPath, fourcc, 30.0, (padding * 2, padding * 2))
 
     while 1:
         _ret, frame = cap.read()
@@ -85,10 +85,10 @@ def crop_video(cap, routine, db):
     cv2.destroyAllWindows()
 
 
-def save_cropped_frames(cap, routine, db):
+def save_cropped_frames(db, cap, routine):
     outDir = routine.path.replace('.mp4', '/')
-    outPath = consts.videoPath+outDir
-    padding = 110  # padding (in pixels) from the center point
+    outPath = consts.videosRootPath + outDir
+    padding = 128  # padding (in pixels) from the center point
 
     if not os.path.exists(outPath):
         os.makedirs(outPath)
@@ -103,9 +103,9 @@ def save_cropped_frames(cap, routine, db):
             continue
 
         cx = frame_data.center_pt_x
-        cy = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) - frame_data.center_pt_y)
+        cy = frame_data.center_pt_y
         x1, x2, y1, y2 = track.bounding_square(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                                               int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, 120)
+                                               int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, padding)
         frameCropped = frame[y1:y2, x1:x2]
         imgName = outPath+"frame_{0:04}.png".format(int(cap.get(cv2.CAP_PROP_POS_FRAMES)))
         print("Writing frame to {}".format(imgName))
@@ -177,7 +177,7 @@ def main():
 
         selectedRoutineIndices = show_selection_menu(routinesAsDict)
     else:
-        selectedRoutineIndices = [1]
+        selectedRoutineIndices = [87]
     selectedRoutines = [routines[i] for i in selectedRoutineIndices]
 
     # Import pose
@@ -188,9 +188,16 @@ def main():
     # visualise.play_frames(db, selectedRoutines[0], 0, -1, show_pose=True)
     # visualise.play_frames(db, selectedRoutines[0], 0, -1, show_pose=False, show_full=False)
     # plot_skill_pose(db, selectedRoutines[0])
-    save_cropped_frames(helper.open_video(selectedRoutines[0].path), selectedRoutines[0], db)
+    # save_cropped_frames(helper.open_video(selectedRoutines[0].path), selectedRoutines[0], db)
     # pose_error(selectedRoutines[0])
-    exit()
+
+    # for routine in routines:
+    #     if routine.id == 88:
+    #         continue
+    #     for frame in routine.frames:
+    #         frame.center_pt_y = routine.video_height - frame.center_pt_x
+    # db.commit()
+    # exit()
 
 
     # Execute
@@ -217,6 +224,8 @@ def main():
             # Track gymnast and save
             track.track_and_save(db, cap, routine)
 
+            save_cropped_frames(db, cap, routine)
+
             # Find bounces and save
             segment_bounces.segment_bounces_and_save(db, routine)
 
@@ -230,6 +239,7 @@ def main():
                 "Track and Save",
                 "Track without Save",
                 "Segment Bounces",
+                "Save Cropped Frames",
                 "Plot",
                 "Exit",
             ]
@@ -240,17 +250,19 @@ def main():
                 choiceInt = helper.read_num(len(options))
                 choiceStr = options[choiceInt - 1]
 
-                if choiceStr == "Detect Trampoline":
+                if choiceStr == options[0]:
                     trampoline.detect_trampoline(db, cap, routine)
-                elif choiceStr == "Track and Save":
+                elif choiceStr == options[1]:
                     track.track_and_save(db, cap, routine)
-                elif choiceStr == "Track without Save":
+                elif choiceStr == options[2]:
                     track.track_gymnast(cap, routine)
-                elif choiceStr == "Segment Bounces":
+                elif choiceStr == options[3]:
                     segment_bounces.segment_bounces_and_save(db, routine)
-                elif choiceStr == "Plot":
+                elif choiceStr == options[4]:
+                    save_cropped_frames(db, cap, routine)
+                elif choiceStr == options[5]:
                     visualise.plot_data(routine)
-                elif choiceStr == "Exit":
+                elif choiceStr == options[6]:
                     break
                 else:
                     print("No such choice")

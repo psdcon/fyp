@@ -11,7 +11,7 @@ import consts
 # Helper functions
 # Opens video with error handling
 def open_video(videoName):
-    pathToVideo = os.path.join(consts.videoPath, videoName)
+    pathToVideo = os.path.join(consts.videosRootPath, videoName)
     print("\nOpening " + pathToVideo)
 
     if not os.path.exists(pathToVideo):

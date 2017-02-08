@@ -1,6 +1,7 @@
 # Constants
-videoPath = 'C:/Users/psdco/Videos/'
-dbPath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/db.sqlite3'
+videosRootPath = 'C:/Users/psdco/Videos/'
+# databasePath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/db.sqlite3'
+databasePath = 'C:/Users/psdco/Documents/ProjectCode/Python/db.sqlite3'
 lastSelectionFilePath = 'gui/lastSaved.txt'
 
 comps = [

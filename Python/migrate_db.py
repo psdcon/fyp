@@ -5,7 +5,7 @@ import cv2
 
 from helpers import consts, helper
 
-db = sqlite3.connect(consts.dbPath)
+db = sqlite3.connect(consts.databasePath)
 db.row_factory = sqlite3.Row
 
 # Copy data from old table

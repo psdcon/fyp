@@ -43,16 +43,16 @@ def find_trampoline(cap, routine):
 
         k = cv2.waitKey(100)
         res = k
-        # TODO this is broken...
-        print 'You pressed %d (0x%x), LSB: %d (%s)' % (res, res, res % 256,
-                                                       repr(chr(res % 256)) if res % 256 < 128 else '?')
-        if k == 2490368:  # up
+        # TODO this is broken... DONE: Fixed it with asdw
+        # print 'You pressed %d (0x%x), LSB: %d (%s)' % (res, res, res % 256,
+        #                                                repr(chr(res % 256)) if res % 256 < 128 else '?')
+        if k == ord('w'):  #2490368:  # up
             trampoline['top'] -= 1
-        elif k == 2621440:  # down
+        elif k == ord('s'):  #2621440:  # down
             trampoline['top'] += 1
-        elif k == 2424832:  # left
+        elif k == ord('a'):  #2424832:  # left
             trampoline['center'] -= 1
-        elif k == 2555904:  # right
+        elif k == ord('d'):  #2555904:  # right
             trampoline['center'] += 1
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
             break

@@ -16,14 +16,11 @@ def track_and_save(db, cap, routine):
 
     print("Saving points...")
 
-    # Truncate ellipse data precision to ints. Should maybe not do that except that it's pixel accuracy.
-    ellipsesInts = json.loads(json.dumps(ellipses), parse_float=lambda x: int(float(x)))
-
     # Add data for routine to db frame-by-frame
     frames = []
-    for frameNum in centerPoints.keys():
+    for frameNum in ellipses.keys():
         cpt = centerPoints[frameNum]  # [cx, cy]
-        ell = ellipsesInts[frameNum]  # [(cx, cy), (MA, ma), angle]
+        ell = ellipses[frameNum]  # [(cx, cy), (MA, ma), angle]
         frames.append(Frame(routine.id, frameNum, cpt[0], cpt[1], ell[1][0], ell[1][1], ell[2]))
 
     db.add_all(frames)
@@ -197,14 +194,15 @@ def track_gymnast(cap, routine):
                         # (x, y), (MA, ma), angle
                         ellipse = cv2.fitEllipse(contours[0])
                         # {frame: [(cx, cy), (MA, ma), angle]}
-                        ellipses[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = list(ellipse)
+                        ellipses[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = json.loads(json.dumps(list(ellipse)), parse_float=lambda x: int(float(x)))
+
                         # Draw it
                         cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
 
                     else:
                         print("Couldn't find enough points for ellipse. Need 5, found {}".format(len(contours[0])))
 
-                    x1, x2, y1, y2 = bounding_square(capHeight, capWidth, cx, cy)
+                    x1, x2, y1, y2 = bounding_square(capHeight, capWidth, cx, cy, 120)
                     if visualise:
                         # finerPersonMask = cv2.bitwise_and(fgMaskKNN, fgMaskKNN, mask=personMask)
                         # personMasked = cv2.bitwise_and(frameNoEllipse, frameNoEllipse, mask=finerPersonMask)

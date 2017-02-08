@@ -142,7 +142,7 @@ if isempty(output.R_init)
         C_init{i,1} = info.C;
         R_init{i,1} = info.R(1:2,:);
         T_init{i,1} = info.T;
-    end
+    end    
     S_init = cell2mat(S_init);
     R_init = cell2mat(R_init);
     C_init = cell2mat(C_init);

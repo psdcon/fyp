@@ -29,12 +29,12 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
     waitTime = 40
     updateOne = False
     paused = False
-    padding = 100
+    padding = 110
 
-    hg_preds_file = h5py.File('preds.h5', 'r')
-    hg_preds = hg_preds_file.get('preds')
+    # hg_preds_file = h5py.File('preds.h5', 'r')
+    # hg_preds = hg_preds_file.get('preds')
 
-    mat_preds_file = scipy.io.loadmat('preds.mat')
+    mat_preds_file = scipy.io.loadmat(consts.videosRootPath + routine.path[:-4] + '/preds_2d.mat')
     mat_preds = mat_preds_file['preds_2d']
 
     cap = helper.open_video(routine.path)
@@ -42,6 +42,9 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
     if end_frame == -1:
         end_frame == cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
+    firstFrame = db.query(Frame).filter_by(routine_id=routine.id,
+                                                       frame_num=1).one()
+    firstFrameId = firstFrame.id
     while True:
         if updateOne or not paused:
 
@@ -54,14 +57,15 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
                 continue
 
             cx = frame_data.center_pt_x
-            # cy = frame_data.center_pt_y
-            cy = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) - frame_data.center_pt_y)
+            cy = frame_data.center_pt_y
+            x1, x2, y1, y2 = track.bounding_square(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                                                   int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, 120)
 
             if show_pose:
                 # pose = np.array(json.loads(frame_data.pose))
                 # pose = np.array(json.loads(frame_data.pose_hg))
-                pose = mat_preds[:, :, frame_data.id-1]
-                pose_hg = np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
+                pose = mat_preds[:, :, frame_data.id-firstFrameId]
+                # pose_hg = np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
 
                 # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
                 # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
@@ -76,7 +80,7 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
 
                 # Show cropped
                 else:
-                    frameCropped = frame[cy - padding:cy + padding, cx - padding:cx + padding]  # [y1:y2, x1:x2]
+                    frameCropped = frame[y1:y2, x1:x2]
                     frameCropped = np.copy(frameCropped)
                     cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     for p_idx in range(16):
@@ -86,12 +90,12 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
                     cv2.imshow('DC', frameCropped)
 
                     # padding = 105
-                    frameCroppedCopy = frame[cy - padding:cy + padding, cx - padding:cx + padding]  # [y1:y2, x1:x2]
-                    for p_idx in range(16):
-                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                        cv2.circle(frameCroppedCopy, (int(pose_hg[0, p_idx]), int(pose_hg[1, p_idx])), 5, color,
-                                   thickness=-1)  # -ve thickness = filled
-                    cv2.imshow('HG', frameCroppedCopy)
+                    # frameCroppedCopy = frame[cy - padding:cy + padding, cx - padding:cx + padding]  # [y1:y2, x1:x2]
+                    # for p_idx in range(16):
+                    #     color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
+                    #     cv2.circle(frameCroppedCopy, (int(pose_hg[0, p_idx]), int(pose_hg[1, p_idx])), 5, color,
+                    #                thickness=-1)  # -ve thickness = filled
+                    # cv2.imshow('HG', frameCroppedCopy)
 
             else:
                 cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
@@ -101,7 +105,6 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
                     cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
                     cv2.imshow('bounce.skill_name', frame)
                 else:
-                    x1, x2, y1, y2 = track.bounding_square(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, 120)
                     frameCropped = frame[y1:y2, x1:x2]
                     cv2.imshow('bounce.skill_name', frameCropped)
 
