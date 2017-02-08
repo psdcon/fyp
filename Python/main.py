@@ -43,7 +43,7 @@ def main():
 
         selectedRoutineIndices = show_selection_menu(routinesAsDict)
     else:
-        selectedRoutineIndices = [0]  # [87]
+        selectedRoutineIndices = [87]  # [87]
     selectedRoutines = [routines[i] for i in selectedRoutineIndices]
 
     # Execute

@@ -135,7 +135,7 @@ def plot_data(routine):
     # Plot bounce heights
     x_frames = [frame.frame_num / routine.video_fps for frame in routine.frames]
     y_travel = [frame.center_pt_x for frame in routine.frames]
-    y_height = [frame.center_pt_y for frame in routine.frames]
+    y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
 
     # List inside list gets flattened
     peaks_x = list(chain.from_iterable(
@@ -143,7 +143,7 @@ def plot_data(routine):
     peaks_x.append(routine.bounces[-1].end_time)
     peaks_y = list(chain.from_iterable((bounce.start_height, bounce.max_height) for bounce in routine.bounces))
     peaks_y.append(routine.bounces[-1].end_height)
-    peaks_y = [routine.video_height - p for p in peaks_y]
+    # peaks_y = [routine.video_height - p for p in peaks_y]
 
     axarr[0].set_title("Height")
     axarr[0].plot(x_frames, y_height, color="g")

@@ -25,17 +25,19 @@ def calculate_bounces(routine):
     x = np.array([frame.frame_num for frame in routine.frames])
     y = np.array([routine.video_height - frame.center_pt_y for frame in routine.frames])
     maxima, minima = peakdetect(y, x, lookahead=8, delta=20)
+    # maxima, minima = peakdetect(y, x, lookahead=5, delta=10)
 
     # Plot bounce heights
-    # peaks = maxima + minima  # concat the two
-    # peaks_x = [pt['x'] for pt in peaks]
-    # peaks_y = [pt['y'] for pt in peaks]
-    #
-    # plt.title("Height")
-    # plt.plot(x, y, color="g")
-    # plt.plot(peaks_x, peaks_y, 'r+')
-    # plt.ylabel('Height (Pixels)')
-    # plt.show()
+    if True:
+        peaks = maxima + minima  # concat the two
+        peaks_x = [pt['x'] for pt in peaks]
+        peaks_y = [pt['y'] for pt in peaks]
+
+        plt.title("Height")
+        plt.plot(x, y, color="g")
+        plt.plot(peaks_x, peaks_y, 'r+')
+        plt.ylabel('Height (Pixels)')
+        plt.show()
 
     bounces = []
     for i in range(len(minima)-1):
