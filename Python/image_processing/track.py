@@ -33,14 +33,17 @@ def bounding_square(capHeight, capWidth, cx, cy, padding):
     x1 = cx - padding
     x2 = cx + padding
     if y2 > capHeight:
+        y1 = capHeight - padding * 2
         y2 = capHeight
     if y1 < 0:
         y1 = 0
-        y2 = padding*2
+        y2 = padding * 2
     if x2 > capWidth:
+        x1 = capWidth - padding * 2
         x2 = capWidth
     if x1 < 0:
         x1 = 0
+        x2 = padding * 2
     return x1, x2, y1, y2
 
 
@@ -96,7 +99,7 @@ def track_gymnast(cap, routine):
     # Average background
     framesToAverageStart = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) - (framesToAverage / 2)
     framesToAverageEnd = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) + (
-    framesToAverage / 2)  # Variable only for printing purposes
+        framesToAverage / 2)  # Variable only for printing purposes
     print("Averaging frames {:.0f} - {:.0f}, please wait...".format(framesToAverageStart, framesToAverageEnd))
     cap.set(cv2.CAP_PROP_POS_FRAMES, framesToAverageStart)
     for i in range(framesToAverage):
@@ -194,7 +197,9 @@ def track_gymnast(cap, routine):
                         # (x, y), (MA, ma), angle
                         ellipse = cv2.fitEllipse(contours[0])
                         # {frame: [(cx, cy), (MA, ma), angle]}
-                        ellipses[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = json.loads(json.dumps(list(ellipse)), parse_float=lambda x: int(float(x)))
+                        ellipses[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = json.loads(json.dumps(list(ellipse)),
+                                                                                     parse_float=lambda x: int(
+                                                                                         float(x)))
 
                         # Draw it
                         cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)

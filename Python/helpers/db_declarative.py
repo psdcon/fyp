@@ -20,6 +20,7 @@ class Routine(Base):
     trampoline_top = Column(INTEGER)
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
+    padding = Column(INTEGER) # padding (in pixels) from the center point
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')

@@ -2,6 +2,7 @@ from __future__ import print_function
 from __future__ import print_function
 
 import json
+import os
 from itertools import chain
 
 import cv2
@@ -9,7 +10,6 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io
-import sqlalchemy
 from sqlalchemy.orm.exc import NoResultFound
 
 from helpers import consts
@@ -29,21 +29,20 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
     waitTime = 40
     updateOne = False
     paused = False
-    padding = 110
+    padding = 128
 
-    # hg_preds_file = h5py.File('preds.h5', 'r')
-    # hg_preds = hg_preds_file.get('preds')
+    hg_preds_file = h5py.File(consts.videosRootPath + routine.path[:-4] + os.sep + 'preds.h5', 'r')
+    hg_preds = hg_preds_file.get('preds')
 
-    mat_preds_file = scipy.io.loadmat(consts.videosRootPath + routine.path[:-4] + '/preds_2d.mat')
+    mat_preds_file = scipy.io.loadmat(consts.videosRootPath + routine.path[:-4] + os.sep + 'preds_2d.mat')
     mat_preds = mat_preds_file['preds_2d']
 
     cap = helper.open_video(routine.path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     if end_frame == -1:
-        end_frame == cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        end_frame = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
-    firstFrame = db.query(Frame).filter_by(routine_id=routine.id,
-                                                       frame_num=1).one()
+    firstFrame = db.query(Frame).filter_by(routine_id=routine.id, frame_num=1).one()
     firstFrameId = firstFrame.id
     while True:
         if updateOne or not paused:
@@ -59,12 +58,12 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
             cx = frame_data.center_pt_x
             cy = frame_data.center_pt_y
             x1, x2, y1, y2 = track.bounding_square(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                                                   int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, 120)
+                                                   int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, padding)
 
             if show_pose:
                 # pose = np.array(json.loads(frame_data.pose))
                 # pose = np.array(json.loads(frame_data.pose_hg))
-                pose = mat_preds[:, :, frame_data.id-firstFrameId]
+                pose = mat_preds[:, :, frame_data.id - firstFrameId]
                 # pose_hg = np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
 
                 # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
@@ -81,16 +80,15 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
                 # Show cropped
                 else:
                     frameCropped = frame[y1:y2, x1:x2]
-                    frameCropped = np.copy(frameCropped)
-                    cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    # frameCroppedCopy = np.copy(frameCropped)
+                    cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.4, (255, 255, 255))
                     for p_idx in range(16):
                         color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
                         cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color,
                                    thickness=-1)  # -ve thickness = filled
-                    cv2.imshow('DC', frameCropped)
+                    cv2.imshow('MAT', frameCropped)
 
-                    # padding = 105
-                    # frameCroppedCopy = frame[cy - padding:cy + padding, cx - padding:cx + padding]  # [y1:y2, x1:x2]
                     # for p_idx in range(16):
                     #     color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
                     #     cv2.circle(frameCroppedCopy, (int(pose_hg[0, p_idx]), int(pose_hg[1, p_idx])), 5, color,
@@ -101,7 +99,8 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
                 cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
                 if show_full:
                     # (x, y), (MA, ma), angle
-                    ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)), frame_data.ellipse_angle)
+                    ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)),
+                               frame_data.ellipse_angle)
                     cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
                     cv2.imshow('bounce.skill_name', frame)
                 else:
@@ -141,7 +140,7 @@ def plot_data(routine):
     # Plot bounce heights
     x_frames = [frame.frame_num / routine.video_fps for frame in routine.frames]
     y_travel = [frame.center_pt_x for frame in routine.frames]
-    y_height = [frame.center_pt_y for frame in routine.frames]
+    y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
 
     # List inside list gets flattened
     peaks_x = list(chain.from_iterable(
@@ -228,3 +227,101 @@ def skill_into_filmstrip(cap, routine):
     if not ret:
         print("Couldn't write image {}\nAbort!".format(imgName))
         exit()
+
+
+def plot_skill_pose(db, routine):
+    def rel_pose_to_abs_pose(pose, cx, cy, padding=100):
+        # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
+        # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
+        for p_idx in range(14):
+            pose[0, p_idx] = int((cx - padding) + pose[0, p_idx])
+            pose[1, p_idx] = int((cy - padding) + pose[1, p_idx])
+        return pose
+
+    def pose_as_point(pose, p_idx):
+        pt = np.array([pose[0, p_idx], pose[1, p_idx]])
+        return pt
+
+    def angle(A, B, C):
+        from math import acos, degrees
+        from scipy.spatial import distance
+        a = distance.euclidean(C, B)
+        b = distance.euclidean(A, C)
+        c = distance.euclidean(A, B)
+        num = a ** 2 + b ** 2 - c ** 2
+        demon = (2.0 * a * b)
+        ang = acos(num / demon)
+        return degrees(ang)
+
+    # Get a skill
+    skill = routine.bounces[15]
+    play_skill(db, skill.id, show_pose=True)
+
+    # Save all poses from
+    skillFrames = []
+    poses = []
+    for frame in routine.frames:
+        if frame.frame_num > skill.start_frame and frame.frame_num < skill.end_frame:
+            skillFrames.append(frame)
+            # absPose = rel_pose_to_abs_pose(np.array(json.loads(frame.pose)), frame.center_pt_x, routine.video_height - frame.center_pt_y)
+            # poses.append(absPose)
+            poses.append(np.array(json.loads(frame.pose)))
+            # poses.append(np.array(json.loads(frame.pose_hg)))
+
+    # Make a list for each of the joints to be plotted
+    jointNames = consts.getAngleIndices('deepcut')
+    # jointNames = consts.getAngleIndices('hourglass')
+    angleValues = {key: [] for key in jointNames.keys()}
+    # Calculate an array of angles
+    for pose in poses:
+        for key in jointNames.keys():
+            part_idx = jointNames[key]
+            #
+            angleVal = angle(pose_as_point(pose, part_idx[0]), pose_as_point(pose, part_idx[1]),
+                             pose_as_point(pose, part_idx[2]))
+            angleValues[key].append(angleVal)
+
+    # Plot angles
+    f, axarr = plt.subplots(4, sharex=True)
+
+    # use angleIndexKeys rahter than jointNames.keys() because order matters here
+    for i, key in enumerate(consts.angleIndexKeys):
+        plti = int(i / 2)  # when i=0,1; plti = 0. when i=2,3; plti = 1. when i=4,5; plti = 2. when i=6,7; plti = 3
+        axarr[plti].plot(range(len(poses)), angleValues[key], c=consts.jointAngleColors[i % 2], label=key)
+        axarr[plti].scatter(range(len(poses)), angleValues[key], c=consts.jointAngleColors[i % 2])
+        axarr[plti].legend(loc='best')
+    plt.show()
+
+
+def pose_error(routine):
+    hg_preds_file = h5py.File('preds.h5', 'r')
+    hg_preds = hg_preds_file.get('preds')
+
+    mat_preds_file = scipy.io.loadmat('preds.mat')
+    mat_preds = mat_preds_file['preds_2d']
+
+    x_mat = [[] for _ in range(16)]
+    x_hg = [[] for _ in range(16)]
+    y_mat = [[] for _ in range(16)]
+    y_hg = [[] for _ in range(16)]
+
+    for i, frame_data in enumerate(routine.frames):
+        pose_mat = mat_preds[:, :, i]
+        pose_hg = np.array(
+            json.loads(frame_data.pose_hg))  # np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
+        for p_idx in range(16):
+            x_mat[p_idx].append(int(pose_mat[0, p_idx]))
+            x_hg[p_idx].append(int(pose_hg[0, p_idx]))
+            y_mat[p_idx].append(int(pose_mat[1, p_idx]))
+            y_hg[p_idx].append(int(pose_hg[1, p_idx]))
+
+    plt.figure(1)
+    for i in range(16):
+        diff = np.diff([x_mat[i], x_hg[i]], axis=0)
+        plt.plot(diff[0])
+
+    plt.figure(2)
+    for i in range(16):
+        diff = np.diff([y_mat[i], y_hg[i]], axis=0)
+        plt.plot(diff[0])
+    plt.show()
