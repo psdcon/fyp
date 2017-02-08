@@ -23,7 +23,7 @@ def segment_bounces_and_save(db, routine):
 
 def calculate_bounces(routine):
     x = np.array([frame.frame_num for frame in routine.frames])
-    y = np.array([frame.center_pt_y for frame in routine.frames])
+    y = np.array([routine.video_height - frame.center_pt_y for frame in routine.frames])
     maxima, minima = peakdetect(y, x, lookahead=8, delta=20)
 
     # Plot bounce heights

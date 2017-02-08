@@ -5,8 +5,8 @@ import cv2
 import numpy as np
 
 from helpers.db_declarative import Frame
+from helpers.helper import bounding_square
 
-# Data is global because memory efficiency, yay.
 centerPoints = {}
 ellipses = {}
 
@@ -25,26 +25,6 @@ def track_and_save(db, cap, routine):
 
     db.add_all(frames)
     db.commit()
-
-
-def bounding_square(capHeight, capWidth, cx, cy, padding):
-    y1 = cy - padding
-    y2 = cy + padding
-    x1 = cx - padding
-    x2 = cx + padding
-    if y2 > capHeight:
-        y1 = capHeight - padding * 2
-        y2 = capHeight
-    if y1 < 0:
-        y1 = 0
-        y2 = padding * 2
-    if x2 > capWidth:
-        x1 = capWidth - padding * 2
-        x2 = capWidth
-    if x1 < 0:
-        x1 = 0
-        x2 = padding * 2
-    return x1, x2, y1, y2
 
 
 def track_gymnast(cap, routine):

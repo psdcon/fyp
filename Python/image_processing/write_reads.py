@@ -8,9 +8,9 @@ import numpy as np
 import scipy.io
 from sqlalchemy.orm.exc import NoResultFound
 
+import helpers.helper
 from helpers import consts
 from helpers.db_declarative import *
-from image_processing import track
 
 
 def import_pose_deepcut(db, routine):
@@ -25,6 +25,7 @@ def import_pose_deepcut(db, routine):
             continue
         frame.pose = json.dumps(pose.tolist())
     db.commit()
+    print("Imported rough deepcut pose")
 
 
 # Import raw hourglass pose from
@@ -38,6 +39,7 @@ def import_pose_hg(db, routine):
         pose = np.array(hg_preds['{0:04}'.format(frame.frame_num)].value).T
         frame.pose_hg = json.dumps(pose.tolist())
     db.commit()
+    print("Imported rough hourglass pose")
 
 
 # Imports into pose, because it's better.
@@ -50,7 +52,7 @@ def import_pose_hg_smooth(db, routine):
     for i, frame in enumerate(routine.frames):
         frame.pose = json.dumps(mat_preds[:, :, i].tolist())
     db.commit()
-    print("Imported ")
+    print("Imported smooth hourglass pose")
 
 
 # Outputs
@@ -93,6 +95,7 @@ def save_cropped_frames(db, cap, routine):
     outPath = consts.videosRootPath + routine.path.replace('.mp4', os.sep)
 
     if not os.path.exists(outPath):
+        print("Creating "+outPath)
         os.makedirs(outPath)
 
     while 1:
@@ -106,11 +109,11 @@ def save_cropped_frames(db, cap, routine):
 
         cx = frame_data.center_pt_x
         cy = frame_data.center_pt_y
-        x1, x2, y1, y2 = track.bounding_square(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                                               int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, routine.padding)
+        x1, x2, y1, y2 = helpers.helper.bounding_square(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                                                        int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, routine.padding)
         frameCropped = frame[y1:y2, x1:x2]
         imgName = outPath + "frame_{0:04}.png".format(int(cap.get(cv2.CAP_PROP_POS_FRAMES)))
-        print("Writing frame to {}".format(imgName))
+        # print("Writing frame to {}".format(imgName))
         ret = cv2.imwrite(imgName, frameCropped)
         if not ret:
             print("Couldn't write image {}\nAbort!".format(imgName))

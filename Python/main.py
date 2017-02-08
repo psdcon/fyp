@@ -43,15 +43,8 @@ def main():
 
         selectedRoutineIndices = show_selection_menu(routinesAsDict)
     else:
-        selectedRoutineIndices = [87]
+        selectedRoutineIndices = [0]  # [87]
     selectedRoutines = [routines[i] for i in selectedRoutineIndices]
-
-    # visualise.play_frames(db, selectedRoutines[0], 0, -1, show_pose=True)
-    # visualise.play_frames(db, selectedRoutines[0], 0, -1, show_pose=False, show_full=False)
-    # plot_skill_pose(db, selectedRoutines[0])
-    # save_cropped_frames(helper.open_video(selectedRoutines[0].path), selectedRoutines[0], db)
-    # pose_error(selectedRoutines[0])
-    # exit()
 
     # Execute
     for i, routine in enumerate(selectedRoutines):
@@ -97,15 +90,16 @@ def main():
                 ["Play Video", visualise.play_frames, [db, routine]],
                 ["Exit", None, [None]],
             ]
+            print("This routine has already been tracked.")
             while True:
-                print("This routine has already been tracked. What would you like to do?")
+                print("What would you like to do?")
                 for ii, op in enumerate(options):
                     print('%d) %s' % (ii + 1, op[0]))
                 choiceInt = helper.read_num(len(options)) - 1
-                if choiceInt == len(options)-1:
+                if choiceInt == len(options)-1:  # Last option is to Exit
                     break
                 else:
-                    # Load function name and covert iterable to positional args
+                    # Load function name and covert iterable to positional args  http://stackoverflow.com/questions/3941517/converting-list-to-args-in-python
                     options[choiceInt][1](*options[choiceInt][2])
 
         print("Finished routine {} of {}".format(i + 1, len(selectedRoutines)))

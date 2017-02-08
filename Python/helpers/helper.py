@@ -55,3 +55,23 @@ def parse_num(s):
         return int(s)
     except ValueError:
         return 0
+
+
+def bounding_square(capHeight, capWidth, cx, cy, padding):
+    y1 = cy - padding
+    y2 = cy + padding
+    x1 = cx - padding
+    x2 = cx + padding
+    if y2 > capHeight:
+        y1 = capHeight - padding * 2
+        y2 = capHeight
+    if y1 < 0:
+        y1 = 0
+        y2 = padding * 2
+    if x2 > capWidth:
+        x1 = capWidth - padding * 2
+        x2 = capWidth
+    if x1 < 0:
+        x1 = 0
+        x2 = padding * 2
+    return x1, x2, y1, y2

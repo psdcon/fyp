@@ -20,7 +20,7 @@ class Routine(Base):
     trampoline_top = Column(INTEGER)
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
-    padding = Column(INTEGER) # padding (in pixels) from the center point
+    # padding = Column(INTEGER)  # padding (in pixels) from the center point
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
@@ -43,11 +43,11 @@ class Frame(Base):
     frame_num = Column(INTEGER)
     center_pt_x = Column(INTEGER)
     center_pt_y = Column(INTEGER)
-    ellipse_len_major = Column(INTEGER)
-    ellipse_len_minor = Column(INTEGER)
+    ellipse_len_major = Column(REAL)
+    ellipse_len_minor = Column(REAL)
     ellipse_angle = Column(INTEGER)
     pose = Column(TEXT)
-    pose_hg = Column(TEXT)
+    # pose_hg = Column(TEXT)
 
     routine = relationship("Routine", back_populates='frames')
 

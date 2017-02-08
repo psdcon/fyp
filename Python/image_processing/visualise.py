@@ -12,6 +12,7 @@ import numpy as np
 import scipy.io
 from sqlalchemy.orm.exc import NoResultFound
 
+import helpers.helper
 from helpers import consts
 from helpers import helper
 from helpers.db_declarative import *
@@ -25,17 +26,10 @@ def play_skill(db, bounce_id, show_pose=False, show_full=False):
     play_frames(db, routine, bounce.start_frame, bounce.end_frame, show_pose, show_full)
 
 
-def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_full=False):
+def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=None, show_full=False):
     waitTime = 40
-    updateOne = False
+    playOneFrame = False
     paused = False
-    padding = 128
-
-    hg_preds_file = h5py.File(consts.videosRootPath + routine.path[:-4] + os.sep + 'preds.h5', 'r')
-    hg_preds = hg_preds_file.get('preds')
-
-    mat_preds_file = scipy.io.loadmat(consts.videosRootPath + routine.path[:-4] + os.sep + 'preds_2d.mat')
-    mat_preds = mat_preds_file['preds_2d']
 
     cap = helper.open_video(routine.path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -44,8 +38,11 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
 
     firstFrame = db.query(Frame).filter_by(routine_id=routine.id, frame_num=1).one()
     firstFrameId = firstFrame.id
+    if show_pose is not False:  # if not deliberately set to ellipse, then gracefully fallback to pose if available or ellipse if not
+        show_pose = firstFrame.pose is not None  # if pose is none, show ellipse
+
     while True:
-        if updateOne or not paused:
+        if playOneFrame or not paused:
 
             _ret, frame = cap.read()
 
@@ -57,25 +54,21 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
 
             cx = frame_data.center_pt_x
             cy = frame_data.center_pt_y
-            x1, x2, y1, y2 = track.bounding_square(int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                                                   int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), cx, cy, padding)
+            x1, x2, y1, y2 = helper.bounding_square(routine.video_height, routine.video_width, cx, cy, routine.padding)
 
             if show_pose:
-                # pose = np.array(json.loads(frame_data.pose))
-                # pose = np.array(json.loads(frame_data.pose_hg))
-                pose = mat_preds[:, :, frame_data.id - firstFrameId]
-                # pose_hg = np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
-
-                # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
-                # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
+                pose = np.array(json.loads(frame_data.pose))
+                # pose_rough = np.array(json.loads(frame_data.pose_hg))
                 # Show full frame
                 if show_full:
+                    cv2.putText(frame, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.4, (255, 255, 255))
                     for p_idx in range(14):
-                        posex = int((cx - padding) + pose[0, p_idx])
-                        posey = int((cy - padding) + pose[1, p_idx])
-                        cv2.circle(frame, (posex, posey), 5, consts.poseColors[p_idx],
-                                   thickness=-1)  # -ve thickness = filled
-                    cv2.imshow('bounce.skill_name', frame)
+                        pose_x = int((cx - routine.padding) + pose[0, p_idx])
+                        pose_y = int((cy - routine.padding) + pose[1, p_idx])
+                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
+                        cv2.circle(frame, (pose_x, pose_y), 5, color, thickness=-1)  # -ve thickness = filled
+                    cv2.imshow('HG Smooth', frame)
 
                 # Show cropped
                 else:
@@ -87,11 +80,11 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
                         color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
                         cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color,
                                    thickness=-1)  # -ve thickness = filled
-                    cv2.imshow('MAT', frameCropped)
+                    cv2.imshow('HG Smooth', frameCropped)
 
                     # for p_idx in range(16):
                     #     color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                    #     cv2.circle(frameCroppedCopy, (int(pose_hg[0, p_idx]), int(pose_hg[1, p_idx])), 5, color,
+                    #     cv2.circle(frameCroppedCopy, (int(pose_rough[0, p_idx]), int(pose_rough[1, p_idx])), 5, color,
                     #                thickness=-1)  # -ve thickness = filled
                     # cv2.imshow('HG', frameCroppedCopy)
 
@@ -99,25 +92,26 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
                 cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
                 if show_full:
                     # (x, y), (MA, ma), angle
-                    ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)),
-                               frame_data.ellipse_angle)
+                    # ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)),
+                    #            frame_data.ellipse_angle)
+                    ellipse = ((cx, cy), (frame_data.ellipse_len_major, frame_data.ellipse_len_minor),frame_data.ellipse_angle)
                     cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
                     cv2.imshow('bounce.skill_name', frame)
                 else:
                     frameCropped = frame[y1:y2, x1:x2]
                     cv2.imshow('bounce.skill_name', frameCropped)
 
-            if updateOne:
-                updateOne = False
+            if playOneFrame:
+                playOneFrame = False
 
         k = cv2.waitKey(waitTime) & 0xff
         if k == ord('k'):  # play pause
             paused = not paused
         elif k == ord('j'):  # prev frame
-            updateOne = True
+            playOneFrame = True
             cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) - 2)
         elif k == ord('l'):  # next frame
-            updateOne = True
+            playOneFrame = True
         elif k == ord('.'):  # speed up
             waitTime -= 5
             print(waitTime)
@@ -128,6 +122,7 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=False, show_
             print("Exiting...")
             exit()
 
+        # Loop forever
         if cap.get(cv2.CAP_PROP_POS_FRAMES) == end_frame:
             cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             # break
@@ -140,7 +135,7 @@ def plot_data(routine):
     # Plot bounce heights
     x_frames = [frame.frame_num / routine.video_fps for frame in routine.frames]
     y_travel = [frame.center_pt_x for frame in routine.frames]
-    y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
+    y_height = [frame.center_pt_y for frame in routine.frames]
 
     # List inside list gets flattened
     peaks_x = list(chain.from_iterable(
@@ -148,6 +143,7 @@ def plot_data(routine):
     peaks_x.append(routine.bounces[-1].end_time)
     peaks_y = list(chain.from_iterable((bounce.start_height, bounce.max_height) for bounce in routine.bounces))
     peaks_y.append(routine.bounces[-1].end_height)
+    peaks_y = [routine.video_height - p for p in peaks_y]
 
     axarr[0].set_title("Height")
     axarr[0].plot(x_frames, y_height, color="g")
@@ -176,11 +172,16 @@ def plot_data(routine):
     y_major = np.array([frame.ellipse_len_major for frame in routine.frames])
     y_minor = np.array([frame.ellipse_len_minor for frame in routine.frames])
 
-    axarr[3].scatter(x_frames, y_major, color="g")
-    axarr[3].scatter(x_frames, y_minor, color='b')
-    axarr[3].set_ylim([0, 300])
-    axarr[3].set_title("Ellipse Axes Length")
-    axarr[3].set_ylabel('Length')
+    # axarr[3].scatter(x_frames, y_major, color="g")
+    # axarr[3].scatter(x_frames, y_minor, color='b')
+    # axarr[3].set_ylim([0, 300])
+    # axarr[3].set_title("Ellipse Axes Length")
+    # axarr[3].set_ylabel('Length')
+    # axarr[3].set_xlabel('Time (s)')
+
+    axarr[3].plot(x_frames, y_major/y_minor, color="g")
+    axarr[3].set_title("Ellipse Axes Ratio")
+    axarr[3].set_ylabel('Length Ratio')
     axarr[3].set_xlabel('Time (s)')
 
     plt.show()
