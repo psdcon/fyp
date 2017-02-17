@@ -1,6 +1,7 @@
 from sqlalchemy import *
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+import numpy as np
 
 Base = declarative_base()
 
@@ -11,7 +12,7 @@ class Routine(Base):
     id = Column(INTEGER, primary_key=True)
     path = Column(TEXT, nullable=False, unique=True)
     note = Column(TEXT)
-    performer_id = Column(INTEGER)
+    # performer_id = Column(INTEGER)
     competition = Column(TEXT)
     level = Column(TEXT)
     video_height = Column(INTEGER)
@@ -20,7 +21,7 @@ class Routine(Base):
     trampoline_top = Column(INTEGER)
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
-    padding = Column(INTEGER)  # padding (in pixels) from the center point
+    crop_length = Column(INTEGER)  # padding (in pixels) from the center point
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
@@ -28,8 +29,27 @@ class Routine(Base):
     def __init__(self, path=None):
         self.path = path
 
-        # def __repr__(self):
-        # return "Routine(path=%r, bounces=%r)" % (self.path, self.bounces)
+    def __repr__(self):
+        return "Routine(path=%r, bounces=%r)" % (self.path, self.bounces)
+
+    def getScores(self):
+        bounceDeductions = []
+        for bounce in self.bounces:
+            if bounce.deductions != []:
+                bounceDeductions.append(bounce.deductions)
+        # Transpose all deduction objects using * operator with zip. http://stackoverflow.com/questions/6473679/transpose-list-of-lists
+        routineDeductions = zip(*bounceDeductions)  # returns a tuple. * operator causes transpose
+        # This assumes same number of deductions for all judgements.
+        # TODO because of incorrect number of bounces on some routines, all previous judgements of a routine should be updated or for new judgements including that deduction will never be counted
+        scores = []
+        for deductions in routineDeductions:
+            deductionValues = [deduction.deduction for deduction in deductions]
+            # Only take the first 10
+            scores.append(10 - sum(deductionValues[:10]))
+        return scores
+
+    def getScore(self):
+        return float("{0:.1f}".format(np.average(self.getScores())))
 
     def isTracked(self):
         return self.trampoline_top is not None
@@ -48,11 +68,12 @@ class Frame(Base):
     ellipse_angle = Column(INTEGER)
     pose = Column(TEXT)
     pose_hg = Column(TEXT)
+    crop_length = Column(INTEGER)
 
     routine = relationship("Routine", back_populates='frames')
 
     def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, ellipse_len_major, ellipse_len_minor,
-                 ellipse_angle):
+                 ellipse_angle, crop_length):
         self.routine_id = routine_id
         self.frame_num = frame_num
         self.center_pt_x = center_pt_x
@@ -60,6 +81,10 @@ class Frame(Base):
         self.ellipse_len_major = ellipse_len_major
         self.ellipse_len_minor = ellipse_len_minor
         self.ellipse_angle = ellipse_angle
+        self.crop_length = crop_length
+
+    def get_scale_factor(self):
+        return 256.0/float(self.crop_length)
 
 
 class Bounce(Base):
@@ -107,6 +132,13 @@ class Bounce(Base):
         return "Bounce(skill_name=%r)" % (self.skill_name)
         # return "Bounce(name=%r, routine=%r)" % (self.name, self.routine)
 
+    def isJudgeable(self):
+        return self.skill_name != "In/Out Bounce" and self.skill_name != "Broken"
+
+    def getFrames(self, db):
+        return list(db.query(Frame).filter(Frame.routine_id == self.routine_id, Frame.frame_num >= self.start_frame, Frame.frame_num <= self.end_frame))
+        # return self.routine.frames.filter_by(Frame.frame_num > self.start_frame, Frame.frame_num < self.end_frame)
+
 
 class Deduction(Base):
     __tablename__ = 'bounce_deductions'
@@ -120,7 +152,7 @@ class Deduction(Base):
     contributor = relationship("Contributor", back_populates='deductions')
 
     def __repr__(self):
-        return "Deduction(deduction=%r)" % (self.deduction)
+        return "Deduction(deduction=%r, who=%r)" % (self.deduction, self.contributor)
 
 
 class Contributor(Base):
@@ -131,6 +163,10 @@ class Contributor(Base):
     name = Column(TEXT)
 
     deductions = relationship("Deduction", back_populates='contributor')
+
+
+    def __repr__(self):
+        return "Contributor(id=%r, name=%s)" % (self.id, self.name)
 
 
 # Create an engine that stores data in the local directory's

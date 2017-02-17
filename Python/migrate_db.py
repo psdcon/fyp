@@ -3,7 +3,7 @@ import sqlite3
 
 import cv2
 
-from helpers import consts, helper
+from helpers import consts, helper_funcs
 
 db = sqlite3.connect(consts.databasePath)
 db.row_factory = sqlite3.Row
@@ -19,7 +19,7 @@ for routine in routines:
     bounces = json.loads(routine['bounces'])
     competition = routine['name'][:routine['name'].index("/")]
 
-    cap = helper.open_video(routine['name'])
+    cap = helper_funcs.open_video(routine['name'])
     fps = cap.get(cv2.CAP_PROP_FPS)
     capWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     capHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

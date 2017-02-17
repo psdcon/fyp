@@ -1,8 +1,11 @@
 # Constants
-videosRootPath = 'C:/Users/psdco/Videos/'
+videosRootPath = 'C:\\Users\\psdco\\Videos\\'
 # databasePath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/db.sqlite3'
 databasePath = 'C:/Users/psdco/Documents/ProjectCode/Python/db.sqlite3'
 lastSelectionFilePath = 'gui/lastSaved.txt'
+
+contourDistance = 25
+minContourArea = 800
 
 comps = [
     'Trainings',
@@ -81,6 +84,12 @@ angleIndexKeys = [
     "Left shoulder",
     "Right elbow",
     "Left elbow",
+]
+angleAverageKeys = [
+    'Knee',
+    'Hip',
+    'Shoulder',
+    'Elbow',
 ]
 
 # part_name: [name, bgr]. for plot and opencv

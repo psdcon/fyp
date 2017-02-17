@@ -1,45 +1,46 @@
 from __future__ import print_function
 from __future__ import print_function
+from math import acos, degrees
+from scipy import interpolate
 
+from scipy.spatial import distance
 import json
-import os
 from itertools import chain
+from os import path
 
 import cv2
 import h5py
 import matplotlib.pyplot as plt
-import numpy as np
 import scipy.io
+from scipy import signal
 from sqlalchemy.orm.exc import NoResultFound
 
-import helpers.helper
 from helpers import consts
-from helpers import helper
+from helpers import helper_funcs
 from helpers.db_declarative import *
-from image_processing import track
 
 
-def play_skill(db, bounce_id, show_pose=False, show_full=False):
+def play_skill(db, bounce_id, show_pose=None, show_full=False):
     bounce = db.query(Bounce).filter_by(id=bounce_id).one()
     routine = bounce.routine
 
     play_frames(db, routine, bounce.start_frame, bounce.end_frame, show_pose, show_full)
 
 
-def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=None, show_full=False):
+def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=None, show_full=False):
     waitTime = 40
     playOneFrame = False
     paused = False
 
-    cap = helper.open_video(routine.path)
+    cap = helper_funcs.open_video(routine.path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     if end_frame == -1:
         end_frame = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
-    firstFrame = db.query(Frame).filter_by(routine_id=routine.id, frame_num=1).one()
-    firstFrameId = firstFrame.id
-    if show_pose is not False:  # if not deliberately set to ellipse, then gracefully fallback to pose if available or ellipse if not
-        show_pose = firstFrame.pose is not None  # if pose is none, show ellipse
+    firstFrame = db.query(Frame).filter_by(routine_id=routine.id, frame_num=start_frame).one()
+    # firstFrameId = firstFrame.id
+    if show_pose is None:  # if not deliberately set to ellipse, then gracefully fallback to pose if available or ellipse if not
+        show_pose = False if firstFrame.pose is None else True  # if pose is none, show ellipse
 
     while True:
         if playOneFrame or not paused:
@@ -47,14 +48,21 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=None, show_f
             _ret, frame = cap.read()
 
             try:
-                frame_data = db.query(Frame).filter_by(routine_id=routine.id,
-                                                       frame_num=cap.get(cv2.CAP_PROP_POS_FRAMES)).one()
+                frame_data = db.query(Frame).filter_by(routine_id=routine.id, frame_num=cap.get(cv2.CAP_PROP_POS_FRAMES)).one()
             except NoResultFound:
                 continue
 
             cx = frame_data.center_pt_x
             cy = frame_data.center_pt_y
-            x1, x2, y1, y2 = helper.bounding_square(routine.video_height, routine.video_width, cx, cy, routine.padding)
+            # Graceful degredation
+            if frame_data.crop_length:
+                cropLength = frame_data.crop_length
+            elif routine.crop_length:
+                cropLength = routine.crop_length
+            else:
+                cropLength = 256
+
+            x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine.video_height, routine.video_width, cx, cy, cropLength)
 
             if show_pose:
                 pose = np.array(json.loads(frame_data.pose))
@@ -67,35 +75,32 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=None, show_f
                         pose_x = int((cx - routine.padding) + pose[0, p_idx])
                         pose_y = int((cy - routine.padding) + pose[1, p_idx])
                         color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                        cv2.circle(frame, (pose_x, pose_y), 5, color, thickness=-1)  # -ve thickness = filled
+                        cv2.circle(frame, (pose_x, pose_y), 5, color, thickness=cv2.FILLED)
                     cv2.imshow('HG Smooth', frame)
 
                 # Show cropped
                 else:
                     frameCropped = frame[y1:y2, x1:x2]
+                    # frameCropped = cv2.resize(frameCropped, (256, 256))
+                    cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     # frameCroppedCopy = np.copy(frameCropped)
-                    cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.4, (255, 255, 255))
                     for p_idx in range(16):
                         color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                        cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color,
-                                   thickness=-1)  # -ve thickness = filled
+                        cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color, thickness=cv2.FILLED)
                     cv2.imshow('HG Smooth', frameCropped)
 
                     # for p_idx in range(16):
                     #     color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                    #     cv2.circle(frameCroppedCopy, (int(pose_rough[0, p_idx]), int(pose_rough[1, p_idx])), 5, color,
-                    #                thickness=-1)  # -ve thickness = filled
-                    # cv2.imshow('HG', frameCroppedCopy)
+                    #     cv2.circle(frameCroppedCopy, (int(pose_rough[0, p_idx]), int(pose_rough[1, p_idx])), 5, color, thickness=cv2.FILLED)  # -ve thickness = filled
+                    # cv2.imshow('HG Rough', frameCroppedCopy)
 
             else:
-                cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
+                cv2.circle(frame, (cx, cy), 3, (0, 0, 255), cv2.FILLED)
+                ellipse = ((cx, cy), (frame_data.ellipse_len_major, frame_data.ellipse_len_minor), frame_data.ellipse_angle)
+                cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
                 if show_full:
                     # (x, y), (MA, ma), angle
-                    # ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)),
-                    #            frame_data.ellipse_angle)
-                    ellipse = ((cx, cy), (frame_data.ellipse_len_major, frame_data.ellipse_len_minor),frame_data.ellipse_angle)
-                    cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
+                    # ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)), frame_data.ellipse_angle)
                     cv2.imshow('bounce.skill_name', frame)
                 else:
                     frameCropped = frame[y1:y2, x1:x2]
@@ -118,6 +123,13 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=None, show_f
         elif k == ord(','):  # slow down
             waitTime += 5
             print(waitTime)
+        elif k >= ord('0') and k <= ord('9'):
+            num = k - ord('0')
+            frameToJumpTo = (cap.get(cv2.CAP_PROP_FRAME_COUNT) / 10) * num
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frameToJumpTo)
+            updateOne = True
+        elif k == ord('\n') or k == ord('\r'):  # return/enter key
+            break
         elif k == ord('q') or k == 27:  # q/ESC
             print("Exiting...")
             exit()
@@ -126,6 +138,138 @@ def play_frames(db, routine, start_frame=0, end_frame=-1, show_pose=None, show_f
         if cap.get(cv2.CAP_PROP_POS_FRAMES) == end_frame:
             cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             # break
+
+
+def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, start_frame2=1, end_frame2=-1, show_full=False):
+    waitTime = 40
+    playOneFrame = False
+    paused = False
+
+    cap1 = helper_funcs.open_video(routine1.path)
+    cap1.set(cv2.CAP_PROP_POS_FRAMES, start_frame1)
+    if end_frame1 == -1:
+        end_frame1 = cap1.get(cv2.CAP_PROP_FRAME_COUNT)
+    # TODO
+    # frameIndexes = [f.frame_num for f in fr]
+
+    cap2 = helper_funcs.open_video(routine2.path)
+    cap2.set(cv2.CAP_PROP_POS_FRAMES, start_frame2)
+    if end_frame2 == -1:
+        end_frame2 = cap2.get(cv2.CAP_PROP_FRAME_COUNT)
+
+    firstFrame = db.query(Frame).filter_by(routine_id=routine1.id, frame_num=start_frame1).one()
+    show_pose = False if firstFrame.pose is None else True  # if pose is none, show ellipse
+
+    bothFrames = np.zeros(shape=(256, 256 * 2, 3), dtype=np.uint8)
+
+    while True:
+        if playOneFrame or not paused:
+
+            _ret, frame1 = cap1.read()
+            _ret, frame2 = cap2.read()
+
+            try:
+                frame_data1 = db.query(Frame).filter_by(routine_id=routine1.id, frame_num=cap1.get(cv2.CAP_PROP_POS_FRAMES)).one()
+                frame_data2 = db.query(Frame).filter_by(routine_id=routine2.id, frame_num=cap2.get(cv2.CAP_PROP_POS_FRAMES)).one()
+            except NoResultFound:
+                continue
+
+            cx1 = frame_data1.center_pt_x
+            cy1 = frame_data1.center_pt_y
+            if frame_data1.crop_length:
+                cropLength1 = frame_data1.crop_length
+            elif routine1.crop_length:
+                cropLength1 = routine1.crop_length
+            else:
+                cropLength1 = 256
+
+            cx2 = frame_data2.center_pt_x
+            cy2 = frame_data2.center_pt_y
+            if frame_data2.crop_length:
+                cropLength2 = frame_data2.crop_length
+            elif routine2.crop_length:
+                cropLength2 = routine2.crop_length
+            else:
+                cropLength2 = 256
+
+            if show_pose:
+                pose1 = np.array(json.loads(frame_data1.pose))
+                pose2 = np.array(json.loads(frame_data2.pose))
+
+                # Show full frame
+                if show_full:
+                    pass
+                    # cv2.putText(frame1, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX,
+                    #             0.4, (255, 255, 255))
+                    # for p_idx in range(14):
+                    #     pose_x = int((cx - routine.padding) + pose[0, p_idx])
+                    #     pose_y = int((cy - routine.padding) + pose[1, p_idx])
+                    #     color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
+                    #     cv2.circle(frame1, (pose_x, pose_y), 5, color, thickness=cv2.FILLED)
+                    # cv2.imshow('HG Smooth', frame1)
+
+                # Show cropped
+                else:
+                    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine1.video_height, routine1.video_width, cx1, cy1, cropLength1)
+                    frameCropped1 = frame1[y1:y2, x1:x2]
+                    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine2.video_height, routine2.video_width, cx2, cy2, cropLength2)
+                    frameCropped2 = frame2[y1:y2, x1:x2]
+
+                    for p_idx in range(16):
+                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
+                        cv2.circle(frameCropped1, (int(pose1[0, p_idx]), int(pose1[1, p_idx])), 5, color, thickness=cv2.FILLED)
+                    bothFrames[0:256, 0:256] = cv2.resize(frameCropped1, (256, 256))
+
+                    for p_idx in range(16):
+                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
+                        cv2.circle(frameCropped2, (int(pose2[0, p_idx]), int(pose2[1, p_idx])), 5, color, thickness=cv2.FILLED)
+                    frameCropped2 = cv2.resize(frameCropped2, (256, 256))
+                    bothFrames[0:256, 256:512] = cv2.resize(frameCropped2, (256, 256))
+
+                    cv2.putText(bothFrames, '{}'.format(frame_data1.frame_num-start_frame1), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    cv2.imshow('Pose', bothFrames)
+
+            else:
+                pass
+                # cv2.circle(frame1, (cx, cy), 3, (0, 0, 255), cv2.FILLED)
+                # ellipse = ((cx, cy), (frame_data.ellipse_len_major, frame_data.ellipse_len_minor), frame_data.ellipse_angle)
+                # cv2.ellipse(frame1, ellipse, color=(0, 255, 0), thickness=2)
+                # if show_full:
+                #     # (x, y), (MA, ma), angle
+                #     # ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)), frame_data.ellipse_angle)
+                #     cv2.imshow('bounce.skill_name', frame1)
+                # else:
+                #     frameCropped = frame1[y1:y2, x1:x2]
+                #     cv2.imshow('bounce.skill_name', frameCropped)
+
+            if playOneFrame:
+                playOneFrame = False
+
+        k = cv2.waitKey(waitTime) & 0xff
+        if k == ord('k'):  # play pause
+            paused = not paused
+        elif k == ord('j'):  # prev frame
+            playOneFrame = True
+            cap1.set(cv2.CAP_PROP_POS_FRAMES, cap1.get(cv2.CAP_PROP_POS_FRAMES) - 2)
+            cap2.set(cv2.CAP_PROP_POS_FRAMES, cap2.get(cv2.CAP_PROP_POS_FRAMES) - 2)
+        elif k == ord('l'):  # next frame
+            playOneFrame = True
+        elif k == ord('.'):  # speed up
+            waitTime -= 5
+            print(waitTime)
+        elif k == ord(','):  # slow down
+            waitTime += 5
+            print(waitTime)
+        elif k == ord('\n') or k == ord('\r'):  # return/enter key
+            break
+        elif k == ord('q') or k == 27:  # q/ESC
+            print("Exiting...")
+            exit()
+
+        # Loop forever
+        if cap1.get(cv2.CAP_PROP_POS_FRAMES) == end_frame1 or cap2.get(cv2.CAP_PROP_POS_FRAMES) == end_frame2:
+            cap1.set(cv2.CAP_PROP_POS_FRAMES, start_frame1)
+            cap2.set(cv2.CAP_PROP_POS_FRAMES, start_frame2)
 
 
 def plot_data(routine):
@@ -179,7 +323,7 @@ def plot_data(routine):
     # axarr[3].set_ylabel('Length')
     # axarr[3].set_xlabel('Time (s)')
 
-    axarr[3].plot(x_frames, y_major/y_minor, color="g")
+    axarr[3].plot(x_frames, y_major / y_minor, color="g")
     axarr[3].set_title("Ellipse Axes Ratio")
     axarr[3].set_ylabel('Length Ratio')
     axarr[3].set_xlabel('Time (s)')
@@ -230,7 +374,7 @@ def skill_into_filmstrip(cap, routine):
         exit()
 
 
-def plot_skill_pose(db, routine):
+def gen_pose_angles(poses, average=False):
     def rel_pose_to_abs_pose(pose, cx, cy, padding=100):
         # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
         # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
@@ -243,9 +387,7 @@ def plot_skill_pose(db, routine):
         pt = np.array([pose[0, p_idx], pose[1, p_idx]])
         return pt
 
-    def angle(A, B, C):
-        from math import acos, degrees
-        from scipy.spatial import distance
+    def calc_angle(A, B, C):
         a = distance.euclidean(C, B)
         b = distance.euclidean(A, C)
         c = distance.euclidean(A, B)
@@ -254,50 +396,200 @@ def plot_skill_pose(db, routine):
         ang = acos(num / demon)
         return degrees(ang)
 
-    # Get a skill
-    skill = routine.bounces[15]
-    play_skill(db, skill.id, show_pose=True)
-
-    # Save all poses from
-    skillFrames = []
-    poses = []
-    for frame in routine.frames:
-        if frame.frame_num > skill.start_frame and frame.frame_num < skill.end_frame:
-            skillFrames.append(frame)
-            # absPose = rel_pose_to_abs_pose(np.array(json.loads(frame.pose)), frame.center_pt_x, routine.video_height - frame.center_pt_y)
-            # poses.append(absPose)
-            poses.append(np.array(json.loads(frame.pose)))
-            # poses.append(np.array(json.loads(frame.pose_hg)))
-
     # Make a list for each of the joints to be plotted
-    jointNames = consts.getAngleIndices('deepcut')
-    # jointNames = consts.getAngleIndices('hourglass')
-    angleValues = {key: [] for key in jointNames.keys()}
-    # Calculate an array of angles
+    # jointNames = consts.getAngleIndices('deepcut')
+    jointNames = consts.getAngleIndices('hourglass')
+    jointAngles = {key: [] for key in jointNames.keys()}
+
     for pose in poses:
+        # pose = rel_pose_to_abs_pose(np.array(json.loads(frame.pose)), frame.center_pt_x, routine.video_height - frame.center_pt_y)
+        # pose = np.array(json.loads(frame.pose))
+        # pose = np.array(json.loads(frame.pose_hg))
+
+        # Calculate an angle for each joint
+        # Add to the dict for that joint
         for key in jointNames.keys():
-            part_idx = jointNames[key]
-            #
-            angleVal = angle(pose_as_point(pose, part_idx[0]), pose_as_point(pose, part_idx[1]),
-                             pose_as_point(pose, part_idx[2]))
-            angleValues[key].append(angleVal)
+            # Get the 3 pose points that make up this joint
+            joint_pose_pts_idxs = jointNames[key]
+            # Calculate the angle between them
+            angle = calc_angle(pose_as_point(pose, joint_pose_pts_idxs[0]), pose_as_point(pose, joint_pose_pts_idxs[1]), pose_as_point(pose, joint_pose_pts_idxs[2]))
+            # Append it to the appropriate dict
+            jointAngles[key].append(angle)
 
+    if not average:
+        return jointAngles
+    else:
+        averagedJointAngles = {}
+        for i in range(0, len(consts.angleIndexKeys), 2):  # step from 0 to 8 in increments of 2
+            rightKey = consts.angleIndexKeys[i]
+            leftKey = consts.angleIndexKeys[i+1]
+            jointName = rightKey.split(' ')[1].title()  # take the last word and set it to title case
+            averagedJointAngles[jointName] = np.average([jointAngles[rightKey], jointAngles[leftKey]], axis=0)
+        return averagedJointAngles
+
+
+# def plot_frame_angles(db, routine, frames=None):
+#     if frames is None:
+#         frames = routine.frames
+#
+#     angleValues = gen_frame_angles(frames)
+#     count = len(angleValues.values()[0])
+#
+#     # Plot angles
+#     f, axarr = plt.subplots(4, sharex=True)
+#
+#     # use angleIndexKeys rather than jointNames.keys() because order matters here
+#     for i, key in enumerate(consts.angleIndexKeys):
+#         plti = int(i / 2)  # when i=0,1; plti = 0. when i=2,3; plti = 1. when i=4,5; plti = 2. when i=6,7; plti = 3
+#         axarr[plti].plot(range(count), angleValues[key], c=consts.jointAngleColors[i % 2], label=key)
+#         axarr[plti].scatter(range(count), angleValues[key], c=consts.jointAngleColors[i % 2])
+#         if i % 2 == 0:
+#             axarr[plti].set_title(key.split(' ')[1].title())
+#             nextKey = consts.angleIndexKeys[i + 1]
+#             axarr[plti].plot(range(count), np.average([angleValues[key], angleValues[nextKey]], axis=0), c='yellow')
+#             # axarr[plti].legend(loc='best')
+#     plt.savefig('C:/Users/psdco/Pictures/Tucks/' + path.basename(routine.path)[:-4] + "_{}".format(frames[0].frame_num))
+#     plt.show()
+
+
+def compare_many_angles_plot(manyRoutineAngles, labels, block=True):
     # Plot angles
-    f, axarr = plt.subplots(4, sharex=True)
+    f, axarr = plt.subplots(len(manyRoutineAngles[0]), sharex=True)
 
-    # use angleIndexKeys rahter than jointNames.keys() because order matters here
-    for i, key in enumerate(consts.angleIndexKeys):
-        plti = int(i / 2)  # when i=0,1; plti = 0. when i=2,3; plti = 1. when i=4,5; plti = 2. when i=6,7; plti = 3
-        axarr[plti].plot(range(len(poses)), angleValues[key], c=consts.jointAngleColors[i % 2], label=key)
-        axarr[plti].scatter(range(len(poses)), angleValues[key], c=consts.jointAngleColors[i % 2])
-        axarr[plti].legend(loc='best')
-    plt.show()
+    # Get number of data points in each one for resampling.
+    # dataPointLens = [len(routineAngles.values()[0]) for routineAngles in manyRoutineAngles]
+    # sampleCount = min(dataPointLens)
 
+    # Loop through
+    error = [[label, 0] for label in labels]
+    for i, label, routineAngles in zip(range(len(manyRoutineAngles)), labels, manyRoutineAngles):
+        # use angleIndexKeys rather than jointNames.keys() because order matters here
+        # AngleIndexKeys are grouped in left right pairs. Want to add to average the two and add it to the plot
+        for plti, key in enumerate(routineAngles):
+            axarr[plti].set_title(key)
+
+            angles = routineAngles[key]
+            # angles = signal.resample(angles, sampleCount)
+            goodIndices = find_outlier_indices(angles, 50)
+            f = interpolate.interp1d(goodIndices, angles[goodIndices], kind='cubic')
+            newAngles = f(range(len(angles)))
+            # error[i][1] += sum(np.absolute(angles))
+
+            # all_idx = 1:length(x)
+            # outlier_idx = abs(x - median(x)) > 3 * std(x) | abs(y - median(y)) > 3 * std(y) # Find outlier idx
+            # x(outlier_idx) = interp1(all_idx(~outlier_idx), x(~outlier_idx), all_idx(outlier_idx))
+
+            axarr[plti].plot(range(len(angles)), newAngles, label=label)
+            axarr[plti].plot(range(len(angles)), angles, label=label, marker='o', linestyle="-")
+
+    print(error)
+    plt.legend(loc='best')
+    # plt.savefig('C:/Users/psdco/Pictures/Tucks/' + path.basename(routine.path)[:-4] + "_{}".format(frames[0].frame_num))
+    plt.show(block=block)
+
+
+def find_outlier_indices(arr, cutoff=40):
+    diff = np.diff(arr)
+    outliers = np.nonzero(diff < -cutoff)[0]
+    if len(outliers) == 0:
+        return range(len(arr))
+
+    if outliers[0] == 0:
+        outliers = outliers[1:]
+
+    tweenOutliers = []
+    for oli in outliers:
+        if oli in tweenOutliers:
+            continue
+        normalRef = arr[oli]
+        i = oli+1
+        while 1:
+            thisDif = normalRef - arr[i]
+            if abs(thisDif) > cutoff:
+                tweenOutliers.append(i)
+            else:  # found a point close to normal ref, go to next outlier
+                break
+            i += 1
+            # Dont go off the end
+            if i == len(arr):
+                tweenOutliers = tweenOutliers[:-1]
+                break
+
+    goodIndices = [i for i in range(len(arr)) if i not in tweenOutliers]
+    return goodIndices
+
+    # for i in range(len(diff)):
+    #     pt1 = diff[i]
+    #     pt2 = diff[i+1]
+    #     if
+    #
+    # badPts = []
+    # outliers = False
+    # lastGoodVal = 0
+    # for i in range(1, len(arr)):
+    #     pt1 = arr[i-1]
+    #     pt2 = arr[i]
+    #     diff = pt2-pt2
+    #     if abs(diff) > cutoff:
+    #         outliers = True
+    #         lastGoodVal = pt1
+    #         badPts.append(i)
+
+
+    # from scipy import interpolate
+    # x = [a for a in range(len(angles)) if a not in np.nonzero(diff > 40)[0][1:]]
+    # # x = [x for x in x if x not in np.nonzero(np.diff(angles[x])>40)[0][1:]]
+    # y = angles[x]
+    # # x = range(len(angles))
+    # xnew = range(len(angles))
+    #
+    # f = interpolate.interp1d(x, y, kind='cubic')
+    #
+    # spl = interpolate.UnivariateSpline(x, y)
+    # # spl.set_smoothing_factor(200)
+    #
+    # b, a = signal.butter(3, 0.1)
+    # # b, a = signal.ellip(4, 0.01, 120, 0.091)
+    # yfilt = signal.filtfilt(b, a, angles, padlen=50)
+    #
+    # plt.figure()
+    # plt.plot(x, y, 'o', xnew, f(xnew), '-')
+    # plt.plot(xnew, spl(xnew), 'r')
+    # plt.plot(xnew, yfilt)
+    # plt.show()
+
+def is_outlier(points, thresh=3.5):
+    """
+    Returns a boolean array with True if points are outliers and False otherwise.
+
+    Parameters:
+    -----------
+        points : An numobservations by numdimensions array of observations
+        thresh : The modified z-score to use as a threshold. Observations with
+            a modified z-score (based on the median absolute deviation) greater
+            than this value will be classified as outliers.
+
+    Returns:
+    --------
+        mask : A numobservations-length boolean array.
+    """
+    if len(points.shape) == 1:
+        points = points[:,None]
+    median = np.median(points, axis=0)
+    diff = np.sum((points - median)**2, axis=-1)
+    diff = np.sqrt(diff)
+    med_abs_deviation = np.median(diff)
+
+    modified_z_score = 0.6745 * diff / med_abs_deviation
+
+    return modified_z_score > thresh
 
 def pose_error(routine):
+    # Original hg output
     hg_preds_file = h5py.File('preds.h5', 'r')
     hg_preds = hg_preds_file.get('preds')
 
+    # Smoothed monocap output
     mat_preds_file = scipy.io.loadmat('preds.mat')
     mat_preds = mat_preds_file['preds_2d']
 
@@ -308,8 +600,8 @@ def pose_error(routine):
 
     for i, frame_data in enumerate(routine.frames):
         pose_mat = mat_preds[:, :, i]
-        pose_hg = np.array(
-            json.loads(frame_data.pose_hg))  # np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
+        pose_hg = np.array(json.loads(frame_data.pose_hg))
+        # pose_hg = np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
         for p_idx in range(16):
             x_mat[p_idx].append(int(pose_mat[0, p_idx]))
             x_hg[p_idx].append(int(pose_hg[0, p_idx]))

@@ -14,8 +14,7 @@ def main():
     video_size = "720x480"
 
     parser = argparse.ArgumentParser(description='Convert all .mp4 files in path to ' + video_size)
-    parser.add_argument('path', default='.', action="store",
-                        help='path to the directory containing mp4 files to convert')
+    parser.add_argument('path', default='.', action="store", help='path to the directory containing mp4 files to convert')
     args = parser.parse_args()
 
     # Source directory

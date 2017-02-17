@@ -1,51 +1,65 @@
 import cv2
 import numpy as np
 
+from helpers import helper_funcs
 
-def detect_trampoline(db, cap, routine):
-    trampoline = find_trampoline(cap, routine)
+
+def detect_trampoline(db, routine):
+    # Open the video with some error handling
+    trampoline = find_trampoline(routine)
 
     routine.trampoline_top = trampoline['top']
     routine.trampoline_center = trampoline['center']
+    routine.trampoline_width = trampoline['width']
     db.commit()
 
-    print("Trampoline has been set to " + repr(trampoline))
+    print("Trampoline info saved as " + repr(trampoline))
 
 
-def find_trampoline(cap, routine):
-    maskLeftBorder = int(routine.video_width * 0.3)
-    maskRightBorder = int(routine.video_width * 0.7)
+def calcTrampolineEnds(width):
+    return int(width * 1.4)
+
+def find_trampoline(routine):
+    cap = helper_funcs.open_video(routine.path)
 
     # print("Trampoline Top has not yet been set!")
-    print("Use the arrow keys to adjust the cross hairs.")
-    print("Press ENTER to save, 'c' to continue without save, and ESC/'q' to quit")
+    print("Use the awsd keys to adjust the cross hairs. Use qe keys to adjust width")
+    print("Press ENTER to finish, and ESC/'q' to quit")
 
     _ret, frame = cap.read()
 
     # Take a best guess at where it might be
     trampoline = {
-        'top': _trampoline_top_best_guess(frame),
-        'center': routine.video_width / 2  # TODO this is a poor default
+        'top': routine.trampoline_top if routine.trampoline_top else _trampoline_top_best_guess(frame),
+        'center': routine.trampoline_center if routine.trampoline_center else routine.video_width / 2,  # TODO this is a poor default
+        'width': routine.trampoline_width if routine.trampoline_width else 135,
     }
+    trampoline['ends'] = calcTrampolineEnds(trampoline['width'])
 
     while 1:  # video will loop back to the start
         _ret, frame = cap.read()
 
+        maskLeftBorder = int(trampoline['center']-(trampoline['ends']/2))
+        maskRightBorder = int(trampoline['center']+(trampoline['ends']/2))
         maskAroundTrampoline = np.zeros(shape=(routine.video_height, routine.video_width), dtype=np.uint8)
         maskAroundTrampoline[0:trampoline['top'], maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
         frameCropped = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
 
+        # (x1 y1), (x2, y2)
         cv2.line(frame, (0, trampoline['top']), (routine.video_width, trampoline['top']), (0, 255, 0), 1)
+        # Vertical Lines
         cv2.line(frame, (trampoline['center'], 0), (trampoline['center'], routine.video_height), (0, 255, 0), 1)
+        cv2.line(frame, (trampoline['center']+(trampoline['width']/2), 0), (trampoline['center']+(trampoline['width']/2), routine.video_height), (0, 0, 255), 1)
+        cv2.line(frame, (trampoline['center']-(trampoline['width']/2), 0), (trampoline['center']-(trampoline['width']/2), routine.video_height), (0, 0, 255), 1)
+        cv2.line(frame, (trampoline['center']+(trampoline['ends']/2), 0), (trampoline['center']+(trampoline['ends']/2), routine.video_height), (0, 255, 0 ), 1)
+        cv2.line(frame, (trampoline['center']-(trampoline['ends']/2), 0), (trampoline['center']-(trampoline['ends']/2), routine.video_height), (0, 255, 0 ), 1)
 
         cv2.imshow('Frame', frame)
         cv2.imshow('Frame Cropped', frameCropped)
 
         k = cv2.waitKey(100)
-        res = k
         # TODO this is broken... DONE: Fixed it with asdw
-        # print 'You pressed %d (0x%x), LSB: %d (%s)' % (res, res, res % 256,
-        #                                                repr(chr(res % 256)) if res % 256 < 128 else '?')
+        # print 'You pressed %d (0x%x), LSB: %d (%s)' % (k, k, k % 256,repr(chr(k % 256)) if k % 256 < 128 else '?')
         if k == ord('w'):  #2490368:  # up
             trampoline['top'] -= 1
         elif k == ord('s'):  #2621440:  # down
@@ -54,6 +68,12 @@ def find_trampoline(cap, routine):
             trampoline['center'] -= 1
         elif k == ord('d'):  #2555904:  # right
             trampoline['center'] += 1
+        elif k == ord('e'):  # widen the width
+            trampoline['width'] += 2
+            trampoline['ends'] = calcTrampolineEnds(trampoline['width'])
+        elif k == ord('q'):  # narrow the width
+            trampoline['width'] -= 2
+            trampoline['ends'] = calcTrampolineEnds(trampoline['width'])
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
             break
         elif k == ord('q') or k == 27:  # q/ESC
@@ -65,6 +85,7 @@ def find_trampoline(cap, routine):
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     cv2.destroyAllWindows()
+    cap.release()
     return trampoline
 
 
