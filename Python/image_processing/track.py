@@ -1,5 +1,4 @@
 import json
-import os
 
 import cv2
 import numpy as np
@@ -8,67 +7,202 @@ from scipy.spatial import distance
 from helpers import consts
 from helpers import helper_funcs
 from helpers.db_declarative import Frame
-from helpers.helper_funcs import crop_points_constrained, contourCenter
+from helpers.helper_funcs import crop_points_constrained, calcContourCenter
 from image_processing import trampoline
 
+# Global Vars that get updated in the track loop with frame numbers
+# Used when saving data back to db
 centerPoints = {}
-ellipses = {}
-cropLengths = {}
-
+hullLengths = {}
+trampolineAreas = {}
+trampolineTouches = {}
+personMasks = {}
 
 def track_and_save(db, routine):
     track_gymnast(routine)
 
     print("Saving points...")
 
+    # Delete any existing frames
+    # if routine.frames:
+    #     print("Deleting existing frames")
+    #     routine.frames.delete()
+
     # Add data for routine to db frame-by-frame
     frames = []
-    for frameNum in ellipses.keys():
+    for frameNum in centerPoints.keys():
         cpt = centerPoints[frameNum]  # [cx, cy]
-        ell = ellipses[frameNum]  # [(cx, cy), (MA, ma), angle]
-        crop_length = cropLengths[frameNum]  # [(cx, cy), (MA, ma), angle]
-        frames.append(Frame(routine.id, frameNum, cpt[0], cpt[1], ell[1][0], ell[1][1], ell[2], crop_length))
+        center_pt_x = cpt[0]
+        center_pt_y = cpt[1]
+        hull_length = hullLengths[frameNum]
+        trampoline_area = trampolineAreas[frameNum]
+        trampoline_touch = 1 if trampolineTouches[frameNum] else 0
+        person_mask = json.dumps(personMasks[frameNum])
+
+        frame = Frame(routine.id, frameNum, center_pt_x, center_pt_y, hull_length, trampoline_area, trampoline_touch, person_mask)
+        frames.append(frame)
 
     db.add_all(frames)
     db.commit()
 
 
+def prepareBgSubt(pKNN, cap, framesToAverage):
+    framesToAverageStart = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) - (framesToAverage / 2)
+    framesToAverageEnd = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) + (framesToAverage / 2)  # Variable only for printing purposes
+    print("Averaging {} frames: {:.0f} - {:.0f}, please wait...".format(framesToAverage, framesToAverageStart, framesToAverageEnd))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, framesToAverageStart)
+    for i in range(framesToAverage):
+        _ret, frame = cap.read()
+        # maskedFrame = cv2.bitwise_and(frame, frame, mask=maskAboveTrmpl)
+        pKNN.apply(frame)  # Train background subtractor
+
+    # Reset video to start
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+
+def getPersonContour(fgMaskPrevPersonOverlap, contours):
+    # Find contours in the combo mask and get their centers
+    _im2, overlapContours, _hierarchy = cv2.findContours(np.copy(fgMaskPrevPersonOverlap), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Sort the contours and find their centers
+    overlapContours = sorted(overlapContours, key=cv2.contourArea, reverse=True)
+    overlapContourCenters = [calcContourCenter(contour) for contour in overlapContours if calcContourCenter(contour) is not None]
+
+    # Show the contours with their numbers
+    overlapColor = cv2.cvtColor(fgMaskPrevPersonOverlap, cv2.COLOR_GRAY2RGB)
+    for i, cpt in enumerate(overlapContourCenters):
+        cv2.putText(overlapColor, '{}'.format(i), cpt, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255))
+    # cv2.imshow("overlap", cv2.resize(overlapColor, (resizeWidth, resizeHeight)))
+
+    # Get contours in this errodedilate mask
+    thisFrameContourCenters = [calcContourCenter(contour) for contour in contours if calcContourCenter(contour) is not None]
+
+    # Match the contours in both frames based on min distance to their center points
+    contourGuessesIndices = []  # list where the index refers to the overlaContour and the value is the index of the closest thisContour
+    for i, overlapCenter in enumerate(overlapContourCenters):
+        minDist = 99999
+        minDistIndex = 0
+        for ii, thisCenter in enumerate(thisFrameContourCenters):
+            dist = distance.euclidean(thisCenter, overlapCenter)
+            if dist < minDist:
+                minDist = dist
+                minDistIndex = ii
+        contourGuessesIndices.append(minDistIndex)
+
+    # Draw the last body detection as a mask
+    # cv2.imshow("prevPersonFgMask", cv2.resize(prevPersonFgMask, (resizeWidth, resizeHeight)))
+
+    # Update it
+    prevPersonFgMask = np.zeros_like(fgMaskPrevPersonOverlap)
+    if False and contourGuessesIndices and 0 in contourGuessesIndices:
+        # check if the biggest and smallest have close edges so that if they're difting apart, the smaller one gets kicked out
+        # if not helper_funcs.find_if_close(contours[0], contours[contourGuessesIndices[-1]]):
+        #     print('throwing away')
+        #     contourGuessesIndices = contourGuessesIndices[:-1]  # throw away the last index
+
+        foundContours = [contours[i] for i in contourGuessesIndices]
+        personContour = np.concatenate(foundContours)
+        for contour in foundContours:
+            cv2.drawContours(prevPersonFgMask, [contour], 0, (255, 255, 255), cv2.FILLED)
+    else:
+        personContour = contours[0]
+        cv2.drawContours(prevPersonFgMask, contours, 0, (255, 255, 255), cv2.FILLED)
+
+    return personContour, prevPersonFgMask
+
+
+def highlightPerson(frame, personMask, cx, cy, cropLength):
+    # Get boundary
+    x1, x2, y1, y2 = crop_points_constrained(frame.shape[0], frame.shape[1], cx, cy, cropLength)
+
+    # Dilate the mask
+    kernel = np.ones((3, 3), np.uint8)
+    personMask = cv2.dilate(personMask, kernel, iterations=2)
+    # personMask = cv2.GaussianBlur(personMask, (15, 15), 0)
+    # cv2.imshow("personMask", cv2.resize(personMask, (resizeWidth, resizeHeight)))
+
+    # Darken the background and blur it
+    darkBg = cv2.addWeighted(frame, 0.4, np.zeros_like(frame), 0.6, 0)
+    darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
+    darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
+    # Make a person shaped hole in the bg
+    darkBgHole = cv2.bitwise_and(darkBg, darkBg, mask=255 - personMask)
+
+    # darkBgHole = alphaMask(darkBg, 255-personMask)
+    # cv2.imshow('darkBg', cv2.resize(darkBg, (resizeWidth, resizeHeight)))
+    # cv2.imshow('darkBgHole', cv2.resize(darkBgHole, (resizeWidth, resizeHeight)))
+
+    # Fill person shaped hole
+    personRevealed = cv2.bitwise_and(frame, frame, mask=personMask)
+    # personRevealed = alphaMask(frameNoEllipse, personMask)
+
+    # Add the two together
+    personRevealed = cv2.add(darkBgHole, personRevealed)
+
+    return personRevealed[y1:y2, x1:x2]
+
+
+def getMaxHullLength(hull):
+    hullMaxXLen = hull[:, 0, 0].max() - hull[:, 0, 0].min()
+    hullMaxYLen = hull[:, 0, 1].max() - hull[:, 0, 1].min()
+    return max([hullMaxXLen, hullMaxYLen])  # get all y components, get length between them
+
+
+def sq_area(ys, xs):
+    # Calculate the area between two points assuming they're not on a horizontal or vertical line
+    h = ys[0] - ys[1]
+    w = xs[0] - xs[1]
+    return abs(w * h)
+
+
+# Blends a greyscale mask into the src
+def alphaMask(src, mask):
+    scalar = mask / 255.0
+    dst = np.zeros_like(src)
+    for channel in range(3):
+        dst[:, :, channel] = src[:, :, channel] * scalar
+    return dst.astype(np.uint8)
+    # return dst.astype(np.uint8)
+
+
+def erode_dilate(image):
+    kernel = np.ones((2, 2), np.uint8)
+    # erosion = cv2.erode(input, kernel, iterations=1)
+    # dilation = cv2.dilate(erosion, kernel, iterations=1)
+    opening = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+    opening = cv2.dilate(opening, kernel, iterations=10)
+    return opening
+
+
+def isTouchingTrmpl(trmpl_top, hull):
+    # Bottom of person
+    personMinPt = hull[:, 0, 1].max()  # y coordinate frame direction, duh
+    distFromTrmpl = trmpl_top - personMinPt
+
+    if distFromTrmpl == 1:
+        return True
+        # if len(hull) == 1:
+        #     return True
+        # # Sort the points of the hull by max(y) to find the length of the line touching the trampoline
+        # hullSorted = sorted(hull[:, 0], key=lambda h: h[1], reverse=True)
+        # lenTrmplTouch = np.linalg.norm(hullSorted[0] - hullSorted[1])
+        # if lenTrmplTouch > 5:
+        #     return True
+    return False
+
+
 def track_gymnast(routine):
-    def alphaMask(src, mask):
-        scalar = mask/255.0
-        dst = np.zeros_like(src)
-        for channel in range(3):
-            dst[:, :, channel] = src[:, :, channel] * scalar
-        return dst.astype(np.uint8)
-        # return dst.astype(np.uint8)
-
-    def erode_dilate(image):
-        kernel = np.ones((2, 2), np.uint8)
-        # erosion = cv2.erode(input, kernel, iterations=1)
-        # dilation = cv2.dilate(erosion, kernel, iterations=1)
-        opening = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
-
-        # openingSmall = cv2.resize(opening, (resizeWidth, resizeHeight))
-        # ErrodeImages[0:resizeHeight, resizeWidth:resizeWidth * 2] = cv2.cvtColor(openingSmall, cv2.COLOR_GRAY2RGB)
-
-        opening = cv2.dilate(opening, kernel, iterations=10)
-
-        # openingSmall = cv2.resize(opening, (resizeWidth, resizeHeight))
-        # ErrodeImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = cv2.cvtColor(openingSmall, cv2.COLOR_GRAY2RGB)
-
-        # opening = cv2.dilate(opening, np.ones((3, 3), np.uint8), iterations=10)
-        return opening
-
     print("Starting to track gymnast")
     cap = helper_funcs.open_video(routine.path)
 
     font = cv2.FONT_HERSHEY_SIMPLEX
-    framesToAverage = 200
-    startFrame = 0
+    framesToAverage = 300
 
     # Keyboard stuff
     visualise = True  # show windows rendering video
     waitTime = 15  # delay for keyboard input
+    paused = False
+    goOneFrame = False
 
     # Window vars
     scalingFactor = 0.4
@@ -76,282 +210,171 @@ def track_gymnast(routine):
     capHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     resizeWidth = int(capWidth * scalingFactor)
     resizeHeight = int(capHeight * scalingFactor)
+
+    # For masking to the right and left of the trampoline
     maskLeftBorder = int(routine.trampoline_center - (trampoline.calcTrampolineEnds(routine.trampoline_width) / 2))
     maskRightBorder = int(routine.trampoline_center + (trampoline.calcTrampolineEnds(routine.trampoline_width) / 2))
 
     # Create array for tiled window
-    KNNImages = np.zeros(shape=(resizeHeight, resizeWidth * 3, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
-    # ErrodeImages = np.zeros(shape=(resizeHeight, resizeWidth * 3, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
+    processVisImgs = np.zeros(shape=(resizeHeight * 2, resizeWidth * 2, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
+    prevPersonFgMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
 
     # Create mask around trampoline
-    maskAroundTrampoline = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)  # cv2.CV_8U
-    maskAroundTrampoline[0:routine.trampoline_top, maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
-    maskShowTrampoline = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
-    maskShowTrampoline[routine.trampoline_top:capHeight, maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
+    maskAboveTrmpl = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)  # cv2.CV_8U
+    maskAboveTrmpl[0:routine.trampoline_top, maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
+    maskBelowTrmpl = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
+    maskBelowTrmpl[routine.trampoline_top:capHeight, maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
+    trampolineAreaPx = sq_area((routine.trampoline_top, capHeight), (maskLeftBorder, maskRightBorder))
+
+    # Pick a default crop len if none saved
+    cropLength = routine.crop_length if routine.crop_length else 200
 
     # Background extractor. Ignore shadow
     pKNN = cv2.createBackgroundSubtractorKNN()
     pKNN.setShadowValue(0)
+    # Prepare background by pre-training the bg sub
+    prepareBgSubt(pKNN, cap, framesToAverage)
 
-    # Average background
-    framesToAverageStart = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) - (framesToAverage / 2)
-    framesToAverageEnd = (cap.get(cv2.CAP_PROP_FRAME_COUNT) * 0.5) + (
-        framesToAverage / 2)  # Variable only for printing purposes
-    print("Averaging {} frames: {:.0f} - {:.0f}, please wait...".format(framesToAverage, framesToAverageStart, framesToAverageEnd))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, framesToAverageStart)
-    for i in range(framesToAverage):
-        _ret, frame = cap.read()
-        # maskedFrame = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
-        pKNN.apply(frame)  # Train background subtractor
-
-    # Reset video to start
-    cap.set(cv2.CAP_PROP_POS_FRAMES, startFrame)
-
-    # print("\nStarting video at frame {}".format(startFrame))
     print("Press v to toggle showing visuals")
     print("Press ENTER to finish, and ESC/'q' to quit")
 
     lastContours = None  # used to remember last contour if area goes too small
-    paused = False
-    updateOne = False
-    prevErodeDilatedMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
-    comboMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
     while 1:
-        if updateOne or not paused:
+        if goOneFrame or not paused:
 
             _ret, frame = cap.read()
 
-            # if int(cap.get(cv2.CAP_PROP_POS_FRAMES)) not in range(425, 515):
-            #     if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
-            #         cap.set(cv2.CAP_PROP_POS_FRAMES, 425)
-            #     else:
-            #         continue
-
             # TODO if mask is really noisy (area is large/ high num contours), could increase the learning rate?
-            # maskedFrame = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
-            fgMaskKNN = pKNN.apply(frame)
-            KNNErodeDilated = erode_dilate(fgMaskKNN)
-            trampolineForeground = cv2.bitwise_and(KNNErodeDilated, KNNErodeDilated, mask=maskShowTrampoline)
-            cv2.imshow("trampolineForeground", cv2.resize(trampolineForeground, (resizeWidth, resizeHeight)))
+            frameFgMask = pKNN.apply(frame)
+            frameFgMaskMorphed = erode_dilate(frameFgMask)
 
-            KNNErodeDilated = cv2.bitwise_and(KNNErodeDilated, KNNErodeDilated, mask=maskAroundTrampoline)
-            comboMask = cv2.bitwise_and(KNNErodeDilated, KNNErodeDilated, mask=prevErodeDilatedMask)
+            # Get area of Trampoline via num of pixel showing
+            fgMaskBelowTrmpl = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=maskBelowTrmpl)
+            # percentage pixels of trampoline
+            trampolineArea = int(((fgMaskBelowTrmpl.sum() / 255)*100) / trampolineAreaPx)
+            trampolineAreas[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = trampolineArea
 
-            if visualise:  # show the thing
-                KNNImages[0:resizeHeight, 0:resizeWidth] = cv2.resize(pKNN.getBackgroundImage(), (resizeWidth, resizeHeight))
-                cv2.putText(KNNImages, 'Current bg model', (10, 20), font, 0.4, (255, 255, 255))
+            # Crop fg mask detail to be ROI (region of interest) above the trampoline
+            frameFgMaskMorphed = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=maskAboveTrmpl)
 
-                fgMaskKNNSmall = cv2.resize(fgMaskKNN, (resizeWidth, resizeHeight))
-                KNNImages[0:resizeHeight, resizeWidth:resizeWidth * 2] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
-                cv2.putText(KNNImages, 'Subtracted', (10 + resizeWidth, 20), font, 0.4, (255, 255, 255))
+            # Create mask of the common regions in this and in the prevPersonFgMask
+            fgMaskPrevPersonOverlap = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=prevPersonFgMask)
 
-                # For report
-                # KNNImages[0:resizeHeight, 0:resizeWidth] = cv2.resize(frame, (resizeWidth, resizeHeight))
-                # KNNImages[0:resizeHeight, resizeWidth:resizeWidth * 2] = cv2.resize(pKNN.getBackgroundImage(), (resizeWidth, resizeHeight))
-                # KNNImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
-                #
-                # Erode dilate for report
-                # ErrodeImages[0:resizeHeight, 0:resizeWidth] = cv2.cvtColor(fgMaskKNNSmall, cv2.COLOR_GRAY2RGB)
+            if visualise:
+                # Show current background model
+                processVisImgs[0:resizeHeight, 0:resizeWidth] = cv2.resize(pKNN.getBackgroundImage(), (resizeWidth, resizeHeight))
+                cv2.putText(processVisImgs, 'Background Model', (10, 20), font, 0.4, (255, 255, 255))
+                # Show fg mask
+                frameFgMask4Vis = cv2.cvtColor(cv2.resize(frameFgMask, (resizeWidth, resizeHeight)), cv2.COLOR_GRAY2RGB)
+                cv2.line(frameFgMask4Vis, (0, int(routine.trampoline_top*scalingFactor)), (resizeWidth, int(routine.trampoline_top*scalingFactor)), (0, 255, 0), 1)
+                cv2.putText(frameFgMask4Vis, 'Foreground Mask', (10, 20), font, 0.4, (255, 255, 255))
+                processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 0:resizeWidth * 1] = frameFgMask4Vis
+                # Trampoline area
+                # cv2.putText(fgMaskBelowTrmpl, '{}%'.format(trampolineArea), (10, 20), font, 1, (255, 255, 255))
+                # cv2.imshow("fgMaskBelowTrmpl", cv2.resize(fgMaskBelowTrmpl, (resizeWidth, resizeHeight)))
 
-            #
             # Find contours in masked image
-            _im2, contours, _hierarchy = cv2.findContours(np.copy(KNNErodeDilated), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            _img, contours, _hierarchy = cv2.findContours(np.copy(frameFgMaskMorphed), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             if len(contours) > 0:
-
-                # Sort DESC, so biggest contour's first
+                # Sort DESC, so biggest contour is first
                 contours = sorted(contours, key=cv2.contourArea, reverse=True)
-
-                # If contour is less than given area, replace it with previous contour
-                area = cv2.contourArea(contours[0])  # print(area)
-                if area < consts.minContourArea and lastContours is not None:
+                # If contour is less than min area, replace it with previous contour
+                if cv2.contourArea(contours[0]) < consts.minContourArea and lastContours is not None:
                     contours = lastContours
                 else:
                     lastContours = contours
 
-                # Find contours in the combo mask and get their centers
-                _im2, comboContours, _hierarchy = cv2.findContours(np.copy(comboMask), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                comboContours = sorted(comboContours, key=cv2.contourArea, reverse=True)
-                comboContourCenters = [contourCenter(cont) for cont in comboContours if contourCenter(cont) is not None]
-                # Show the contours with their numbers
-                comboColor = cv2.cvtColor(comboMask, cv2.COLOR_GRAY2RGB)
-                for i, cent in enumerate(comboContourCenters):
-                    cv2.putText(comboColor, '{}'.format(i), cent, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255))
-                # cv2.imshow("combo", cv2.resize(comboColor, (resizeWidth, resizeHeight)))
-                # Get contours in this errodedilate mask
-                thisContourCenters = [contourCenter(cont) for cont in contours if contourCenter(cont) is not None]
-
-                # Check if they're close to each other
-                contourGuessesIndices = []
-                for i, comboCenter in enumerate(comboContourCenters):
-                    minDist = 99999
-                    minDistIndex = 0
-                    for ii, thisCenter in enumerate(thisContourCenters):
-                        dist = distance.euclidean(thisCenter, comboCenter)
-                        if dist < minDist:
-                            minDist = dist
-                            minDistIndex = ii
-                    # The index
-                    contourGuessesIndices.append(minDistIndex)
-
-                # Draw the last body detection as a mask
-                # cv2.imshow("prevErodeDilatedMask", cv2.resize(prevErodeDilatedMask, (resizeWidth, resizeHeight)))
-                prevErodeDilatedMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
-                if False and contourGuessesIndices and 0 in contourGuessesIndices:
-                    # check if the biggest and smallest have close edges so that if they're difting apart, the smaller one gets kicked out
-                    # if not helper_funcs.find_if_close(contours[0], contours[contourGuessesIndices[-1]]):
-                    #     print('throwing away')
-                    #     contourGuessesIndices = contourGuessesIndices[:-1]  # throw away the last index
-
-                    foundContours = [contours[i] for i in contourGuessesIndices]
-                    personContour = np.concatenate(foundContours)
-                    for cont in foundContours:
-                        cv2.drawContours(prevErodeDilatedMask, [cont], 0, (255, 255, 255), cv2.FILLED)
-                else:
-                    personContour = contours[0]
-                    cv2.drawContours(prevErodeDilatedMask, contours, 0, (255, 255, 255), cv2.FILLED)
-
-                used2nd = False
-                # # Check if the two biggest contours are near each other
-                # if False and (len(contours) >= 2 and helper_funcs.find_if_close(contours[0], contours[1])):
-                #     personContour = np.concatenate((contours[0], contours[1]))
-                #     used2nd = True
-                # else:
-                #     personContour = contours[0]
-
+                personContour, prevPersonFgMask = getPersonContour(fgMaskPrevPersonOverlap, contours)
                 hull = cv2.convexHull(personContour)
-                hullMaxXLen = hull[:, 0, 0].max() - hull[:, 0, 0].min()
-                hullMaximaY = hull[:, 0, 1].max()
-                hullMaxYLen = hullMaximaY - hull[:, 0, 1].min()
-                hullMaxLen = max([hullMaxXLen, hullMaxYLen])  # get all y components, get length between them
-
-                # distFromTrampoline = routine.trampoline_top - hullMaximaY
-                # print("distFromTrampoline", distFromTrampoline)
 
                 if visualise:
-                    # KNNErodeDilated has all the contours of interest
-                    biggestContour = cv2.cvtColor(KNNErodeDilated, cv2.COLOR_GRAY2RGB)
-                    personMask = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
-                    cv2.drawContours(personMask, [personContour], 0, 255, cv2.FILLED)
-                    # cv2.imshow('personMask', personMask)
+                    # Convert the foreground mask to color so the biggest can be coloured in
+                    biggestContour = cv2.cvtColor(frameFgMaskMorphed, cv2.COLOR_GRAY2RGB)
                     # Draw the biggest one in red
                     cv2.drawContours(biggestContour, contours, 0, (0, 0, 255), cv2.FILLED)
-                    # Draw second biggest in green if it was included in the personContour
-                    if len(contours) >= 2 and used2nd:
-                        cv2.drawContours(biggestContour, contours, 1, (0, 255, 0), cv2.FILLED)
                     # Draw the outline of the convex hull for the person
-                    cv2.drawContours(biggestContour, [hull], 0, (0, 255, 0), 1)
-
-                    for i, cent in enumerate(thisContourCenters):
-                        cv2.putText(biggestContour, '{}'.format(i), cent, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0))
-
+                    cv2.drawContours(biggestContour, [hull], 0, (0, 255, 0), 2)
                     # Resize and show it
-                    biggestContourSmaller = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
-                    # cv2.imshow('big', biggestContour)
-                    KNNImages[0:resizeHeight, resizeWidth * 2:resizeWidth * 3] = biggestContourSmaller
-                    cv2.putText(KNNImages, 'ErodeDilated', (10 + resizeWidth * 2, 20), font, 0.4, (255, 255, 255))
-                    cv2.imshow('KNNImages', KNNImages)
-                    # cv2.imshow('ErrodeImages', ErrodeImages)
+                    biggestContour = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
+                    cv2.putText(biggestContour, 'ErodeDilated', (10, 20), font, 0.4, (255, 255, 255))
+                    processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 1:resizeWidth * 2] = biggestContour
+                    # cv2.imshow('personMask', personMask)
 
-                cx, cy = contourCenter(personContour)
+                cx, cy = calcContourCenter(personContour)
                 if cx and cy:
-                    # cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
                     centerPoints[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = [cx, cy]
 
-                    # Fit ellipse
-                    frameNoEllipse = np.copy(frame)
-                    if len(personContour) > 5:  # ellipse requires contour to have at least 5 points
-                        # (x, y), (MA, ma), angle
-                        ellipse = cv2.fitEllipse(personContour)
-                        # {frame: [(cx, cy), (MA, ma), angle]}
-                        ellipses[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = json.loads(json.dumps(list(ellipse)), parse_float=lambda x: int(float(x)))
+                    # Save person mask so it can be used when outputting frames
+                    # prevPersonFgMask is, at the moment, the current person fg mask. It's already been updated.
+                    finerPersonMask = cv2.bitwise_and(frameFgMask, frameFgMask, mask=prevPersonFgMask)
+                    personMasks[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = json.dumps(finerPersonMask.tolist())
 
-                        # Draw it
-                        cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
+                    # Get max dimension of person
+                    _img, finerContours, _h = cv2.findContours(np.copy(finerPersonMask), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                    if len(finerContours) > 0:
+                        finerContours = sorted(finerContours, key=cv2.contourArea, reverse=True)
+                        hull = cv2.convexHull(finerContours[0])
+                    # Otherwise old hull is m
+                    hullMaxLen = getMaxHullLength(hull)
+                    hullLengths[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = hullMaxLen
 
-                    else:
-                        print("Couldn't find enough points for ellipse. Need 5, found {}".format(len(personContour)))
+                    finerPersonMask4Vis = cv2.cvtColor(finerPersonMask, cv2.COLOR_GRAY2RGB)
+                    cv2.drawContours(finerPersonMask4Vis, [hull], 0, (0, 255, 0), 2)
+                    cv2.line(finerPersonMask4Vis, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 1)
+                    finerPersonMask4Vis = cv2.resize(finerPersonMask4Vis, (resizeWidth, resizeHeight))
+                    cv2.imshow('finerPersonMask4Vis', finerPersonMask4Vis)
 
-                    # cropLength = np.clip(hullMaxLen+40, 160, 400)
-                    # cropLengths[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = cropLength
-                    # print("Hull Max Len:", hullMaxLen, "Crop Height:", cropLength)
-                    # cropLength = 256
-                    cropLength = routine.crop_length if routine.crop_length else 200
+                    touchingTrmpl = isTouchingTrmpl(routine.trampoline_top, hull)
+                    trampolineTouches[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = touchingTrmpl
 
-                    x1, x2, y1, y2 = crop_points_constrained(capHeight, capWidth, cx, cy, cropLength)
                     if visualise:
-                        finerPersonMask = cv2.bitwise_and(fgMaskKNN, fgMaskKNN, mask=prevErodeDilatedMask)
-                        kernel = np.ones((3, 3), np.uint8)
-                        finerPersonMask = cv2.dilate(finerPersonMask, kernel, iterations=2)
-                        # finerPersonMask = cv2.GaussianBlur(finerPersonMask, (15, 15), 0)
-                        # cv2.imshow("finerPersonMask", cv2.resize(finerPersonMask, (resizeWidth, resizeHeight)))
+                        # Draw person's center of mass
+                        # if trampolineArea > 10:
+                        if touchingTrmpl:
+                            cv2.circle(frame, (cx, cy), 3, (0, 255, 0), -1)
+                        else:
+                            cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
 
-                        darkBg = cv2.addWeighted(frameNoEllipse, 0.4, np.zeros_like(frameNoEllipse), 0.6, 0)
-                        darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
-                        darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
-                        darkBgHole = cv2.bitwise_and(darkBg, darkBg, mask=255-finerPersonMask)
-                        # darkBgHole = alphaMask(darkBg, 255-finerPersonMask)
-                        # cv2.imshow('darkBg', cv2.resize(darkBg, (resizeWidth, resizeHeight)))
-                        # cv2.imshow('darkBgHole', cv2.resize(darkBgHole, (resizeWidth, resizeHeight)))
-
-                        personMasked = cv2.bitwise_and(frameNoEllipse, frameNoEllipse, mask=finerPersonMask)
-                        # personMasked = alphaMask(frameNoEllipse, finerPersonMask)
-                        personMasked = cv2.add(darkBgHole, personMasked)
-                        trackPerson = personMasked[y1:y2, x1:x2]
-                        cv2.imshow('track', trackPerson)
-                        #####################################
-                        outPath = consts.videosRootPath + routine.path.replace('.mp4', '__dilated_blurred_0.4-0.6/')
-                        if not os.path.exists(outPath):
-                            print("Creating " + outPath)
-                            os.makedirs(outPath)
-
-                        imgName = outPath + "frame_{0:04}.png".format(int(cap.get(cv2.CAP_PROP_POS_FRAMES)))
-                        print("Writing frame to {}".format(imgName))
-                        ret = cv2.imwrite(imgName, trackPerson)
-                        if not ret:
-                            print("Couldn't write image {}\nAbort!".format(imgName))
-                            exit()
-                        #####################################
-
-                        # trackScaled = cv2.resize(trackPerson, (256, 256))
-                        # cv2.imshow('track scaled', trackScaled)
-
+                        trackedPerson = highlightPerson(frame, finerPersonMask, cx, cy, cropLength)
+                        cv2.imshow("Track", trackedPerson)
                 else:
-                    print("Skipping center point. No moment")
+                    print("Skipping center point. Couldn't find moment")
+            else:
+                print("Skipping everything. Couldn't find contours")
 
-            #
             # End stuff
-            #
             if visualise:
-                cv2.putText(frame, '{}'.format(int(cap.get(cv2.CAP_PROP_POS_FRAMES))), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                 cv2.line(frame, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 1)
-                cv2.imshow('frame ', cv2.resize(frame, (resizeWidth, resizeHeight)))
+                frameSm = cv2.resize(frame, (resizeWidth, resizeHeight))
+                cv2.putText(frameSm, 'Frame {}'.format(int(cap.get(cv2.CAP_PROP_POS_FRAMES))), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                processVisImgs[resizeHeight * 0:resizeHeight * 1, resizeWidth * 1:resizeWidth * 2] = frameSm
+                cv2.imshow('Visualise Processing', processVisImgs)
 
-            if updateOne:
-                updateOne = False
+            # If we went one frame, stop from going another
+            if goOneFrame:
+                goOneFrame = False
 
         k = cv2.waitKey(waitTime) & 0xff
         if k == ord('v'):
             visualise = not visualise
-            # if not visualise:  # destroy any open windows
-            #     cv2.destroyAllWindows()
         elif k == ord('k'):  # play pause
             paused = not paused
         elif k == ord('j'):  # prev frame
-            updateOne = True
             cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) - 2)
+            goOneFrame = True
         elif k == ord('l'):  # next frame
-            updateOne = True
+            goOneFrame = True
         elif k == ord('.'):  # speed up
             waitTime -= 5
             print(waitTime)
         elif k == ord(','):  # slow down
             waitTime += 5
             print(waitTime)
-        elif k >= ord('0') and k <= ord('9'):
+        elif ord('0') <= k <= ord('9'):
             num = k - ord('0')
             frameToJumpTo = (cap.get(cv2.CAP_PROP_FRAME_COUNT) / 10) * num
             cap.set(cv2.CAP_PROP_POS_FRAMES, frameToJumpTo)
-            updateOne = True
+            goOneFrame = True
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
             break
         elif k == ord('q') or k == 27:  # q/ESC

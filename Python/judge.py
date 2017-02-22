@@ -1,3 +1,5 @@
+import json
+
 import cv2
 import matplotlib.pyplot as plt
 import scipy
@@ -45,7 +47,10 @@ def judge(db):
     skills = db.query(Bounce).filter_by(skill_name=desiredSkill)
 
     idealFrames = skills[5].getFrames(db)
-    idealTuckAngles = visualise.gen_frame_angles(idealFrames)
+    poses = []
+    for frame in idealFrames:
+        poses.append(json.loads(frame.pose))
+    idealTuckAngles = visualise.gen_pose_angles(np.array(poses), average=True)
 
     for i, skill in enumerate(skills[:10]):
 
@@ -59,8 +64,11 @@ def judge(db):
         else:
             print(skill.deductions)
             # plot_frame_angles(db, skill.routine, skillFrames)
-            theseAngles = visualise.gen_frame_angles(skillFrames)
-            visualise.compare_angles_plot(idealTuckAngles, theseAngles, block=False)
+            poses = []
+            for frame in skillFrames:
+                poses.append(json.loads(frame.pose))
+            theseAngles = visualise.gen_pose_angles(np.array(poses), average=True)
+            visualise.compare_many_angles_plot([idealTuckAngles, theseAngles], ['Ideal', 'Moe'], block=False)
             visualise.play_frames_of_2(db, skills[5].routine, skill.routine, skills[5].start_frame+5, skills[5].end_frame-5, skill.start_frame+5, skill.end_frame-5)
 
 
@@ -71,7 +79,7 @@ def compare_pose_tracking(routine):
     # Then show all the frames with next frame prev frame.
     import glob
 
-    poseDirs = glob.glob(consts.videosRootPath + routine.path[:-4] + '__*')
+    poseDirs = glob.glob(consts.videosRootPath + routine.path[:-4] + '*')
     matFiles = []
     for pDir in list(poseDirs):  # copy list because otherwise it gets updated under our feet
         matFile = pDir+os.sep+"preds_2d.mat"
@@ -81,7 +89,7 @@ def compare_pose_tracking(routine):
         else:
             print('No file', pDir)
             poseDirs.remove(pDir)
-    dirLabels = [pDir.replace(consts.videosRootPath + routine.path[:-4] + '__', '') for pDir in poseDirs]
+    dirLabels = [pDir.replace(consts.videosRootPath + routine.path[:-4] + '', 'rout') for pDir in poseDirs]
     imgFileses = [glob.glob(pDir+os.sep+"smoothed_pose_frame_*.png") for pDir in poseDirs]
     matPoses = [scipy.io.loadmat(matFile)['preds_2d'] for matFile in matFiles]
     myPoses = [[] for _ in matPoses]
@@ -96,16 +104,22 @@ def compare_pose_tracking(routine):
     waitTime = 80
     playOneFrame = False
     paused = False
-    resizeWidth = int(1630*0.4)
-    resizeHeight = int(400*0.4)
+    resizeWidth = int(1630*0.3)
+    resizeHeight = int(400*0.3)
     frames = np.zeros(shape=(resizeHeight*len(dirLabels), resizeWidth, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
     while 1:
         if playOneFrame or not paused:
             for imgi, label, imgFiles in zip(range(len(dirLabels)), dirLabels, imgFileses):
-                frame = cv2.imread(imgFiles[i])
-                height, width = frame.shape[:2]
-                frame = frame[65:height-79, 210:width-180]
-                frame = cv2.resize(frame, (resizeWidth, resizeHeight))
+                if not imgFiles:
+                    frame = np.zeros((resizeHeight, resizeWidth, 3), np.uint8)
+                else:
+                    frame = cv2.imread(imgFiles[i])
+                    if frame is None:
+                        frame = np.zeros((resizeHeight, resizeWidth, 3), np.uint8)
+                    else:
+                        height, width = frame.shape[:2]
+                        frame = frame[65:height-79, 210:width-180]
+                        frame = cv2.resize(frame, (resizeWidth, resizeHeight))
                 cv2.putText(frame, label, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                 frames[resizeHeight*imgi:resizeHeight*(imgi+1), 0:resizeWidth] = frame
             cv2.imshow("Frames", frames)

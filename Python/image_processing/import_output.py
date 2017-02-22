@@ -33,8 +33,7 @@ def import_pose_deepcut(db, routine):
 
 # Import raw hourglass pose from
 def import_pose_hg(db, routine):
-    data_path = consts.videosRootPath + routine.path.replace('.mp4', os.sep)
-    hg_preds_file = h5py.File(data_path + 'preds.h5', 'r')
+    hg_preds_file = h5py.File(routine.getAsDirPath() + 'preds.h5', 'r')
     hg_preds = hg_preds_file.get('preds')
 
     # Not all frames get data extracted so have to use i...
@@ -46,13 +45,9 @@ def import_pose_hg(db, routine):
 
 
 # Imports into pose, because it's better.
-def import_pose_hg_smooth(db, routine, frames=None):
-    data_path = consts.videosRootPath + routine.path.replace('.mp4', os.sep)
-    mat_preds_file = scipy.io.loadmat(data_path + 'preds_2d.mat')
+def import_pose_hg_smooth(db, routine, frames):
+    mat_preds_file = scipy.io.loadmat(routine.getAsDirPath() + 'preds_2d.mat')
     mat_preds = mat_preds_file['preds_2d']
-
-    if frames is None:
-        frames = routine.frames
 
     # Not all frames get data extracted so have to use i...
     for i, frame in enumerate(frames):
@@ -97,83 +92,47 @@ def save_cropped_video(cap, routine, db):
     cv2.destroyAllWindows()
 
 
-def save_cropped_frames(db, routine, frames=None):
-    cap = helper_funcs.open_video(routine.path)
-    outPath = consts.videosRootPath + routine.path.replace('.mp4', os.sep)
-    if frames is None:
-        frames = routine.frames
-
+def save_cropped_frames(db, routine, frames):
     # TODO suggest a reasonable padding width based on ellipse axes.
     # Discard outliers. Anything above 140*2. Then take the median or average?
     # Discard the top 10 % and the bottom 20%. Then take the average of this + margin of 20 Save this to the db.
     # HG would give better predictions with a fixed with but scalling based on each frame becomes tedious to keep track of. TODO Does it??
     # Hoping that monocap takes care of smoothing?
-
-    if not os.path.exists(outPath):
-        print("Creating "+outPath)
-        os.makedirs(outPath)
-
-    x = np.array([frame.frame_num for frame in routine.frames])
-    y = np.array([routine.video_height - frame.center_pt_y for frame in routine.frames])
-    maxima, minima = peakdetect(y, x, lookahead=8, delta=20)
-    blacklistedFrames = []
-    blacklistedValues = []
-    for mini in minima:
-        thisMinValue = mini['y']
-        thisMinValueCutoff = thisMinValue + 20
-
-        # Lookback
-        frame_num = mini['x']  # where x is frame num
-        direction = -1
-        while 1:
-            if y[frame_num] < thisMinValueCutoff:  # y val at current frame num
-                blacklistedFrames.append(frame_num)
-                blacklistedValues.append(y[frame_num])
-            else:
-                # If lookking ahread and limit reached, then exit
-                if direction > 0:
-                    break
-                else: # Change from look behind to look ahead
-                    direction = +1
-                    frame_num = mini['x'] - 1
-            frame_num += direction
-
-    peaks = maxima + minima  # concat the two
-    peaks_x = [pt['x'] for pt in peaks]
-    peaks_y = [pt['y'] for pt in peaks]
-
-    # plt.title("Height")
-    # plt.plot(x, y, color="g")
-    # plt.plot(peaks_x, peaks_y, 'r+')
-    # plt.scatter(blacklistedFrames, blacklistedValues, marker='.')
-    # plt.ylabel('Height (Pixels)')
-    # plt.show()
-
+    routine.getAsDirPath()
+    if not os.path.exists(routine.getAsDirPath()):
+        print("Creating "+routine.getAsDirPath())
+        os.makedirs(routine.getAsDirPath())
+    else:
+        import glob
+        nFiles = len(glob.glob(routine.getAsDirPath()+'frame_*'))
+        if nFiles > 0:
+            print("Found {} frames in {!r}. Stopping".format(nFiles, routine.getAsDirPath()))
+            return
 
     position = np.array([routine.video_height - frame_data.center_pt_y for frame_data in frames])
-    # scaleWithPerson = frames[0].crop_length is not None
-    scaleWithPerson = True
-    stretchPositionMinima = True
+    # scaleWithPerson = frames[0].hull_max_length is not None
+    scaleWithPerson = False
+    stretchPositionMinima = False
     cropLengths = []
     cropLength = 0
     if scaleWithPerson:  # hull length
         # Compensate... something
-        cropLengths = np.array([frame_data.crop_length for frame_data in frames])
+        cropLengths = np.array([frame_data.hull_max_length for frame_data in frames])
 
         cropLengths[np.nonzero(position < np.median(position))] = int(np.average(cropLengths) * 1.1)
         plt.plot(cropLengths, label="Hull Length", color="blue")
         # plt.axhline(np.average(cropLengths), label="Average Length", color="blue")
         # plt.axhline(np.median(cropLengths), label="Med Length", color="purple")
     else:  # Ellipse lengths
-        ellipseLengths = [max([frame_data.ellipse_len_major, frame_data.ellipse_len_minor]) for frame_data in frames]
-        plt.plot(ellipseLengths, label="Ellipse Length", color="blue")
+        hullLens = [frame_data.hull_max_length for frame_data in frames]
+        plt.plot(hullLens, label="Hull Length", color="blue")
 
         averageScaler = 1.3
-        cropLength = int(np.average(ellipseLengths)*averageScaler)  # 40 is the padding
+        cropLength = int(np.average(hullLens)*averageScaler)
         # Average should be trusted more because median can be skewed by poor ellipse fitting
-        # plt.axhline(np.average(ellipseLengths), label="Average Length", color="blue")
-        # plt.axhline(cropLength, label="Crop Length", color="orange")
-        # plt.axhline(np.median(ellipseLengths), label="Med Length", color="purple")
+        plt.axhline(np.average(hullLens), label="Average Length", color="blue")
+        plt.axhline(cropLength, label="Crop Length", color="orange")
+        # plt.axhline(np.median(hullLens), label="Med Length", color="purple")
 
     if stretchPositionMinima:
         # Get cutoff for where scaling below this point should occur
@@ -207,8 +166,9 @@ def save_cropped_frames(db, routine, frames=None):
     # plt.axhline(np.median(position), label="Med Position", color="red")
     plt.xlabel("Time (s)")
     plt.legend(loc="best")
-    plt.show(block=False)
+    plt.show()
 
+    cap = helper_funcs.open_video(routine.path)
     for i, frame_data in enumerate(frames):
         # ignore frames where trampoline is touched
         # if frame_data.frame_num in blacklistedFrames:
@@ -234,7 +194,7 @@ def save_cropped_frames(db, routine, frames=None):
         cv2.imshow('track scaled', cropScaled)
         k = cv2.waitKey(50) & 0xff
 
-        # imgName = outPath + "frame_{0:04}.png".format(frame_data.frame_num)
+        # imgName = routine.getAsDirPath() + "frame_{0:04}.png".format(frame_data.frame_num)
         # # print("Writing frame to {}".format(imgName))
         # ret = cv2.imwrite(imgName, cropScaled)
         # if not ret:

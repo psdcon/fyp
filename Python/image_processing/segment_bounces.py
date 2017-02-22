@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 
 
 def segment_bounces_and_save(db, routine):
-
     bounces = calculate_bounces(routine)
-    # No bounces have been saved before
-    if len(routine.bounces) is 0:
+
+    # Don't update db is something seems weird with the bounces
+    if len(routine.bounces) is 0:  # No bounces have been saved before
         db.add_all(bounces)
         db.commit()
         print("Bounces updated")
@@ -22,6 +22,7 @@ def segment_bounces_and_save(db, routine):
 
 
 def calculate_bounces(routine):
+    print("Segmenting bounces")
     x = np.array([frame.frame_num for frame in routine.frames])
     y = np.array([routine.video_height - frame.center_pt_y for frame in routine.frames])
     maxima, minima = peakdetect(y, x, lookahead=8, delta=20)
@@ -33,6 +34,7 @@ def calculate_bounces(routine):
         peaks_x = [pt['x'] for pt in peaks]
         peaks_y = [pt['y'] for pt in peaks]
 
+        f = plt.figure("Bounce Peaks")
         plt.title("Height")
         plt.plot(x, y, color="g")
         plt.plot(peaks_x, peaks_y, 'r+')
@@ -51,15 +53,15 @@ def calculate_bounces(routine):
             routine.id,
             i,
             "",
-
+            # Frame Numbers
             thisBedHit['x'],
             jumpMaxHeight['x'],
             nextBedHit['x'],
-
+            # Timestamps in 0.00s
             round(float(thisBedHit['x'] / routine.video_fps), 2),
             round(float(jumpMaxHeight['x'] / routine.video_fps), 2),
             round(float(nextBedHit['x'] / routine.video_fps), 2),
-
+            # Heights (Not yet used)
             thisBedHit['y'],
             jumpMaxHeight['y'],
             nextBedHit['y']

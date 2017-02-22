@@ -1,7 +1,10 @@
+import os
+
 from sqlalchemy import *
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-import numpy as np
+
+from helpers import consts
 
 Base = declarative_base()
 
@@ -12,6 +15,7 @@ class Routine(Base):
     id = Column(INTEGER, primary_key=True)
     path = Column(TEXT, nullable=False, unique=True)
     note = Column(TEXT)
+    use = Column(INTEGER)
     # performer_id = Column(INTEGER)
     competition = Column(TEXT)
     level = Column(TEXT)
@@ -32,6 +36,17 @@ class Routine(Base):
     def __repr__(self):
         return "Routine(path=%r, bounces=%r)" % (self.path, self.bounces)
 
+    def framesAsDict(self):
+        # Dictionary Comprehension
+        return {frame.frame_num: frame for frame in self.frames}
+
+    def framesCount(self, db):
+        return db.execute(
+            select([func.count('*')])
+                .select_from(Frame)
+                .where(Frame.routine_id == self.id)
+        ).fetchone()[0]
+
     def getScores(self):
         bounceDeductions = []
         for bounce in self.bounces:
@@ -49,49 +64,67 @@ class Routine(Base):
         return scores
 
     def getScore(self):
+        import numpy as np
         return float("{0:.1f}".format(np.average(self.getScores())))
 
-    def isTracked(self):
-        return self.trampoline_top is not None
+    def isTracked(self, db):
+        return self.framesCount(db) > 0
+
+    def isPosed(self, db):
+        # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=NULL
+        s = select([func.count('*')])\
+            .select_from(Frame)\
+            .where(
+                and_(Frame.pose != '', Frame.routine_id == self.id)
+            )
+        poseCount = db.execute(s).fetchone()[0]
+        return poseCount > 0
+
+    def getAsDirPath(self):
+        return consts.videosRootPath + self.path.replace('.mp4', os.sep)
+
+    def hasFramesSaved(self):
+        import glob
+        nFiles = len(glob.glob(self.getAsDirPath() + 'frame_*'))
+        return nFiles > 0
 
 
 class Frame(Base):
     __tablename__ = 'frame_data'
 
     id = Column(INTEGER, primary_key=True)
-    routine_id = Column(Integer, ForeignKey('routines.id'))
+    routine_id = Column(INTEGER, ForeignKey('routines.id'))
     frame_num = Column(INTEGER)
     center_pt_x = Column(INTEGER)
     center_pt_y = Column(INTEGER)
-    ellipse_len_major = Column(REAL)
-    ellipse_len_minor = Column(REAL)
-    ellipse_angle = Column(INTEGER)
+    hull_max_length = Column(INTEGER)
+    trampoline_area = Column(INTEGER)
+    trampoline_touch = Column(INTEGER)
+    person_mask = Column(TEXT)
     pose = Column(TEXT)
-    pose_hg = Column(TEXT)
-    crop_length = Column(INTEGER)
 
     routine = relationship("Routine", back_populates='frames')
 
-    def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, ellipse_len_major, ellipse_len_minor,
-                 ellipse_angle, crop_length):
+    def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, hull_length, trampoline_area, trampoline_touch, person_mask):
         self.routine_id = routine_id
         self.frame_num = frame_num
         self.center_pt_x = center_pt_x
         self.center_pt_y = center_pt_y
-        self.ellipse_len_major = ellipse_len_major
-        self.ellipse_len_minor = ellipse_len_minor
-        self.ellipse_angle = ellipse_angle
-        self.crop_length = crop_length
+        self.hull_max_length = hull_length
+        self.trampoline_area = trampoline_area
+        self.trampoline_touch = trampoline_touch
+        self.person_mask = person_mask
+        self.pose = ""
 
     def get_scale_factor(self):
-        return 256.0/float(self.crop_length)
+        return 256.0 / float(self.hull_max_length)
 
 
 class Bounce(Base):
     __tablename__ = 'bounces'
 
-    id = Column(Integer, primary_key=True)
-    routine_id = Column(Integer, ForeignKey('routines.id'))
+    id = Column(INTEGER, primary_key=True)
+    routine_id = Column(INTEGER, ForeignKey('routines.id'))
     bounce_index = Column(INTEGER)
     skill_name = Column(TEXT)
 
@@ -136,8 +169,7 @@ class Bounce(Base):
         return self.skill_name != "In/Out Bounce" and self.skill_name != "Broken"
 
     def getFrames(self, db):
-        return list(db.query(Frame).filter(Frame.routine_id == self.routine_id, Frame.frame_num >= self.start_frame, Frame.frame_num <= self.end_frame))
-        # return self.routine.frames.filter_by(Frame.frame_num > self.start_frame, Frame.frame_num < self.end_frame)
+        return db.query(Frame).filter(Frame.routine_id == self.routine_id, Frame.frame_num >= self.start_frame, Frame.frame_num <= self.end_frame).all()
 
 
 class Deduction(Base):
@@ -164,10 +196,8 @@ class Contributor(Base):
 
     deductions = relationship("Deduction", back_populates='contributor')
 
-
     def __repr__(self):
         return "Contributor(id=%r, name=%s)" % (self.id, self.name)
-
 
 # Create an engine that stores data in the local directory's
 # sqlalchemy_example.db file.

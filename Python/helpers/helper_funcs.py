@@ -77,7 +77,7 @@ def crop_points_constrained(frame_height, frame_width, cx, cy, crop_length):
     return x1, x2, y1, y2
 
 
-def contourCenter(contour):
+def calcContourCenter(contour):
     M = cv2.moments(contour)
     if M['m00'] > 0:
         cx = int(M['m10'] / M['m00'])
@@ -111,3 +111,21 @@ def simple_downsample(a, num):
     for i in range(num):
         b.append(a[int(round(spacing*i))])
     return b
+
+
+def prettyPrintRoutine(bounces):
+    if not bounces:
+        return "No bounces"
+
+    str = ""
+    count = 0
+    paddingLen = max([len(b.skill_name) for b in bounces]) + 2
+    for b in bounces:
+        if b.skill_name != "In/Out Bounce":
+            count += 1
+        # Print any associated juding info
+        if b.deductions:
+            str += "\n\t{:2}. {:{padding}} {}".format(count, b.skill_name, b.deductions[0], padding=paddingLen)
+        else:
+            str += "\n\t{:2}. {}".format(count, b.skill_name)
+    return str
