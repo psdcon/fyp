@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtWidgets import QDialog
 from PyQt5.QtWidgets import QMenu
 
-from gui.routineSelectDialogUi import *
+from pyqt_gui.routineSelectDialogUi import *
 from helpers import consts
 
 

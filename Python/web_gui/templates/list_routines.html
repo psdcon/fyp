@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% block body %}
+<p>
+  Each row is a video of a routine. Frowny face means something went wrong with the tracking and there are two skills labelled as one.<br>
+  <strong>Label</strong>: Name the skills in a routine. <br>
+  <strong>Judge</strong>: Score each of the routines.
+</p>
+
+<div class="row vid-row" style="font-weight:bold;font-size:1.1rem">
+  <div class="col-md-7 col-8">Name</div>
+  <div class="col-md-2 col-4">Level</div>
+  <div class="col-md-2 col-8">Actions</div>
+  <div class="col-md-1 col-4" style="text-align:center">Score</div>
+</div>
+
+
+{% for routine in routines %}
+
+  <div class="row vid-row">
+    <div class="col-md-7 col-8" style="word-break: break-word;">{{ routine.name }}</div>
+    <div class="col-md-2 col-4">
+      {{ routine.level }}
+      {# <?=($isBroken)?'<i class="fa fa-frown-o" aria-hidden="true" title="Indicates one of the skills are broken"></i>':''?> #}
+    </div>
+    <div class="col-md-2 col-8">
+      {% if routine.labelled %}
+        <span style="padding-right:1em; color:#aaa;" title="Already labelled">Labelled</span>
+        <a href="judge/{{ routine.id }}" style="white-space: nowrap">
+          {% if routine.judged %}
+            <i class="fa fa-star" aria-hidden="true"></i> Judged
+          {% else %}
+            <i class="fa fa-star-o" aria-hidden="true"></i> Judge
+          {% endif %}
+        </a>
+      {% elif routine.tracked %}
+        <a href="label/{{ routine.id }}" style="white-space: nowrap;padding-right:1rem;">
+          <i class="fa fa-tag" aria-hidden="true"></i> Label
+        </a>
+        <span style="padding-right:1em; color:#aaa; white-space: nowrap;" title="Label first">
+          <i class="fa fa-star-o" aria-hidden="true"></i> Judge
+        </span>
+      {% else %}
+          <span style="padding-right:1em; color:#aaa;">Not Tracked</span>
+      {% endif %}
+    </div>
+    <div class="col-md-1 col-4" title="No score yet" style="text-align:center">
+      {{ routine.score }}
+    </div>
+  </div>
+{% endfor %}
+
+
+{% endblock %}

@@ -2,20 +2,25 @@ import os
 
 from sqlalchemy import *
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, scoped_session, sessionmaker
 
 from helpers import consts
 
 Base = declarative_base()
 
+engine = create_engine('sqlite:///../db.sqlite3')
+Base.metadata.bind = engine
+DBSession = scoped_session(sessionmaker(bind=engine))
+db = DBSession()
 
 class Routine(Base):
     __tablename__ = 'routines'
 
     id = Column(INTEGER, primary_key=True)
     path = Column(TEXT, nullable=False, unique=True)
-    note = Column(TEXT)
     use = Column(INTEGER)
+    crop_length = Column(INTEGER)  # padding (in pixels) from the center point
+    note = Column(TEXT)
     # performer_id = Column(INTEGER)
     competition = Column(TEXT)
     level = Column(TEXT)
@@ -25,10 +30,10 @@ class Routine(Base):
     trampoline_top = Column(INTEGER)
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
-    crop_length = Column(INTEGER)  # padding (in pixels) from the center point
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
+    judgements = relationship("Judgement", back_populates='routine')
 
     def __init__(self, path=None):
         self.path = path
@@ -47,38 +52,69 @@ class Routine(Base):
                 .where(Frame.routine_id == self.id)
         ).fetchone()[0]
 
-    def getScores(self):
-        bounceDeductions = []
-        for bounce in self.bounces:
-            if bounce.deductions != []:
-                bounceDeductions.append(bounce.deductions)
-        # Transpose all deduction objects using * operator with zip. http://stackoverflow.com/questions/6473679/transpose-list-of-lists
-        routineDeductions = zip(*bounceDeductions)  # returns a tuple. * operator causes transpose
-        # This assumes same number of deductions for all judgements.
-        # TODO because of incorrect number of bounces on some routines, all previous judgements of a routine should be updated or for new judgements including that deduction will never be counted
-        scores = []
-        for deductions in routineDeductions:
-            deductionValues = [deduction.deduction for deduction in deductions]
-            # Only take the first 10
-            scores.append(10 - sum(deductionValues[:10]))
-        return scores
+    # def createJudgements(self, db):
+    #     bounceDeductions = []
+    #     for bounce in self.bounces:
+    #         if bounce.deductions != []:
+    #             bounceDeductions.append(bounce.deductions)
+    #
+    #     # Transpose all deduction objects using zip. http://stackoverflow.com/questions/6473679/transpose-list-of-lists
+    #     routineDeductions = zip(*bounceDeductions) # This assumes same number of deductions for all judgements.
+    #
+    #     for judgement in routineDeductions:
+    #         deduction = judgement[0]
+    #         j = Judgement(deduction.bounce.routine_id, deduction.contributor.id)
+    #         db.add(j)
+    #         db.flush()
+    #         for d in judgement:
+    #             d.judgement_id = j.id
+    #     db.commit()
+    #     return
 
-    def getScore(self):
+    def getScore(self, contributor):
+        for j in self.judgements:
+            if j.contributor_id == contributor.id:
+                return j.getScore()
+        return 'N/A'
+
+    def getAvgScore(self):
         import numpy as np
-        return float("{0:.1f}".format(np.average(self.getScores())))
+        scores = [j.getScore() for j in self.judgements]
+        return float("{0:.1f}".format(np.average(scores)))
 
     def isTracked(self, db):
         return self.framesCount(db) > 0
 
     def isPosed(self, db):
-        # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=NULL
+        # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=''
         s = select([func.count('*')])\
             .select_from(Frame)\
             .where(
                 and_(Frame.pose != '', Frame.routine_id == self.id)
             )
-        poseCount = db.execute(s).fetchone()[0]
-        return poseCount > 0
+        count = db.execute(s).fetchone()[0]
+        return count > 0
+
+    def isLabelled(self):
+        if not self.bounces:
+            return False
+        # Otherwise, check that they're all labelled
+        labelledCount = 0
+        for b in self.bounces:
+            if b.skill_name:
+                labelledCount += 1
+        return labelledCount == len(self.bounces)
+
+    def isJudged(self, contributor=None):
+        if contributor:
+            for j in self.judgements:
+                if j.contributor_id == contributor.id:
+                    return True
+            return False
+        else:
+            if self.judgements:
+                return True
+            return False
 
     def getAsDirPath(self):
         return consts.videosRootPath + self.path.replace('.mp4', os.sep)
@@ -87,6 +123,9 @@ class Routine(Base):
         import glob
         nFiles = len(glob.glob(self.getAsDirPath() + 'frame_*'))
         return nFiles > 0
+
+    def prettyName(self):
+        return os.path.basename(self.path[:-4])
 
 
 class Frame(Base):
@@ -166,21 +205,49 @@ class Bounce(Base):
         # return "Bounce(name=%r, routine=%r)" % (self.name, self.routine)
 
     def isJudgeable(self):
-        return self.skill_name != "In/Out Bounce" and self.skill_name != "Broken"
+        return self.skill_name != "In/Out Bounce" #and self.skill_name != "Broken"
 
     def getFrames(self, db):
         return db.query(Frame).filter(Frame.routine_id == self.routine_id, Frame.frame_num >= self.start_frame, Frame.frame_num <= self.end_frame).all()
+
+
+class Judgement(Base):
+    __tablename__ = 'judgements'
+
+    id = Column(INTEGER, primary_key=True)
+    routine_id = Column(INTEGER, ForeignKey('routines.id'))
+    contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
+    # score = Column(REAL)
+
+    routine = relationship("Routine", back_populates='judgements')
+    contributor = relationship("Contributor", back_populates='judgements')
+    deductions = relationship("Deduction", back_populates='judgement')
+
+    def __init__(self, routine_id, contributor_id):
+        self.routine_id = routine_id
+        self.contributor_id = contributor_id
+
+    def __repr__(self):
+        return "Judgement(routine=%r, deductions=%r, who=%r)" % (self.routine, self.deductions, self.contributor)
+
+    def getScore(self):
+        deductionValues = [d.deduction for d in self.deductions]
+        # Only take the first 10
+        score = 10 - sum(deductionValues[:10])
+        return score
 
 
 class Deduction(Base):
     __tablename__ = 'bounce_deductions'
 
     id = Column(INTEGER, primary_key=True)
+    judgement_id = Column(INTEGER, ForeignKey('judgements.id'))
     bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
-    deduction = Column(REAL)
     contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
+    deduction = Column(REAL)
 
     bounce = relationship("Bounce", back_populates='deductions')
+    judgement = relationship("Judgement", back_populates='deductions')
     contributor = relationship("Contributor", back_populates='deductions')
 
     def __repr__(self):
@@ -191,18 +258,11 @@ class Contributor(Base):
     __tablename__ = 'contributors'
 
     id = Column(INTEGER, primary_key=True)
-    m5d_id = Column(TEXT, unique=True)
+    uid = Column(TEXT, unique=True)
     name = Column(TEXT)
 
     deductions = relationship("Deduction", back_populates='contributor')
+    judgements = relationship("Judgement", back_populates='contributor')
 
     def __repr__(self):
         return "Contributor(id=%r, name=%s)" % (self.id, self.name)
-
-# Create an engine that stores data in the local directory's
-# sqlalchemy_example.db file.
-# engine = create_engine('sqlite:///sqlalchemy_example.db')
-
-# Create all tables in the engine. This is equivalent to "Create Table"
-# statements in raw SQL.
-# Base.metadata.create_all(engine)

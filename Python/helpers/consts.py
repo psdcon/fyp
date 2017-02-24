@@ -2,7 +2,7 @@
 videosRootPath = 'C:\\Users\\psdco\\Videos\\'
 # databasePath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/db.sqlite3'
 databasePath = 'C:/Users/psdco/Documents/ProjectCode/Python/db.sqlite3'
-lastSelectionFilePath = 'gui/lastSaved.txt'
+lastSelectionFilePath = 'pyqt_gui/lastSaved.txt'
 
 contourDistance = 25
 minContourArea = 800

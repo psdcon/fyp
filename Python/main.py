@@ -4,13 +4,12 @@ from __future__ import print_function
 from collections import OrderedDict
 
 import cv2
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from gui.showRoutineSelectDialog import show_selection_menu
+from pyqt_gui.showRoutineSelectDialog import show_selection_menu
 from helpers import helper_funcs
-from helpers.db_declarative import Base, Routine
+from helpers.db_declarative import db, Routine
 from helpers.helper_funcs import prettyPrintRoutine
+from image_processing import trampoline
 from image_processing import visualise, track, segment_bounces, import_output
 
 # https://github.com/opencv/opencv/issues/6055
@@ -18,18 +17,13 @@ cv2.ocl.setUseOpenCL(False)
 
 
 def main():
-    # engine = create_engine('sqlite:///'+consts.dbPath)
-    engine = create_engine('sqlite:///db.sqlite3')
-    Base.metadata.bind = engine
-    DBSession = sessionmaker(bind=engine)
-    db = DBSession()
-
     # judge.judge(db)
     # exit()
 
     ask = False
     # Ask the user to select routine from database
-    routines = db.query(Routine).filter(Routine.use == 1).all()
+    # routines = db.query(Routine).filter(Routine.use == 1).all()
+    routines = db.query(Routine).all()
     if ask:
         routinesAsDict = []
         for routine in routines:
@@ -53,8 +47,8 @@ def main():
         print("\n" + routine.path)
         print("Note:", repr(routine.note))
         print("Level:", routine.level)
-        trampoline = {'top': routine.trampoline_top, 'center': routine.trampoline_center, 'width': routine.trampoline_width, }
-        print("Trampoline:", trampoline)
+        trampolineObj = {'top': routine.trampoline_top, 'center': routine.trampoline_center, 'width': routine.trampoline_width, }
+        print("Trampoline:", trampolineObj)
         print("Tracked:", routine.isTracked(db))
         # print("Bounces:", prettyPrintRoutine(routine.bounces))
         print("Bounces:", len(routine.bounces))
@@ -70,9 +64,10 @@ def main():
         #     continue
 
         # If this routine is selected, automatically prompt to locate trampoline.
-        if not routine.trampoline_top or not routine.trampoline_center or not routine.trampoline_width:
+        if True or not routine.trampoline_top or not routine.trampoline_center or not routine.trampoline_width:
             # Detect Trampoline
             trampoline.detect_trampoline(db, routine)
+            continue
 
         if not routine.isTracked(db):
             print("Auto tracking frames")

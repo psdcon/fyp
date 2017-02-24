@@ -35,6 +35,7 @@ def find_trampoline(routine):
         'width': routine.trampoline_width if routine.trampoline_width else 135,
     }
     trampoline['ends'] = calcTrampolineEnds(trampoline['width'])
+    use = routine.use
 
     while 1:  # video will loop back to the start
         _ret, frame = cap.read()
@@ -60,7 +61,10 @@ def find_trampoline(routine):
         k = cv2.waitKey(100)
         # TODO this is broken... DONE: Fixed it with asdw
         # print 'You pressed %d (0x%x), LSB: %d (%s)' % (k, k, k % 256,repr(chr(k % 256)) if k % 256 < 128 else '?')
-        if k == ord('w'):  #2490368:  # up
+        if k == ord('u'):  #2490368:  # up
+            use = 1 if use == 0 else 0
+            print("Use ", use)
+        elif k == ord('w'):  #2490368:  # up
             trampoline['top'] -= 1
         elif k == ord('s'):  #2621440:  # down
             trampoline['top'] += 1

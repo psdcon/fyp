@@ -1,0 +1,195 @@
+{% extends "layout.html" %}
+{% block body %}
+
+    <!--
+    <h4>
+      <?=$routine['name']?>
+      <small><?=$routine['level']?></small>
+    </h4>
+    <p>
+      Tab will move along skills. Use Up and Down arrow keys to change the deduction. If you're a bit rusty on the judging, check out the <a href="http://www.fig-gymnastics.com/publicdir/rules/files/tra/TRA-CoP_2017-2020-e.pdf">2017 - 2020 Code Of Points</a>, page 36 and on. Keyboard shortcuts include:
+      <strong>Ctrl+Enter</strong> Save.
+      <strong>n</strong> Label Next.
+      <strong>k</strong> Play/pause the video.
+      <strong>l</strong> Play next bounce.
+      <strong>j</strong> Play previous bounce.
+      <strong>i</strong> Toggle looping.
+      <strong>.</strong> Speed up video.
+      <strong>,</strong> Slow down video.
+    </p> -->
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="fixedsticky">
+                <video src="{{ url_for('static', filename=vidPath) }}" controls style="max-width:100%"></video>
+
+                <div style="text-align:right;">
+                    <div class="js-current-playback-speed">Playback Speed: 1</div>
+                    <div class="js-current-loop-index">No bounce looping</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+
+            {% if not routine.labelled %}
+                <p>The bounces in this routine have not been labelled yet. Please click the button, and then come back.</p>
+                <div style="text-align:center;">
+                    <a href="label/{{ routine.id }}" class="btn btn-primary">Label This Routine</a>
+                </div>
+            {% else %}
+
+                <form> <!-- form is here for autocomplete to work -->
+                    <div class="row">
+                        <div class="col form-inline">
+                            <label for="name" class="mr-2">Your Name:</label>
+                            <input type="text" id="name" autocomplete="given-name" required class="form-control js-username" style="flex-grow:1" value="{{ userName }}" placeholder="Name">
+                        </div>
+                    </div>
+                </form>
+
+                <div class="row" style="padding-bottom:0.3rem; font-weight:bold">
+                    <div class="col-9">Skill Name</div>
+                    <div class="col-3" style="text-align:right">Deduction</div>
+                </div>
+
+                {% for b in bounces %}
+
+                    <div class="row js-bounce">
+                        <div class="col-9">
+                            <span class="index">{{ b.idx }}.</span>
+
+                            <!-- Loop button -->
+                            <button class="btn-link btn-sm js-loop-btn" tabindex="-1" title="Click to loop the video on one skill. Press i to stop looping.">
+                                <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
+                            </button>
+
+                            {{ b.skill_name }}
+                        </div>
+
+                        <div class="col-3" style="text-align:right">
+                            <!-- Don't allow judging if skill is broken -->
+                            {% if b.skill_name == 'Broken' %}
+                                N/A
+                            {% else %}
+                                <label for="number-input-{{ b.idx }}">0.</label>
+                                <input id="number-input-{{ b.idx }}" class="js-deduction" type="number" min="0" max="5" step="1" value="3" maxlength="1" size="1" style="max-width:2rem; border: 1px solid rgba(0,0,0,.15); border-radius: .25rem;">
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            {{ b.deductions_things|safe }}
+                        </div>
+                        {#                        <div class="col-12">#}
+{#                            <div title="Bent elbows">#}
+{#                                Arms <br>#}
+{#                                <input type="checkbox" name="" id=""> Bent elbows 0.1#}
+{#                            </div>#}
+{#                            <div title="Bent knees, toes not pointed, legs note">#}
+{#                                Legs - <br>#}
+{#                                <input type="checkbox" name="" id=""> Bent knees 0.1#}
+{#                                <input type="checkbox" name="" id=""> Toes not pointed 0.1#}
+{#                                <input type="checkbox" name="" id=""> Legs not together 0.1#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                Body - tighness of shape/dished/angle of hips(pikey) <br>#}
+{#                                <input type="radio" name="body" id=""> Loose shape 0.1#}
+{#                                <input type="radio" name="body" id=""> Very loose shape 0.2#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                Angle of legs with Horizontal <br>#}
+{#                                <input type="radio" name="horz" id=""> >65&deg; <90&deg; 0.1#}
+{#                                <input type="radio" name="horz" id=""> >45&deg; <65&deg; 0.2#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                Opening (shape jumps) <br>#}
+{#                                <input type="radio" name="horz" id=""> >65&deg; <90&deg; 0.1#}
+{#                                <input type="radio" name="horz" id=""> >45&deg; <65&deg; 0.2#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                Opening timing (somi) for feet/front landing (cody)/back landing <br>#}
+{#                                <input type="radio" name="horz" id=""> bet 1 & 2 o'clock 0.1#}
+{#                                <input type="radio" name="horz" id=""> bet 2 & 3 o'clock 0.2#}
+{#                                <input type="radio" name="horz" id=""> after 3/no opening 0.3#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                Opening holding shape for feet or front. (later is better) <br>#}
+{#                                Person#}
+{#                                <input type="radio" name="" id=""> piked down#}
+{#                                <input type="radio" name="" id=""> tucked down#}
+{##}
+{#                                <input type="radio" name="horz" id=""> bet 12 & 2 o'clock 0.2#}
+{#                                <input type="radio" name="horz" id=""> bet 2 & 3 o'clock 0.1#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                Opening holding shape for back. (later is better) <br>#}
+{#                                <input type="radio" name="" id=""> piked down#}
+{#                                <input type="radio" name="" id=""> tucked down (adds 0.1 to deduction)#}
+{##}
+{#                                <input type="radio" name="horz" id=""> bet 12 & 3 o'clock 0.2#}
+{#                                <input type="radio" name="horz" id=""> bet 3 & 4:30 o'clock 0.1#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                End of twist <br>#}
+{#                                <input type="checkbox" name="" id=""> not finished twist at 3 o'clock 0.1#}
+{#                            </div>#}
+{#                            <div>#}
+{#                                Arms to stop twist (baraini/full/half outs) <br>#}
+{#                                <input type="checkbox" name="" id=""> arms >45&deg; 0.1#}
+{#                            </div>#}
+{##}
+{#                            <div>#}
+{#                                Arms to stop twist (>full twist)#}
+{#                                <input type="checkbox" name="" id=""> arms >90&deg; 0.1#}
+{#                            </div>#}
+{#                        </div>#}
+
+                    </div>
+                {% endfor %}
+
+                <div class="row">
+                    <div class="col" style="text-align:center">
+                        <strong>Score:</strong>
+                        <span class="js-score">0.0</span>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col">
+                        <button class="btn btn-primary js-save">Save</button>
+                        {% if nextRoutine %}
+                            <a href="{{ url_for('judge_routine',routine_id=nextRoutine.id) }}" class="float-right btn btn-secondary js-do-next"
+                               title="Judge the next routine you haven't yet: {{ nextRoutine.name }}">Judge Next</a>
+                        {% else %}
+                            <a href="{{ url_for('list_routines') }}" class="float-right btn btn-secondary js-do-next" title="None left to judge">Back to Routines</a>
+                        {% endif %}
+                        {{ nextBtn|safe }}
+                    </div>
+                </div>
+
+            {% endif %}
+        </div> <!-- col-md-6 -->
+    </div>
+
+{% endblock %}
+
+{% block js %}
+
+    <script>
+
+        $('video').fixedsticky()
+
+        VideoControls.init(
+            $('video')[0],
+            {{ startEndTimes|safe }},
+            $('.js-bounce')
+        );
+
+        Judge.init(
+            {{ routine.id }},
+            []
+            {#            {{ bounces|safe }}#}
+        );
+
+    </script>
+
+{% endblock %}
