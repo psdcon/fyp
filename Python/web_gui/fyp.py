@@ -9,6 +9,7 @@ from flask import Flask, request, g, render_template
 from flask import after_this_request
 
 from helpers.db_declarative import db, Routine, text, Contributor
+from judging_rows_html import *
 
 # create our little application :)
 app = Flask(__name__)
@@ -57,7 +58,7 @@ def list_routines():
         r.tracked = r.isTracked(db)
         r.labelled = r.isLabelled()
         r.judged = r.isJudged(contrib)
-        r.score = '{}'.format(r.getAvgScore()) if r.isJudged else 'N/A'
+        r.score = '{}'.format(r.getAvgScore()) if r.judged else 'N/A'
     # print routines
     return render_template('list_routines.html', title='List of Routines', routines=routines)
 
@@ -82,102 +83,30 @@ def judge_routine(routine_id):
     nextRoutine = getNextRoutine(routine.id, contrib.id)
     userName = contrib.name if contrib else ""
 
-    bounces = [b for b in routine.bounces if b.isJudgeable()]
-    for i, b in enumerate(bounces):
-        b.idx = i + 1
-    startEndTimes = json.dumps([{"start": b.start_time, 'end': b.end_time} for b in bounces])
+    skills = [sk for sk in routine.bounces if sk.isJudgeable()]
+    skillIds = [sk.id for sk in routine.bounces]
+    for i, sk in enumerate(skills):
+        sk.idx = i + 1
+    startEndTimes = json.dumps([{"start": sk.start_time, 'end': sk.end_time} for sk in skills])
 
-    arms = """<div class="clearfix">
-    Arms
-    <span class="pull-right">
-        <label><input type="checkbox" name="" id=""> 0.1 Bent elbows</label>
-    </span>
-</div>"""
-    legs = """<div class="clearfix" title="Bent knees, toes not pointed, legs note">
-    Legs
-    <span class="pull-right">
-        <label><input type="checkbox" name="" id=""> 0.1 Knees</label>
-        <label><input type="checkbox" name="" id=""> 0.1 Toes</label>
-        <label><input type="checkbox" name="" id=""> 0.1 Apart</label>
-    </span>
-</div>"""
-    # <!-- tighness of shape/dished/angle of hips(pikey) -->
-    body = """<div class="clearfix">
-    Body
-    <span class="pull-right">
-        <label><input type="radio" name="body" id=""> 0.1 Loose</label>
-        <label><input type="radio" name="body" id=""> 0.2 Very loose</label>
-    </span>
-</div>"""
-    angle_with_horizontal = """<div class="clearfix">
-    Angle of legs with Horizontal <br>
-    <label><input type="radio" name="horz" id=""> >65&deg; <90&deg; 0.1</label>
-    <label><input type="radio" name="horz" id=""> >45&deg; <65&deg; 0.2</label>
-</div>"""
-    opening_shape_jumps = """<div class="clearfix">
-    Opening (shape jumps) TODO fix<br>
-    <label><input type="radio" name="horz" id=""> >65&deg; <90&deg; 0.1</label>
-    <label><input type="radio" name="horz" id=""> >45&deg; <65&deg; 0.2</label>
-</div>"""
-    opening_timing_somi = """<div class="clearfix">
-    Opening timing (somi) for feet/front landing (cody)/back landing <br>
-    <label><input type="radio" name="horz" id=""> bet 1 & 2 o'clock 0.1</label>
-    <label><input type="radio" name="horz" id=""> bet 2 & 3 o'clock 0.2</label>
-    <label><input type="radio" name="horz" id=""> after 3/no opening 0.3</label>
-</div>"""
-    opening_holding_shape_feet_front = """<div class="clearfix">
-    Opening holding shape for feet or front. (later is better) <br>
-    Person
-    <label><input type="radio" name="" id=""> piked down</label>
-    <label><input type="radio" name="" id=""> tucked down</label>
-
-    <label><input type="radio" name="horz" id=""> bet 12 & 2 o'clock 0.2</label>
-    <label><input type="radio" name="horz" id=""> bet 2 & 3 o'clock 0.1</label>
-</div>"""
-    opening_holding_shape_back = """<div class="clearfix">
-    Opening holding shape for back. (later is better) <br>
-    <label><input type="radio" name="" id=""> piked down</label>
-    <label><input type="radio" name="" id=""> tucked down (adds 0.1 to deduction)</label>
-
-    <label><input type="radio" name="horz" id=""> bet 12 & 3 o'clock 0.2</label>
-    <label><input type="radio" name="horz" id=""> bet 3 & 4:30 o'clock 0.1</label>
-</div>"""
-    twist_timing = """<div class="clearfix">
-    End of twist <br>
-    <label><input type="checkbox" name="" id=""> not finished twist at 3 o'clock 0.1</label>
-</div>"""
-    twist_arms_half_full = """<div class="clearfix">
-    Arms to stop twist (baraini/full/half outs) <br>
-    <label><input type="checkbox" name="" id=""> arms >45&deg; 0.1</label>
-</div>"""
-    twist_arms_over_full = """<div class="clearfix">
-    Arms to stop twist (>full twist)
-    <label><input type="checkbox" name="" id=""> arms >90&deg; 0.1</label>
-</div>"""
-
-    skill_deductions = {
-        'tuck jump, pike jump, straddle jump,': [arms, legs, body, angle_with_horizontal, opening_shape_jumps],
-        'seat drop': [arms, legs, body],
-        'Swivel Hips/Seat Half Twist to Seat Drop': [arms, legs, body, twist_timing],
-        'Half Twist to Feet (from seat)': [arms, legs, body, twist_timing],
-        'front drop, back drop': [arms, legs, body], #"windmilling"
-        'to feet (from front), to feet (from back)': [arms, legs, body],
-        'half twist jump, full twist jump': [arms, legs, body, twist_timing],
-        'front/back somi': [arms, legs, body, opening_timing_somi, opening_holding_shape_feet_front],
-    }
-    for b in bounces:
+    for i, sk in enumerate(skills):
         for skill_key in skill_deductions:
-            if b.skill_name.lower() in skill_key.lower():
-                deduction_things = ""
-                for thing in skill_deductions[skill_key]:
-                    deduction_things += thing
-                b.deductions_things = deduction_things
+            if sk.skill_name.lower() in skill_key.lower():
+                sk.judging_rows = get_judging_rows(i, skill_deductions[skill_key])
 
 
     return render_template('judge_routine.html',
                            title='Judge Routine', vidPath=vidPath, routine=routine,
-                           startEndTimes=startEndTimes, bounces=bounces, userName=userName,
-                           nextRoutine=nextRoutine)
+                           startEndTimes=startEndTimes, skills=skills, skillIds=skillIds,
+                           userName=userName, nextRoutine=nextRoutine)
+
+def get_judging_rows(rowi, rows):
+
+    row_html = ''
+    for row_key in rows:
+        row_html += judging_rows_html[row_key].replace('{index}', '{}'.format(rowi))
+    return row_html
+
 
 
 # http://flask.pocoo.org/docs/0.12/patterns/sqlalchemy/

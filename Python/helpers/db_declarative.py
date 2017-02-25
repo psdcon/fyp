@@ -78,6 +78,8 @@ class Routine(Base):
         return 'N/A'
 
     def getAvgScore(self):
+        if not self.judgements:
+            return 'N/A'
         import numpy as np
         scores = [j.getScore() for j in self.judgements]
         return float("{0:.1f}".format(np.average(scores)))
