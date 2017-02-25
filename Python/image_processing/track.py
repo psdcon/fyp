@@ -1,4 +1,5 @@
 import json
+import os
 
 import cv2
 import numpy as np
@@ -7,14 +8,14 @@ from scipy.spatial import distance
 from helpers import consts
 from helpers import helper_funcs
 from helpers.db_declarative import Frame
-from helpers.helper_funcs import crop_points_constrained, calcContourCenter
+from helpers.helper_funcs import crop_points_constrained, calcContourCenter, save_zipped_pickle
 from image_processing import trampoline
+
 
 # Global Vars that get updated in the track loop with frame numbers
 # Used when saving data back to db
 centerPoints = {}
 hullLengths = {}
-trampolineAreas = {}
 trampolineTouches = {}
 personMasks = {}
 
@@ -28,6 +29,10 @@ def track_and_save(db, routine):
     #     print("Deleting existing frames")
     #     routine.frames.delete()
 
+    fname = os.path.join(routine.getAsDirPath(), 'person_masks.gzip')
+    save_zipped_pickle(personMasks, fname)
+    # loaded = load_zipped_pickle(fname)
+
     # Add data for routine to db frame-by-frame
     frames = []
     for frameNum in centerPoints.keys():
@@ -35,11 +40,9 @@ def track_and_save(db, routine):
         center_pt_x = cpt[0]
         center_pt_y = cpt[1]
         hull_length = hullLengths[frameNum]
-        trampoline_area = trampolineAreas[frameNum]
         trampoline_touch = 1 if trampolineTouches[frameNum] else 0
-        person_mask = json.dumps(personMasks[frameNum])
 
-        frame = Frame(routine.id, frameNum, center_pt_x, center_pt_y, hull_length, trampoline_area, trampoline_touch, person_mask)
+        frame = Frame(routine.id, frameNum, center_pt_x, center_pt_y, hull_length, trampoline_touch)
         frames.append(frame)
 
     db.add_all(frames)
@@ -247,12 +250,6 @@ def track_gymnast(routine):
             # TODO if mask is really noisy (area is large/ high num contours), could increase the learning rate?
             frameFgMask = pKNN.apply(frame)
             frameFgMaskMorphed = erode_dilate(frameFgMask)
-
-            # Get area of Trampoline via num of pixel showing
-            fgMaskBelowTrmpl = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=maskBelowTrmpl)
-            # percentage pixels of trampoline
-            trampolineArea = int(((fgMaskBelowTrmpl.sum() / 255)*100) / trampolineAreaPx)
-            trampolineAreas[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = trampolineArea
 
             # Crop fg mask detail to be ROI (region of interest) above the trampoline
             frameFgMaskMorphed = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=maskAboveTrmpl)

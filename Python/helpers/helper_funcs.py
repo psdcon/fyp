@@ -1,12 +1,15 @@
 from __future__ import print_function
 
+import cPickle
+import gzip
 import os
 import sys
 
 import cv2
+import numpy as np
 
 import consts
-import numpy as np
+
 
 # Helper functions
 # Opens video with error handling
@@ -86,6 +89,7 @@ def calcContourCenter(contour):
     else:
         return
 
+
 # http://dsp.stackexchange.com/questions/2564/opencv-c-connect-nearby-contours-based-on-distance-between-them
 def find_if_close(cnt1, cnt2):
     # minDist = 9999
@@ -107,9 +111,9 @@ def simple_downsample(a, num):
         print("No can do. Cannot upsample list with {} elements to one with {}".format(len(a), num))
         return a
     b = []
-    spacing = len(a)/float(num)
+    spacing = len(a) / float(num)
     for i in range(num):
-        b.append(a[int(round(spacing*i))])
+        b.append(a[int(round(spacing * i))])
     return b
 
 
@@ -129,3 +133,14 @@ def prettyPrintRoutine(bounces):
         else:
             str += "\n\t{:2}. {}".format(count, b.skill_name)
     return str
+
+
+def save_zipped_pickle(obj, filename, protocol=-1):
+    with gzip.open(filename, 'wb') as f:
+        cPickle.dump(obj, f, protocol)
+
+
+def load_zipped_pickle(filename):
+    with gzip.open(filename, 'rb') as f:
+        loaded_object = cPickle.load(f)
+        return loaded_object

@@ -8,7 +8,7 @@ from helpers import consts
 
 Base = declarative_base()
 
-engine = create_engine('sqlite:///../db.sqlite3')
+engine = create_engine('sqlite:////Users/psdco/Documents/ProjectCode/Python/db.sqlite3')
 Base.metadata.bind = engine
 DBSession = scoped_session(sessionmaker(bind=engine))
 db = DBSession()
@@ -139,26 +139,19 @@ class Frame(Base):
     center_pt_x = Column(INTEGER)
     center_pt_y = Column(INTEGER)
     hull_max_length = Column(INTEGER)
-    trampoline_area = Column(INTEGER)
     trampoline_touch = Column(INTEGER)
-    person_mask = Column(TEXT)
     pose = Column(TEXT)
 
     routine = relationship("Routine", back_populates='frames')
 
-    def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, hull_length, trampoline_area, trampoline_touch, person_mask):
+    def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, hull_length, trampoline_touch):
         self.routine_id = routine_id
         self.frame_num = frame_num
         self.center_pt_x = center_pt_x
         self.center_pt_y = center_pt_y
         self.hull_max_length = hull_length
-        self.trampoline_area = trampoline_area
         self.trampoline_touch = trampoline_touch
-        self.person_mask = person_mask
         self.pose = ""
-
-    def get_scale_factor(self):
-        return 256.0 / float(self.hull_max_length)
 
 
 class Bounce(Base):

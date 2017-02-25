@@ -64,10 +64,9 @@ def main():
         #     continue
 
         # If this routine is selected, automatically prompt to locate trampoline.
-        if True or not routine.trampoline_top or not routine.trampoline_center or not routine.trampoline_width:
+        if not routine.trampoline_top or not routine.trampoline_center or not routine.trampoline_width:
             # Detect Trampoline
             trampoline.detect_trampoline(db, routine)
-            continue
 
         if not routine.isTracked(db):
             print("Auto tracking frames")
