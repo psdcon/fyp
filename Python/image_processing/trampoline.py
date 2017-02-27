@@ -17,7 +17,7 @@ def detect_trampoline(db, routine):
 
 
 def calcTrampolineEnds(width):
-    return int(width * 1.6)
+    return int(width * 1.9)
 
 def find_trampoline(routine):
     cap = helper_funcs.open_video(routine.path)

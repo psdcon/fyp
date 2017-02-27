@@ -4,6 +4,7 @@ from __future__ import print_function
 from collections import OrderedDict
 
 import cv2
+from sqlalchemy import or_
 
 import judge
 from helpers import helper_funcs
@@ -23,7 +24,7 @@ def main():
     ask = False
     # Ask the user to select routine from database
     # routines = db.query(Routine).filter(Routine.use == 1).all()
-    routines = db.query(Routine).filter(Routine.id > 16).all()
+    routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).all()
     if ask:
         routinesAsDict = []
         for routine in routines:
