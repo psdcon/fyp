@@ -120,16 +120,19 @@ class Routine(Base):
                 return True
             return False
 
-    def getAsDirPath(self):
-        path = consts.videosRootPath + self.path.replace('.mp4', os.sep)
+    def getAsDirPath(self, suffix=None):
+        if suffix:
+            path = consts.videosRootPath + self.path.replace('.mp4', os.sep+suffix)
+        else:
+            path = consts.videosRootPath + self.path.replace('.mp4', os.sep)
         if not os.path.exists(path):
             print("Creating " + path)
             os.makedirs(path)
         return path
 
-    def hasFramesSaved(self):
+    def hasFramesSaved(self, suffix=None):
         import glob
-        nFiles = len(glob.glob(self.getAsDirPath() + 'frame_*'))
+        nFiles = len(glob.glob(self.getAsDirPath(suffix) + 'frame_*'))
         return nFiles > 0
 
     def prettyName(self):

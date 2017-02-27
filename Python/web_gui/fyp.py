@@ -54,8 +54,9 @@ def index():
 @app.route('/list')
 def list_routines():
     contrib = db.query(Contributor).filter(Contributor.uid == g.userId).one()
-    routines = db.query(Routine).all()
-    for routine in routines:
+    routines = db.query(Routine).filter(Routine.use == 1).all()
+    for i, routine in enumerate(routines):
+        routine.index = i+1
         routine.name = routine.prettyName()
         routine.tracked = routine.isTracked(db)
         routine.framesSaved = routine.hasFramesSaved()

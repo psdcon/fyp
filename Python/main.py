@@ -24,7 +24,7 @@ def main():
     ask = False
     # Ask the user to select routine from database
     # routines = db.query(Routine).filter(Routine.use == 1).all()
-    routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).all()
+    routines = db.query(Routine).filter(Routine.use == 1).all()
     if ask:
         routinesAsDict = []
         for routine in routines:
@@ -72,16 +72,14 @@ def main():
             print("Auto tracking frames")
             # Track gymnast and save
             track.track_and_save(db, routine)
-            continue
             # Find bounces and save
             # segment_bounces.segment_bounces_and_save(db, routine)
             # Plot
             # visualise.plot_data(routine)
-        else:
-            continue
+        # continue
 
-        if not routine.hasFramesSaved():
-            import_output.save_cropped_frames(db, routine, routine.frames)
+        if not routine.hasFramesSaved('_blur_dark_0.6'):
+            import_output.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
         else:
             judge.compare_pose_tracking(routine)
 

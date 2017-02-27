@@ -20,8 +20,9 @@
 
   <div class="row vid-row">
     <div class="col-md-7 col-8 {% if not routine.use %}unused{% endif %}" style="word-break: break-word;">
+        <span class="pull-left mr-3">{{ routine.index }}</span>
         <img src="{{ url_for( 'static', filename=routine.thumbPath) }}" style="max-height: 3em;float: left;padding-right: 1em;">
-        {{ routine.id }} {{ routine.name }} <br>
+        ID: {{ routine.id }}. Name: {{ routine.name }} <br>
         {{ check_or_cross(routine.tracked) }} Track
         {{ check_or_cross(routine.framesSaved) }} Frames
         {{ check_or_cross(routine.posed) }} Pose

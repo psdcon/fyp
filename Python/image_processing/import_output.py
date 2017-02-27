@@ -1,5 +1,6 @@
 # Import statements
 import json
+import os
 
 import cv2
 import h5py
@@ -8,8 +9,10 @@ import numpy as np
 import scipy.io
 from sqlalchemy.orm.exc import NoResultFound
 
+from helpers import consts
 from helpers import helper_funcs
-from helpers.db_declarative import *
+from helpers.db_declarative import Frame
+from image_processing import track
 
 
 def import_pose_deepcut(db, routine):
@@ -88,83 +91,7 @@ def save_cropped_video(cap, routine, db):
     cv2.destroyAllWindows()
 
 
-def save_cropped_frames(db, routine, frames):
-    # TODO suggest a reasonable padding width based on ellipse axes.
-    # Discard outliers. Anything above 140*2. Then take the median or average?
-    # Discard the top 10 % and the bottom 20%. Then take the average of this + margin of 20 Save this to the db.
-    # HG would give better predictions with a fixed with but scalling based on each frame becomes tedious to keep track of. TODO Does it??
-    # Hoping that monocap takes care of smoothing?
-    routineDirPath = routine.getAsDirPath()
-    # import glob
-    # nFiles = len(glob.glob(routineDirPath + 'frame_*'))
-    # if nFiles > 0:
-    #     print("Found {} frames in {!r}. Stopping".format(nFiles, routineDirPath))
-    #     return
-
-    plt.figure()
-    position = np.array([routine.video_height - frame_data.center_pt_y for frame_data in frames])
-    # scaleWithPerson = frames[0].hull_max_length is not None
-    scaleWithPerson = False
-    stretchPositionMinima = False
-    cropLengths = []
-    cropLength = 0
-    if scaleWithPerson:  # hull length
-        # Compensate... something
-        cropLengths = np.array([frame_data.hull_max_length for frame_data in frames])
-
-        cropLengths[np.nonzero(position < np.median(position))] = int(np.average(cropLengths) * 1.1)
-        plt.plot(cropLengths, label="Hull Length", color="blue")
-        # plt.axhline(np.average(cropLengths), label="Average Length", color="blue")
-        # plt.axhline(np.median(cropLengths), label="Med Length", color="purple")
-    else:  # Ellipse lengths
-        hullLens = [frame_data.hull_max_length for frame_data in frames]
-        plt.plot(hullLens, label="Hull Length", color="blue")
-
-        scaler = 1.2
-        # cropLength = int(np.average(hullLens)*averageScaler)
-        cropLength = int(np.percentile(hullLens, 95) * scaler)
-        # Average should be trusted more because median can be skewed by poor ellipse fitting
-        # plt.axhline(np.average(hullLens), label="Average Length", color="blue")
-        plt.axhline(cropLength, label="Percentile", color="blue")
-        plt.axhline(routine.crop_length, label="routine.crop_length", color="orange")
-        # plt.axhline(np.median(hullLens), label="Med Length", color="purple")
-
-    if stretchPositionMinima:
-        # Get cutoff for where scaling below this point should occur
-        scalingCutoff = np.median(position) * 0.8
-        # Create line that returns scaling values from 1 to 0.75 from the cutoff to the global minimum
-        coefficients = np.polyfit([scalingCutoff, position.min()], [1, 0.75], 1)
-        scalingLine = np.poly1d(coefficients)  # create np polynomial object
-
-        if False:
-            x_axis = np.linspace(position.min(), scalingCutoff, 10)
-            y_axis = scalingLine(x_axis)
-
-            # ...and plot the points and the line
-            plt.plot(x_axis, y_axis)
-            plt.show()
-            exit()
-
-        # Get index for each position that falls below the cutoff
-        indices = np.nonzero(position < scalingCutoff)
-        newPositions = position.copy()
-        for i in indices:
-            # Evaluate the scaling line at each x to return the ammount to scale by (1 to 0.75). Multiply existing value by this scalar
-            newPositions[i] = position[i] * scalingLine(position[i])
-
-        plt.plot(newPositions, label="New position", color="red")
-        # plt.axhline(scalingCutoff, label="Position Scaling Start", color="blue")
-        # plt.axhline(position.min(), label="Position Scaling End", color="green")
-
-    plt.plot(position, label="Position", color="green")
-
-    # plt.axhline(np.average(position), label="Average Position", color="green")
-    # plt.axhline(np.median(position), label="Med Position", color="red")
-    plt.xlabel("Time (s)")
-    plt.legend(loc="best")
-    plt.show(block=False)
-
-    trampolineTouches = np.array([frame.trampoline_touch for frame in routine.frames])
+def trimTouches(trampolineTouches):
     touchTransitions = np.diff(trampolineTouches)
     for i in range(len(touchTransitions)):
         thisTransition = touchTransitions[i]
@@ -174,11 +101,51 @@ def save_cropped_frames(db, routine, frames):
         elif thisTransition < 0:  # spike down
             trampolineTouches[i] = 0
             trampolineTouches[i - 1] = 0
+    return trampolineTouches
+
+
+def save_cropped_frames(db, routine, frames, suffix=None):
+    routineDirPath = routine.getAsDirPath(suffix)
+
+    # plt.figure()
+    position = np.array([routine.video_height - frame_data.center_pt_y for frame_data in frames])
+    scaleWithPerson = False
+    # scaleWithPerson = frames[0].hull_max_length is not None
+    cropLengths = []
+    cropLength = 0
+    if scaleWithPerson:  # hull length
+        # Compensate... something
+        cropLengths = np.array([frame_data.hull_max_length for frame_data in frames])
+
+        cropLengths[np.nonzero(position < np.median(position))] = int(np.average(cropLengths) * 1.1)
+        # plt.plot(cropLengths, label="Hull Length", color="blue")
+        # # plt.axhline(np.average(cropLengths), label="Average Length", color="blue")
+        # # plt.axhline(np.median(cropLengths), label="Med Length", color="purple")
+    else:  # Ellipse lengths
+        hullLens = [frame_data.hull_max_length for frame_data in frames]
+        # plt.plot(hullLens, label="Hull Length", color="blue")
+
+        scaler = 1.2
+        cropLength = int(np.percentile(hullLens, 95) * scaler)
+        # # plt.axhline(np.average(hullLens), label="Average Length", color="blue")
+        # plt.axhline(cropLength, label="Percentile", color="blue")
+        # plt.axhline(routine.crop_length, label="routine.crop_length", color="orange")
+
+    # plt.plot(position, label="Position", color="green")
+    # plt.xlabel("Time (s)")
+    # plt.legend(loc="best")
+    # plt.show(block=False)
+
+    trampolineTouches = np.array([frame.trampoline_touch for frame in routine.frames])
+    trampolineTouches = trimTouches(trampolineTouches)
+
+    fname = os.path.join(routine.getAsDirPath(), 'person_masks.gzip')
+    personMasks = helper_funcs.load_zipped_pickle(fname)
 
     cap = helper_funcs.open_video(routine.path)
+    frame = []
     for i, frame_data in enumerate(frames):
         # ignore frames where trampoline is touched
-        # if frame_data.frame_num in blacklistedFrames:
         if trampolineTouches[i] == 1:
             continue
         # ignore any frame that aren't tracked
@@ -186,25 +153,21 @@ def save_cropped_frames(db, routine, frames):
             _ret, frame = cap.read()
 
         cx = frame_data.center_pt_x
-        if stretchPositionMinima:
-            cy = routine.video_height - newPositions[i]
+        cy = frame_data.center_pt_y
+        # Use original background or darken
+        if True:
+            frameCropped = track.highlightPerson(frame, np.array(json.loads(personMasks[frame_data.frame_num]), dtype=np.uint8), cx, cy, cropLength)
         else:
-            cy = frame_data.center_pt_y
+            x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine.video_height, routine.video_width, cx, cy, cropLength)
+            frameCropped = frame[y1:y2, x1:x2]
+        frameCropped = cv2.resize(frameCropped, (256, 256))
 
-        if cropLengths != []:  # otherwise the ellipse len will be used
-            cropLength = cropLengths[i]
-
-        x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine.video_height, routine.video_width, cx, cy, cropLength)
-
-        frameCropped = frame[y1:y2, x1:x2]
-        cropScaled = cv2.resize(frameCropped, (256, 256))
-
-        cv2.imshow('Track ', cropScaled)
-        k = cv2.waitKey(50) & 0xff
+        # cv2.imshow('Track ', frameCropped)
+        # k = cv2.waitKey(50) & 0xff
 
         imgName = routineDirPath + "frame_{0:04}.png".format(frame_data.frame_num)
         # print("Writing frame to {}".format(imgName))
-        # cv2.imwrite(imgName, cropScaled)
+        cv2.imwrite(imgName, frameCropped)
 
     # Done
     cap.release()

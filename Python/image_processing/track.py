@@ -8,7 +8,6 @@ from scipy.spatial import distance
 from helpers import consts
 from helpers import helper_funcs
 from helpers.db_declarative import Frame
-from helpers.helper_funcs import crop_points_constrained, calcContourCenter, save_zipped_pickle
 from image_processing import trampoline
 
 
@@ -28,14 +27,8 @@ def track_and_save(db, routine):
 
     print("Saving points...")
 
-    # Delete any existing frames
-    # if routine.frames:
-    #     print("Deleting existing frames")
-    #     routine.frames.delete()
-
     fname = os.path.join(routine.getAsDirPath(), 'person_masks.gzip')
-    save_zipped_pickle(personMasks, fname)
-    # loaded = load_zipped_pickle(fname)
+    helper_funcs.save_zipped_pickle(personMasks, fname)
 
     # Add data for routine to db frame-by-frame
     frames = []
@@ -73,7 +66,7 @@ def getPersonContour(fgMaskPrevPersonOverlap, contours):
 
     # Sort the contours and find their centers
     overlapContours = sorted(overlapContours, key=cv2.contourArea, reverse=True)
-    overlapContourCenters = [calcContourCenter(contour) for contour in overlapContours if calcContourCenter(contour) is not None]
+    overlapContourCenters = [helper_funcs.calcContourCenter(contour) for contour in overlapContours if helper_funcs.calcContourCenter(contour) is not None]
 
     # Show the contours with their numbers
     overlapColor = cv2.cvtColor(fgMaskPrevPersonOverlap, cv2.COLOR_GRAY2RGB)
@@ -82,7 +75,7 @@ def getPersonContour(fgMaskPrevPersonOverlap, contours):
     # cv2.imshow("overlap", cv2.resize(overlapColor, (resizeWidth, resizeHeight)))
 
     # Get contours in this errodedilate mask
-    thisFrameContourCenters = [calcContourCenter(contour) for contour in contours if calcContourCenter(contour) is not None]
+    thisFrameContourCenters = [helper_funcs.calcContourCenter(contour) for contour in contours if helper_funcs.calcContourCenter(contour) is not None]
 
     # Match the contours in both frames based on min distance to their center points
     contourGuessesIndices = []  # list where the index refers to the overlaContour and the value is the index of the closest thisContour
@@ -120,16 +113,17 @@ def getPersonContour(fgMaskPrevPersonOverlap, contours):
 
 def highlightPerson(frame, personMask, cx, cy, cropLength):
     # Get boundary
-    x1, x2, y1, y2 = crop_points_constrained(frame.shape[0], frame.shape[1], cx, cy, cropLength)
+    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(frame.shape[0], frame.shape[1], cx, cy, cropLength)
 
     # Dilate the mask
     kernel = np.ones((3, 3), np.uint8)
-    personMask = cv2.dilate(personMask, kernel, iterations=2)
+    personMask = cv2.dilate(personMask, kernel, iterations=3)
     # personMask = cv2.GaussianBlur(personMask, (15, 15), 0)
     # cv2.imshow("personMask", cv2.resize(personMask, (resizeWidth, resizeHeight)))
 
     # Darken the background and blur it
-    darkBg = cv2.addWeighted(frame, 0.4, np.zeros_like(frame), 0.6, 0)
+    percDarker = 0.6  # 60% darker
+    darkBg = cv2.addWeighted(frame, 1-percDarker, np.zeros_like(frame), percDarker, 0)
     darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
     darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
     # Make a person shaped hole in the bg
@@ -301,7 +295,7 @@ def track_gymnast(db, routine):
                     processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 1:resizeWidth * 2] = biggestContour
                     # cv2.imshow('personMask', personMask)
 
-                cx, cy = calcContourCenter(personContour)
+                cx, cy = helper_funcs.calcContourCenter(personContour)
                 if cx and cy:
                     centerPoints[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = [cx, cy]
 

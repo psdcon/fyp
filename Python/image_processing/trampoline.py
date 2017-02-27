@@ -19,6 +19,7 @@ def detect_trampoline(db, routine):
 def calcTrampolineEnds(width):
     return int(width * 1.9)
 
+
 def find_trampoline(routine):
     cap = helper_funcs.open_video(routine.path)
 
@@ -40,8 +41,8 @@ def find_trampoline(routine):
     while 1:  # video will loop back to the start
         _ret, frame = cap.read()
 
-        maskLeftBorder = int(trampoline['center']-(trampoline['ends']/2))
-        maskRightBorder = int(trampoline['center']+(trampoline['ends']/2))
+        maskLeftBorder = int(trampoline['center'] - (trampoline['ends'] / 2))
+        maskRightBorder = int(trampoline['center'] + (trampoline['ends'] / 2))
         maskAroundTrampoline = np.zeros(shape=(routine.video_height, routine.video_width), dtype=np.uint8)
         maskAroundTrampoline[0:trampoline['top'], maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
         frameCropped = cv2.bitwise_and(frame, frame, mask=maskAroundTrampoline)
@@ -50,10 +51,10 @@ def find_trampoline(routine):
         cv2.line(frame, (0, trampoline['top']), (routine.video_width, trampoline['top']), (0, 255, 0), 1)
         # Vertical Lines
         cv2.line(frame, (trampoline['center'], 0), (trampoline['center'], routine.video_height), (0, 255, 0), 1)
-        cv2.line(frame, (trampoline['center']+(trampoline['width']/2), 0), (trampoline['center']+(trampoline['width']/2), routine.video_height), (0, 0, 255), 1)
-        cv2.line(frame, (trampoline['center']-(trampoline['width']/2), 0), (trampoline['center']-(trampoline['width']/2), routine.video_height), (0, 0, 255), 1)
-        cv2.line(frame, (trampoline['center']+(trampoline['ends']/2), 0), (trampoline['center']+(trampoline['ends']/2), routine.video_height), (0, 255, 0 ), 1)
-        cv2.line(frame, (trampoline['center']-(trampoline['ends']/2), 0), (trampoline['center']-(trampoline['ends']/2), routine.video_height), (0, 255, 0 ), 1)
+        cv2.line(frame, (trampoline['center'] + (trampoline['width'] / 2), 0), (trampoline['center'] + (trampoline['width'] / 2), routine.video_height), (0, 0, 255), 1)
+        cv2.line(frame, (trampoline['center'] - (trampoline['width'] / 2), 0), (trampoline['center'] - (trampoline['width'] / 2), routine.video_height), (0, 0, 255), 1)
+        cv2.line(frame, (trampoline['center'] + (trampoline['ends'] / 2), 0), (trampoline['center'] + (trampoline['ends'] / 2), routine.video_height), (0, 255, 0), 1)
+        cv2.line(frame, (trampoline['center'] - (trampoline['ends'] / 2), 0), (trampoline['center'] - (trampoline['ends'] / 2), routine.video_height), (0, 255, 0), 1)
 
         cv2.imshow('Frame', frame)
         cv2.imshow('Frame Cropped', frameCropped)
@@ -61,16 +62,16 @@ def find_trampoline(routine):
         k = cv2.waitKey(100)
         # TODO this is broken... DONE: Fixed it with asdw
         # print 'You pressed %d (0x%x), LSB: %d (%s)' % (k, k, k % 256,repr(chr(k % 256)) if k % 256 < 128 else '?')
-        if k == ord('u'):  #2490368:  # up
+        if k == ord('u'):  # 2490368:  # up
             use = 1 if use == 0 else 0
             print("Use ", use)
-        elif k == ord('w'):  #2490368:  # up
+        elif k == ord('w'):  # 2490368:  # up
             trampoline['top'] -= 1
-        elif k == ord('s'):  #2621440:  # down
+        elif k == ord('s'):  # 2621440:  # down
             trampoline['top'] += 1
-        elif k == ord('a'):  #2424832:  # left
+        elif k == ord('a'):  # 2424832:  # left
             trampoline['center'] -= 1
-        elif k == ord('d'):  #2555904:  # right
+        elif k == ord('d'):  # 2555904:  # right
             trampoline['center'] += 1
         elif k == ord('e'):  # widen the width
             trampoline['width'] += 2
