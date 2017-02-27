@@ -89,13 +89,15 @@ class Routine(Base):
 
     def isPosed(self, db):
         # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=''
-        s = select([func.count('*')])\
-            .select_from(Frame)\
-            .where(
-                and_(Frame.pose != '', Frame.routine_id == self.id)
-            )
-        count = db.execute(s).fetchone()[0]
-        return count > 0
+        # s = select([func.count('*')])\
+        #     .select_from(Frame)\
+        #     .where(
+        #         and_(Frame.pose != '', Frame.routine_id == self.id)
+        #     )
+        # count = db.execute(s).fetchone()[0]
+        # return count > 0
+        return os.path.exists(self.getAsDirPath()+'preds_2d.mat')
+
 
     def isLabelled(self):
         if not self.bounces:
@@ -119,7 +121,11 @@ class Routine(Base):
             return False
 
     def getAsDirPath(self):
-        return consts.videosRootPath + self.path.replace('.mp4', os.sep)
+        path = consts.videosRootPath + self.path.replace('.mp4', os.sep)
+        if not os.path.exists(path):
+            print("Creating " + path)
+            os.makedirs(path)
+        return path
 
     def hasFramesSaved(self):
         import glob
@@ -144,12 +150,12 @@ class Frame(Base):
 
     routine = relationship("Routine", back_populates='frames')
 
-    def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, hull_length, trampoline_touch):
+    def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, hull_max_length, trampoline_touch):
         self.routine_id = routine_id
         self.frame_num = frame_num
         self.center_pt_x = center_pt_x
         self.center_pt_y = center_pt_y
-        self.hull_max_length = hull_length
+        self.hull_max_length = hull_max_length
         self.trampoline_touch = trampoline_touch
         self.pose = ""
 

@@ -11,6 +11,7 @@ from helpers import consts
 from helpers.db_declarative import *
 from image_processing import visualise
 from libs.fastdtw import fastdtw
+import numpy as np
 
 
 def judge_skill(db):
@@ -89,6 +90,7 @@ def compare_pose_tracking(routine):
         else:
             print('No file', pDir)
             poseDirs.remove(pDir)
+
     dirLabels = [pDir.replace(consts.videosRootPath + routine.path[:-4] + '', 'rout') for pDir in poseDirs]
     imgFileses = [glob.glob(pDir+os.sep+"smoothed_pose_frame_*.png") for pDir in poseDirs]
     matPoses = [scipy.io.loadmat(matFile)['preds_2d'] for matFile in matFiles]
@@ -122,7 +124,7 @@ def compare_pose_tracking(routine):
                         frame = cv2.resize(frame, (resizeWidth, resizeHeight))
                 cv2.putText(frame, label, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                 frames[resizeHeight*imgi:resizeHeight*(imgi+1), 0:resizeWidth] = frame
-            cv2.imshow("Frames", frames)
+            cv2.imshow("Frames ", frames)
             i += 1
             if playOneFrame:
                 playOneFrame = False

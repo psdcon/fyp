@@ -130,3 +130,19 @@ a .fa, .btn-link .fa {
 .list-group-item{
     border-width: 2px;
 }
+
+
+/* Check marks */
+.good{
+    color:limegreen;
+}
+.bad{
+    color:red;
+}
+/* For unused routine */
+.unused img {
+    filter: grayscale(100%)
+}
+.unused .good, .unused .bad {
+    color:darkgray;
+}

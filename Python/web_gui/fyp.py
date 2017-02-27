@@ -21,6 +21,8 @@ app.config.update(dict(
     USERNAME='admin',
     PASSWORD='defaultpassword'
 ))
+
+
 # app.config.from_envvar('FLASKR_SETTINGS', silent=True)
 
 
@@ -53,13 +55,16 @@ def index():
 def list_routines():
     contrib = db.query(Contributor).filter(Contributor.uid == g.userId).one()
     routines = db.query(Routine).all()
-    for r in routines:
-        r.name = r.prettyName()
-        r.tracked = r.isTracked(db)
-        r.labelled = r.isLabelled()
-        r.judged = r.isJudged(contrib)
-        r.score = '{}'.format(r.getAvgScore()) if r.judged else 'N/A'
-    # print routines
+    for routine in routines:
+        routine.name = routine.prettyName()
+        routine.tracked = routine.isTracked(db)
+        routine.framesSaved = routine.hasFramesSaved()
+        routine.posed = routine.isPosed(db)
+        routine.labelled = routine.isLabelled()
+        routine.judged = routine.isJudged(contrib)
+        routine.score = '{}'.format(routine.getAvgScore()) if routine.judged else 'N/A'
+        routine.thumbPath = 'images/thumbs/' + os.path.basename(routine.path).replace('.mp4', '.jpg')
+
     return render_template('list_routines.html', title='List of Routines', routines=routines)
 
 
@@ -72,6 +77,7 @@ def getNextRoutine(routine_id, contributor_id):
     if nextRoutine:
         nextRoutine.name = nextRoutine.prettyName()
     return nextRoutine
+
 
 @app.route('/judge/<int:routine_id>')
 def judge_routine(routine_id):
@@ -94,19 +100,17 @@ def judge_routine(routine_id):
             if sk.skill_name.lower() in skill_key.lower():
                 sk.judging_rows = get_judging_rows(i, skill_deductions[skill_key])
 
-
     return render_template('judge_routine.html',
                            title='Judge Routine', vidPath=vidPath, routine=routine,
                            startEndTimes=startEndTimes, skills=skills, skillIds=skillIds,
                            userName=userName, nextRoutine=nextRoutine)
 
-def get_judging_rows(rowi, rows):
 
+def get_judging_rows(rowi, rows):
     row_html = ''
     for row_key in rows:
         row_html += judging_rows_html[row_key].replace('{index}', '{}'.format(rowi))
     return row_html
-
 
 
 # http://flask.pocoo.org/docs/0.12/patterns/sqlalchemy/

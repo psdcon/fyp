@@ -9,3 +9,11 @@
         </li>
     {% endif %}
 {% endmacro %}
+
+{% macro check_or_cross(condition) %}
+    {% if condition %}
+        <i class="good fa fa-check" aria-hidden="true"></i>
+    {% else %}
+        <i class="bad fa fa-times" aria-hidden="true"></i>
+    {% endif %}
+{% endmacro %}

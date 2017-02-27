@@ -5,12 +5,12 @@ from collections import OrderedDict
 
 import cv2
 
-from pyqt_gui.showRoutineSelectDialog import show_selection_menu
+import judge
 from helpers import helper_funcs
 from helpers.db_declarative import db, Routine
-from helpers.helper_funcs import prettyPrintRoutine
 from image_processing import trampoline
 from image_processing import visualise, track, segment_bounces, import_output
+from pyqt_gui.showRoutineSelectDialog import show_selection_menu
 
 # https://github.com/opencv/opencv/issues/6055
 cv2.ocl.setUseOpenCL(False)
@@ -23,7 +23,7 @@ def main():
     ask = False
     # Ask the user to select routine from database
     # routines = db.query(Routine).filter(Routine.use == 1).all()
-    routines = db.query(Routine).all()
+    routines = db.query(Routine).filter(Routine.id > 16).all()
     if ask:
         routinesAsDict = []
         for routine in routines:
@@ -39,25 +39,24 @@ def main():
         selectedRoutineIndices = show_selection_menu(routinesAsDict)
     else:
         selectedRoutineIndices = [1]  # select by id
-    selectedRoutines = [routines[i - 1] for i in selectedRoutineIndices]
+    # selectedRoutines = [routines[i - 1] for i in selectedRoutineIndices]
     selectedRoutines = routines
 
     # Execute
     for i, routine in enumerate(selectedRoutines):
-        print("\n" + routine.path)
+        print()
+        print(routine.id, routine.path)
         print("Note:", repr(routine.note))
         print("Level:", routine.level)
-        trampolineObj = {'top': routine.trampoline_top, 'center': routine.trampoline_center, 'width': routine.trampoline_width, }
-        print("Trampoline:", trampolineObj)
+        # trampolineObj = {'top': routine.trampoline_top, 'center': routine.trampoline_center, 'width': routine.trampoline_width, }
+        # print("Trampoline:", trampolineObj)
         print("Tracked:", routine.isTracked(db))
         # print("Bounces:", prettyPrintRoutine(routine.bounces))
-        print("Bounces:", len(routine.bounces))
-        print("Cropped:", routine.hasFramesSaved())
+        # print("Bounces:", len(routine.bounces))
+        print("Frames Saved:", routine.hasFramesSaved())
         print("Posed:", routine.isPosed(db))
+        print("Use:", routine.use)
         print()
-
-        # judge.compare_pose_tracking(routine)
-        # exit()
 
         # if framesCount > 0:
         #     print("Has {} frames. Continuing to next..".format(framesCount))
@@ -68,7 +67,7 @@ def main():
             # Detect Trampoline
             trampoline.detect_trampoline(db, routine)
 
-        if not routine.isTracked(db):
+        if routine.use is None or not routine.isTracked(db):
             print("Auto tracking frames")
             # Track gymnast and save
             track.track_and_save(db, routine)
@@ -77,11 +76,18 @@ def main():
             # segment_bounces.segment_bounces_and_save(db, routine)
             # Plot
             # visualise.plot_data(routine)
-
-        if True:  # False:
-            import_output.save_cropped_frames(db, routine, routine.frames)
-
         else:
+            continue
+
+        if not routine.hasFramesSaved():
+            import_output.save_cropped_frames(db, routine, routine.frames)
+        else:
+            judge.compare_pose_tracking(routine)
+
+        if False:
+            pass
+        else:
+            continue
             # Options as [Title, function name, [function args]]
             options = [
                 ["Detect Trampoline", trampoline.detect_trampoline, [db, routine]],

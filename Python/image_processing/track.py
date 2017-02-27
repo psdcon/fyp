@@ -20,7 +20,11 @@ trampolineTouches = {}
 personMasks = {}
 
 def track_and_save(db, routine):
-    track_gymnast(routine)
+    track_gymnast(db, routine)
+
+    if routine.use == 0:
+        print("use is", routine.use, ". Frame data is not being saved.")
+        return
 
     print("Saving points...")
 
@@ -194,7 +198,7 @@ def isTouchingTrmpl(trmpl_top, hull):
     return False
 
 
-def track_gymnast(routine):
+def track_gymnast(db, routine):
     print("Starting to track gymnast")
     cap = helper_funcs.open_video(routine.path)
 
@@ -293,7 +297,7 @@ def track_gymnast(routine):
                     cv2.drawContours(biggestContour, [hull], 0, (0, 255, 0), 2)
                     # Resize and show it
                     biggestContour = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
-                    cv2.putText(biggestContour, 'ErodeDilated', (10, 20), font, 0.4, (255, 255, 255))
+                    cv2.putText(biggestContour, 'Blob Detection', (10, 20), font, 0.4, (255, 255, 255))
                     processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 1:resizeWidth * 2] = biggestContour
                     # cv2.imshow('personMask', personMask)
 
@@ -315,23 +319,22 @@ def track_gymnast(routine):
                     hullMaxLen = getMaxHullLength(hull)
                     hullLengths[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = hullMaxLen
 
-                    finerPersonMask4Vis = cv2.cvtColor(finerPersonMask, cv2.COLOR_GRAY2RGB)
-                    cv2.drawContours(finerPersonMask4Vis, [hull], 0, (0, 255, 0), 2)
-                    cv2.line(finerPersonMask4Vis, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 1)
-                    finerPersonMask4Vis = cv2.resize(finerPersonMask4Vis, (resizeWidth, resizeHeight))
-                    cv2.imshow('finerPersonMask4Vis', finerPersonMask4Vis)
-
                     touchingTrmpl = isTouchingTrmpl(routine.trampoline_top, hull)
                     trampolineTouches[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = touchingTrmpl
 
                     if visualise:
-                        # Draw person's center of mass
-                        # if trampolineArea > 10:
+                        # Show trampoline touch detection
+                        finerPersonMask4Vis = cv2.cvtColor(finerPersonMask, cv2.COLOR_GRAY2RGB)
+                        cv2.drawContours(finerPersonMask4Vis, [hull], 0, (0, 255, 0), 2)
                         if touchingTrmpl:
-                            cv2.circle(frame, (cx, cy), 3, (0, 255, 0), -1)
+                            cv2.line(finerPersonMask4Vis, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 5)
                         else:
-                            cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
+                            cv2.line(finerPersonMask4Vis, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 0, 255), 5)
+                        finerPersonMask4Vis = cv2.resize(finerPersonMask4Vis, (resizeWidth, resizeHeight))
+                        cv2.imshow('finerPersonMask4Vis', finerPersonMask4Vis)
 
+                        # Show person drawing the center of mass
+                        cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
                         trackedPerson = highlightPerson(frame, finerPersonMask, cx, cy, cropLength)
                         cv2.imshow("Track", trackedPerson)
                 else:
@@ -372,6 +375,10 @@ def track_gymnast(routine):
             frameToJumpTo = (cap.get(cv2.CAP_PROP_FRAME_COUNT) / 10) * num
             cap.set(cv2.CAP_PROP_POS_FRAMES, frameToJumpTo)
             goOneFrame = True
+        elif k == ord('u'):
+            routine.use = 0 if routine.use else 1
+            db.commit()
+            print("use updated to", routine.use)
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
             break
         elif k == ord('q') or k == 27:  # q/ESC

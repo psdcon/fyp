@@ -1,8 +1,11 @@
 # Constants
+import os
+
 videosRootPath = 'C:\\Users\\psdco\\Videos\\'
 # databasePath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/db.sqlite3'
-databasePath = 'C:/Users/psdco/Documents/ProjectCode/Python/db.sqlite3'
+# databasePath = 'C:/Users/psdco/Documents/ProjectCode/Python/db.sqlite3'
 lastSelectionFilePath = 'pyqt_gui/lastSaved.txt'
+thumbDir = 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python\\web_gui\\static\\images\\thumbs'
 
 contourDistance = 25
 minContourArea = 800

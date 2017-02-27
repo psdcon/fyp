@@ -1,19 +1,15 @@
 # Import statements
 import json
-import os
 
 import cv2
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io
 from sqlalchemy.orm.exc import NoResultFound
 
-from helpers import consts
 from helpers import helper_funcs
 from helpers.db_declarative import *
-import matplotlib.pyplot as plt
-
-from libs.peakdetect import peakdetect
 
 
 def import_pose_deepcut(db, routine):
@@ -98,17 +94,14 @@ def save_cropped_frames(db, routine, frames):
     # Discard the top 10 % and the bottom 20%. Then take the average of this + margin of 20 Save this to the db.
     # HG would give better predictions with a fixed with but scalling based on each frame becomes tedious to keep track of. TODO Does it??
     # Hoping that monocap takes care of smoothing?
-    routine.getAsDirPath()
-    if not os.path.exists(routine.getAsDirPath()):
-        print("Creating "+routine.getAsDirPath())
-        os.makedirs(routine.getAsDirPath())
-    else:
-        import glob
-        nFiles = len(glob.glob(routine.getAsDirPath()+'frame_*'))
-        if nFiles > 0:
-            print("Found {} frames in {!r}. Stopping".format(nFiles, routine.getAsDirPath()))
-            return
+    routineDirPath = routine.getAsDirPath()
+    # import glob
+    # nFiles = len(glob.glob(routineDirPath + 'frame_*'))
+    # if nFiles > 0:
+    #     print("Found {} frames in {!r}. Stopping".format(nFiles, routineDirPath))
+    #     return
 
+    plt.figure()
     position = np.array([routine.video_height - frame_data.center_pt_y for frame_data in frames])
     # scaleWithPerson = frames[0].hull_max_length is not None
     scaleWithPerson = False
@@ -127,16 +120,18 @@ def save_cropped_frames(db, routine, frames):
         hullLens = [frame_data.hull_max_length for frame_data in frames]
         plt.plot(hullLens, label="Hull Length", color="blue")
 
-        averageScaler = 1.3
-        cropLength = int(np.average(hullLens)*averageScaler)
+        scaler = 1.2
+        # cropLength = int(np.average(hullLens)*averageScaler)
+        cropLength = int(np.percentile(hullLens, 95) * scaler)
         # Average should be trusted more because median can be skewed by poor ellipse fitting
-        plt.axhline(np.average(hullLens), label="Average Length", color="blue")
-        plt.axhline(cropLength, label="Crop Length", color="orange")
+        # plt.axhline(np.average(hullLens), label="Average Length", color="blue")
+        plt.axhline(cropLength, label="Percentile", color="blue")
+        plt.axhline(routine.crop_length, label="routine.crop_length", color="orange")
         # plt.axhline(np.median(hullLens), label="Med Length", color="purple")
 
     if stretchPositionMinima:
         # Get cutoff for where scaling below this point should occur
-        scalingCutoff = np.median(position)*0.8
+        scalingCutoff = np.median(position) * 0.8
         # Create line that returns scaling values from 1 to 0.75 from the cutoff to the global minimum
         coefficients = np.polyfit([scalingCutoff, position.min()], [1, 0.75], 1)
         scalingLine = np.poly1d(coefficients)  # create np polynomial object
@@ -162,17 +157,30 @@ def save_cropped_frames(db, routine, frames):
         # plt.axhline(position.min(), label="Position Scaling End", color="green")
 
     plt.plot(position, label="Position", color="green")
+
     # plt.axhline(np.average(position), label="Average Position", color="green")
     # plt.axhline(np.median(position), label="Med Position", color="red")
     plt.xlabel("Time (s)")
     plt.legend(loc="best")
-    plt.show()
+    plt.show(block=False)
+
+    trampolineTouches = np.array([frame.trampoline_touch for frame in routine.frames])
+    touchTransitions = np.diff(trampolineTouches)
+    for i in range(len(touchTransitions)):
+        thisTransition = touchTransitions[i]
+        if thisTransition > 0:  # spike up
+            trampolineTouches[i + 1] = 0
+            trampolineTouches[i + 2] = 0
+        elif thisTransition < 0:  # spike down
+            trampolineTouches[i] = 0
+            trampolineTouches[i - 1] = 0
 
     cap = helper_funcs.open_video(routine.path)
     for i, frame_data in enumerate(frames):
         # ignore frames where trampoline is touched
         # if frame_data.frame_num in blacklistedFrames:
-        #     continue
+        if trampolineTouches[i] == 1:
+            continue
         # ignore any frame that aren't tracked
         while frame_data.frame_num != cap.get(cv2.CAP_PROP_POS_FRAMES):
             _ret, frame = cap.read()
@@ -191,15 +199,12 @@ def save_cropped_frames(db, routine, frames):
         frameCropped = frame[y1:y2, x1:x2]
         cropScaled = cv2.resize(frameCropped, (256, 256))
 
-        cv2.imshow('track scaled', cropScaled)
+        cv2.imshow('Track ', cropScaled)
         k = cv2.waitKey(50) & 0xff
 
-        # imgName = routine.getAsDirPath() + "frame_{0:04}.png".format(frame_data.frame_num)
-        # # print("Writing frame to {}".format(imgName))
-        # ret = cv2.imwrite(imgName, cropScaled)
-        # if not ret:
-        #     print("Couldn't write image {}\nAbort!".format(imgName))
-        #     exit()
+        imgName = routineDirPath + "frame_{0:04}.png".format(frame_data.frame_num)
+        # print("Writing frame to {}".format(imgName))
+        # cv2.imwrite(imgName, cropScaled)
 
     # Done
     cap.release()
