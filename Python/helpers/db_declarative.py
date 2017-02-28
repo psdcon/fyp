@@ -96,7 +96,7 @@ class Routine(Base):
         #     )
         # count = db.execute(s).fetchone()[0]
         # return count > 0
-        return os.path.exists(self.getAsDirPath()+'preds_2d.mat')
+        return os.path.exists(self.getAsDirPath(create=False)+'preds_2d.mat')
 
 
     def isLabelled(self):
@@ -120,23 +120,26 @@ class Routine(Base):
                 return True
             return False
 
-    def getAsDirPath(self, suffix=None):
+    def getAsDirPath(self, suffix=None, create=True):
         if suffix:
-            path = consts.videosRootPath + self.path.replace('.mp4', os.sep+suffix)
+            path = consts.videosRootPath + self.path.replace('.mp4', suffix+os.sep)
         else:
             path = consts.videosRootPath + self.path.replace('.mp4', os.sep)
-        if not os.path.exists(path):
+        if create and not os.path.exists(path):
             print("Creating " + path)
             os.makedirs(path)
         return path
 
     def hasFramesSaved(self, suffix=None):
         import glob
-        nFiles = len(glob.glob(self.getAsDirPath(suffix) + 'frame_*'))
+        nFiles = len(glob.glob(self.getAsDirPath(suffix, create=False) + 'frame_*'))
         return nFiles > 0
 
     def prettyName(self):
         return os.path.basename(self.path[:-4])
+
+    def personMasksPath(self):
+        return os.path.join(os.path.normpath(self.getAsDirPath(create=False) + '..'), self.prettyName() + '_person_masks.gzip')
 
 
 class Frame(Base):

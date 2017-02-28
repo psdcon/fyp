@@ -27,8 +27,7 @@ def track_and_save(db, routine):
 
     print("Saving points...")
 
-    fname = os.path.join(routine.getAsDirPath(), 'person_masks.gzip')
-    helper_funcs.save_zipped_pickle(personMasks, fname)
+    helper_funcs.save_zipped_pickle(personMasks, routine.personMasksPath())
 
     # Add data for routine to db frame-by-frame
     frames = []

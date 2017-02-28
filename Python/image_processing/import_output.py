@@ -139,8 +139,7 @@ def save_cropped_frames(db, routine, frames, suffix=None):
     trampolineTouches = np.array([frame.trampoline_touch for frame in routine.frames])
     trampolineTouches = trimTouches(trampolineTouches)
 
-    fname = os.path.join(routine.getAsDirPath(), 'person_masks.gzip')
-    personMasks = helper_funcs.load_zipped_pickle(fname)
+    personMasks = helper_funcs.load_zipped_pickle(routine.personMasksPath())
 
     cap = helper_funcs.open_video(routine.path)
     frame = []
@@ -150,7 +149,10 @@ def save_cropped_frames(db, routine, frames, suffix=None):
             continue
         # ignore any frame that aren't tracked
         while frame_data.frame_num != cap.get(cv2.CAP_PROP_POS_FRAMES):
-            _ret, frame = cap.read()
+            ret, frame = cap.read()
+            if not ret:
+                print('Something went wrong')
+                return
 
         cx = frame_data.center_pt_x
         cy = frame_data.center_pt_y

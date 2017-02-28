@@ -81,6 +81,7 @@ def main():
         if not routine.hasFramesSaved('_blur_dark_0.6'):
             import_output.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
         else:
+            continue
             judge.compare_pose_tracking(routine)
 
         if False:
