@@ -126,7 +126,39 @@ var Judge = {
     bindUIActions: function () {
         that = this;
 
+        $('.js-after_opening').on('change', function () {
+            $deductionRadios = $(this).parent()
+                .parent()
+                .find(':input') // Get all inputs in this row
+                .not('.js-after_opening'); // Which aren't the Tuck/Pike selection buttons
+
+            var isTuck = $(this).val() == "tuck";
+            var offset = isTuck ? 1 : 0;
+            var find = isTuck ? 'pike' : 'tuck';
+            var replace = isTuck ? 'tuck' : 'pike';
+
+            $deductionRadios.each(function (i) {
+                var val = '0.0';
+                var $thisDedLabel = $(this).parent();
+                // For the 2nd and 3rd radios, change their label text and val.
+                if (i > 0) {
+                    val = ((i + offset) / 10).toFixed(1);
+                    $thisDedLabel.children('.js-val').text(val);
+                    $(this).attr('value', val);
+                    $(this).val(val);
+                }
+                // Change the tooltip image
+                tooltipHTML = $thisDedLabel.attr('data-original-title')
+                    .replace(find, replace) // replace tuck with pike
+                    .replace(/0\.\d/g, val);// replace deduction appropriately
+                $thisDedLabel.attr('data-original-title', tooltipHTML);
+            })
+
+        });
+
         $('.js-deduction_category :input').on('change', function () {
+            window.onbeforeunload = that.confirmOnPageExit;
+
             var row_i = $(this).data('row-index');
             var score = that.tallySkillDeductions(that.skillRowsDeductionCategories[row_i]);
             $(that.deductionScoreOutputs[row_i]).text(score.toFixed(1));
@@ -139,7 +171,8 @@ var Judge = {
     tallySkillDeductions: function ($thatSkillDeductionCat) {
         var deductionTally = 0;
         $thatSkillDeductionCat.each(function () {
-            var $incurredDeductions = $(this).find(':checked');
+            // Find the checked input elements which haven't
+            var $incurredDeductions = $(this).find(':checked').not('.js-after_opening');
             $incurredDeductions.each(function () {
                 deductionTally += parseFloat($(this).val());
             });
@@ -156,7 +189,7 @@ var Judge = {
     },
     save: function () {
         var that = Judge;
-        $js_username = $('.js-username')
+        $js_username = $('.js-username');
         if ($js_username.val().trim() === "") {
             alert('Please enter your name before saving.');
             $js_username.focus();
@@ -172,7 +205,7 @@ var Judge = {
             $thatSkillDeductionCat.each(function () {
 
                 var skill_deductions = {};
-                skill_deductions['id'] = that.skillIds[i]
+                skill_deductions['id'] = that.skillIds[i];
 
                 var $incurredDeductions = $(this).find(':checked');
                 $incurredDeductions.each(function () {
@@ -187,15 +220,16 @@ var Judge = {
 
         // Send to server
         $.post({
-            url: "includes/ajax.db.php",
-            data: "action=judge" +
-            "&id=" + that.routineId +
-            "&userName=" + $js_username.val().trim() +
+            url: "/judge",
+            data: "routine_id=" + that.routineId +
+            "&user_name=" + $js_username.val().trim() +
             "&deductions=" + JSON.stringify(routine_deductions),
             dataType: "text",
             success: function (data) {
                 if (data.length === 0) {
                     that.$js_save.text('Saved!');
+                    // Allow naviagation away without warning
+                    window.onbeforeunload = null;
                 }
                 else {
                     that.$js_save.text('Not Saved');
@@ -204,6 +238,21 @@ var Judge = {
                 }
             }
         });
+    },
+    // Navigate away with unsaved warning
+    confirmOnPageExit: function(e) {
+        // If we haven't been passed the event get the window.event
+        e = e || window.event;
+
+        var message = 'Any text will block the navigation and display a prompt';
+
+        // For IE6-8 and Firefox prior to version 4
+        if (e) {
+            e.returnValue = message;
+        }
+
+        // For Chrome, Safari, IE8+ and Opera 12+
+        return message;
     }
 };
 

@@ -1,17 +1,24 @@
 import os
 
-from sqlalchemy import *
+from sqlalchemy import Column, ForeignKey, INTEGER, REAL, TEXT
+from sqlalchemy import create_engine, select, func
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, scoped_session, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker
 
 from helpers import consts
 
 Base = declarative_base()
 
-engine = create_engine('sqlite:////Users/psdco/Documents/ProjectCode/Python/db.sqlite3')
-Base.metadata.bind = engine
-DBSession = scoped_session(sessionmaker(bind=engine))
-db = DBSession()
+
+def getDb():
+    if os.path.abspath('.') == 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python\\web_gui':
+        engine = create_engine('sqlite:////Users/psdco/Documents/ProjectCode/Python/db.sqlite3')
+    else:
+        engine = create_engine('sqlite:////var/www/html/fyp/db.sqlite3')
+    Base.metadata.bind = engine
+    Session = sessionmaker(bind=engine)
+    return Session()
+
 
 class Routine(Base):
     __tablename__ = 'routines'
@@ -72,9 +79,11 @@ class Routine(Base):
     #     return
 
     def getScore(self, contributor):
+        if not contributor:
+            return 'N/A'
         for j in self.judgements:
             if j.contributor_id == contributor.id:
-                return j.getScore()
+                return '{0:.1f}'.format(j.getScore())
         return 'N/A'
 
     def getAvgScore(self):
@@ -82,7 +91,7 @@ class Routine(Base):
             return 'N/A'
         import numpy as np
         scores = [j.getScore() for j in self.judgements]
-        return float("{0:.1f}".format(np.average(scores)))
+        return '{0:.1f}'.format(np.average(scores))
 
     def isTracked(self, db):
         return self.framesCount(db) > 0
@@ -96,8 +105,7 @@ class Routine(Base):
         #     )
         # count = db.execute(s).fetchone()[0]
         # return count > 0
-        return os.path.exists(self.getAsDirPath(create=False)+'preds_2d.mat')
-
+        return os.path.exists(self.getAsDirPath(create=False) + 'preds_2d.mat')
 
     def isLabelled(self):
         if not self.bounces:
@@ -109,20 +117,22 @@ class Routine(Base):
                 labelledCount += 1
         return labelledCount == len(self.bounces)
 
-    def isJudged(self, contributor=None):
-        if contributor:
+    def isJudged(self, contributor=False):
+        if contributor is None:  # has a value of none (not existing)
+            return False
+        elif contributor:  # has a value, the database Contributor obj
             for j in self.judgements:
                 if j.contributor_id == contributor.id:
                     return True
             return False
-        else:
+        elif not contributor:  # contributor is false so tell me the general case
             if self.judgements:
                 return True
             return False
 
     def getAsDirPath(self, suffix=None, create=True):
         if suffix:
-            path = consts.videosRootPath + self.path.replace('.mp4', suffix+os.sep)
+            path = consts.videosRootPath + self.path.replace('.mp4', suffix + os.sep)
         else:
             path = consts.videosRootPath + self.path.replace('.mp4', os.sep)
         if create and not os.path.exists(path):
@@ -212,7 +222,7 @@ class Bounce(Base):
         # return "Bounce(name=%r, routine=%r)" % (self.name, self.routine)
 
     def isJudgeable(self):
-        return self.skill_name != "In/Out Bounce" #and self.skill_name != "Broken"
+        return self.skill_name != "In/Out Bounce"  # and self.skill_name != "Broken"
 
     def getFrames(self, db):
         return db.query(Frame).filter(Frame.routine_id == self.routine_id, Frame.frame_num >= self.start_frame, Frame.frame_num <= self.end_frame).all()

@@ -24,9 +24,26 @@
                 <video src="{{ url_for('static', filename=vidPath) }}" controls style="max-width:100%"></video>
 
                 <div style="text-align:right;">
-                    <div class="js-current-playback-speed">Playback Speed: 1</div>
-                    <div class="js-current-loop-index">No bounce looping</div>
+                    <span class="js-current-playback-speed">
+                        Playback Speed: 1
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="">
+                        <button type="button" class="btn btn-secondary js-btn-speed-down">-</button>
+                        <button type="button" class="btn btn-secondary js-btn-speed-up">+</button>
+                    </div>
                 </div>
+
+                <div style="text-align:right;">
+                    <span class="js-current-loop-index">
+                        No bounce looping
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="">
+                        <button type="button" class="btn btn-secondary js-btn-prev-skill">&laquo;</button>
+                        <button type="button" class="btn btn-secondary js-btn-loop-skill"><i class="fa fa-repeat" aria-hidden="true"></i></button>
+                        <button type="button" class="btn btn-secondary js-btn-next-skill">&raquo;</button>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -120,6 +137,10 @@
     <script>
 
         $('video').fixedsticky();
+
+        $(function () {
+            $('[data-toggle="tooltip"]').tooltip({'trigger': 'hover', 'html': true})
+        })
 
         VideoControls.init(
             $('video')[0],

@@ -3,6 +3,7 @@ import os
 from glob import glob
 import subprocess
 import threading
+from collections import OrderedDict
 
 class colors:
     BLUE = '\033[94m'
@@ -16,40 +17,55 @@ class colors:
 videoDir = '/home/titan/paul_connolly/videos/'
 
 # Check images, check hg,   check matlab, check hg imgs, check mat imgs
-labels =               ['HG',       'MATLAB',       'HGIMG',   'MATIMG']
-fs =    ['frame_*.png', 'preds.h5', 'preds_2d.mat', 'posed_*', 'smoothed_*']
+mdict = OrderedDict([
+    ('f', 'frame_*.png'),
+    ('HG', 'hg_heatmaps.h5'),
+    ('MATLAB', 'monocap_preds_2d.h5'),
+    ('HGIMG', 'posed_*'),
+    ('MATIMG', 'smoothed_*'),
+])
 paths = glob(videoDir+'*')
 paths = sorted(paths)
 
 def getTODOArrays(shouldPrint=True):
-    todoHGPaths = []
-    todoMatPaths = []
+    hgPathsQueue = []
+    mlPathsQueue = []
     for p in paths:
         # Get the number of frames
-        nFrames = len(glob(p + os.sep + fs[0]))
+        nFrames = len(glob(p + os.sep + mdict['f']))
         # If there's no frames, it's not of interest
-        if nFrames > 0:
-            if shouldPrint:
-                print('{:4} '.format(nFrames), end='')
+        if nFrames == 0:
+            continue
 
-            for l,f in zip(labels, fs[1:]):
-                # Didnt find file
-                nFiles = len(glob(p+os.sep+f))
+        # build the queues
+        hgFile = os.path.exists(p + os.sep + mdict['HG'])
+        if not hgFile:
+            hgPathsQueue.append(p)
+
+        # Check if matlabs monocap_preds_2d.mat exists
+        matFile = os.path.exists(p + os.sep + mdict['MATLAB'])
+        # only add to matlab queue if not in lua queue, i.e., it's already been posed.
+        if not matFile and p not in hgPathsQueue:
+            mlPathsQueue.append(p)
+
+        # Print the number of savedFrame files found
+        if shouldPrint:
+            for key in mdict:
+                nFiles = len(glob(p+os.sep+mdict[key]))
                 if nFiles == 0:
-                    if l == 'HGIMG':
-                        todoHGPaths.append(p)
-                    # only add to matlab queue if not in lua queue, i.e., it's already been posed.
-                    elif l == "MATIMG" and p not in todoHGPaths:
-                        todoMatPaths.append(p)
-                    if shouldPrint:
-                        print(colors.str(l, colors.RED), '{:4}'.format(nFiles), end='\t')
+                    print(colors.str(key, colors.RED), end=' ')
                 else:
-                    if shouldPrint:
-                        print(colors.str(l, colors.GREEN), '{:4}'.format(nFiles), end='\t')
-    
-            if shouldPrint:
-                print(p.replace(videoDir,''))
-    return todoHGPaths, todoMatPaths
+                    print(colors.str(key, colors.GREEN), end=' ')
+
+                if nFiles>1:
+                    print('{:3}'.format(nFiles), end='   ')
+                else:
+                    print('{}'.format(nFiles), end='   ')
+
+            # Print the dir/routine name at the end
+            print(p.replace(videoDir,''))
+
+    return hgPathsQueue, mlPathsQueue
 
 
 def prettyPrintList(l):
@@ -61,19 +77,19 @@ def prettyPrintList(l):
 def hgWorker():
     while True:
         # Get routines to be torched
-        todoHGPaths, _todoMatPaths = getTODOArrays(False)    
-        if not todoHGPaths:
+        hgPathsQueue, _mlPathsQueue = getTODOArrays(False)    
+        if not hgPathsQueue:
             break
 
         print("TODO HG")
-        prettyPrintList(todoHGPaths)
-        for i, p in enumerate(todoHGPaths):
+        prettyPrintList(hgPathsQueue)
+        for i, p in enumerate(hgPathsQueue):
             # If we're starting the 2nd loop itteration and todoMatPaths 
             # list was empty, start the matlab processing now
-            if i==1 and not _todoMatPaths:
+            if i==1 and not args.luaonly and not _mlPathsQueue:
                 matThread.start()
 
-            hgCmd = ["qlua", '/home/titan/paul_connolly/pose-hourglass/run-hg-framewise.lua', p, 'png']
+            hgCmd = ["qlua", '/home/titan/paul_connolly/pose-hourglass/run-hg-framewise.lua', p]
             print("Running", hgCmd)
             subprocess.call(hgCmd)
         
@@ -82,14 +98,17 @@ def hgWorker():
 
 def matWorker():
     while True:
-        _todoHGPaths, todoMatPaths = getTODOArrays(False)
-        if not todoMatPaths:
+        _hgPathsQueue, mlPathsQueue = getTODOArrays(False)
+        if not mlPathsQueue:
             break
         
         print("TODO MAT")
-        prettyPrintList(todoMatPaths)
-        for p in todoMatPaths:
-            matCmd = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', '-r "datapath=\''+p+'\', run(\'/home/titan/paul_connolly/monocap/demoHG.m\'), exit"']
+        prettyPrintList(mlPathsQueue)
+        for p in mlPathsQueue:
+            # http://stackoverflow.com/questions/6657005/matlab-running-an-m-file-from-command-line
+            matCmd = ['matlab', '-nodisplay', '-nosplash', '-nodesktop', 
+                      # '-r "datapath=\''+p+'\', run(\'/home/titan/paul_connolly/monocap/demoHG.m\'), exit"']
+                      '-r "datapath=\''+p+'\', try, run(\'/home/titan/paul_connolly/monocap/demoHG.m\'), catch, exit, end, exit"']
             print("Running", matCmd)
             subprocess.call(matCmd)
 
@@ -101,15 +120,18 @@ def main():
 
     parser = argparse.ArgumentParser(description='Batch process hourglass pose and smooth it with matlab')
     parser.add_argument('-p', '--print', action="store_true", help='print the current status of the video folders')
+    parser.add_argument('-l', '--luaonly', action="store_true", help='pose only, dont run matlab')
 
+    global args
     args = parser.parse_args()
+    print(args)
     if args.print:
         getTODOArrays()
 
     else:
         print("Starting batch run")
         # Get MatPaths list
-        _todoHGPaths, todoMatPaths = getTODOArrays()        
+        mlsQueueQueue, mlPathsQueue = getTODOArrays()        
 
         # Create threds
         hgThread = threading.Thread(target=hgWorker)
@@ -121,7 +143,7 @@ def main():
 
         # If matlab has things to do, run it. 
         # Otherwise it will be started by the hgThread after the first routine has been posed
-        if todoMatPaths:
+        if not args.luaonly and mlPathsQueue:
             matThread.start()
 
 

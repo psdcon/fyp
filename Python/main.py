@@ -4,11 +4,10 @@ from __future__ import print_function
 from collections import OrderedDict
 
 import cv2
-from sqlalchemy import or_
 
 import judge
 from helpers import helper_funcs
-from helpers.db_declarative import db, Routine
+from helpers.db_declarative import Routine, getDb
 from image_processing import trampoline
 from image_processing import visualise, track, segment_bounces, import_output
 from pyqt_gui.showRoutineSelectDialog import show_selection_menu
@@ -18,13 +17,14 @@ cv2.ocl.setUseOpenCL(False)
 
 
 def main():
+    db = getDb()
     # judge.judge(db)
     # exit()
 
     ask = False
     # Ask the user to select routine from database
     # routines = db.query(Routine).filter(Routine.use == 1).all()
-    routines = db.query(Routine).filter(Routine.use == 1).all()
+    routines = db.query(Routine).filter(Routine.id == 4).all()
     if ask:
         routinesAsDict = []
         for routine in routines:
@@ -39,7 +39,7 @@ def main():
 
         selectedRoutineIndices = show_selection_menu(routinesAsDict)
     else:
-        selectedRoutineIndices = [1]  # select by id
+        selectedRoutineIndices = [4]  # select by id
     # selectedRoutines = [routines[i - 1] for i in selectedRoutineIndices]
     selectedRoutines = routines
 
@@ -58,6 +58,8 @@ def main():
         print("Posed:", routine.isPosed(db))
         print("Use:", routine.use)
         print()
+
+        import_output.import_monocap_preds_2d(db, routine, routine.frames)
 
         # if framesCount > 0:
         #     print("Has {} frames. Continuing to next..".format(framesCount))

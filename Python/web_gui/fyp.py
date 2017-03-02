@@ -7,8 +7,10 @@ import uuid
 
 from flask import Flask, request, g, render_template
 from flask import after_this_request
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 
-from helpers.db_declarative import db, Routine, text, Contributor
+from helpers.db_declarative import Routine, Contributor, Judgement
 from judging_rows_html import *
 
 # create our little application :)
@@ -22,8 +24,13 @@ app.config.update(dict(
     PASSWORD='defaultpassword'
 ))
 
-
-# app.config.from_envvar('FLASKR_SETTINGS', silent=True)
+# Open db in a way that takes care of threding issue on the server
+if os.path.abspath('.') == 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python\\web_gui':
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////Users/psdco/Documents/ProjectCode/Python/db.sqlite3'
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////var/www/html/fyp/db.sqlite3'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app).session
 
 
 # Set a cookie # http://flask.pocoo.org/docs/0.12/patterns/deferredcallbacks/#deferred-callbacks
@@ -46,24 +53,24 @@ def create_user_id_cookie():
 
 @app.route('/')
 def index():
-    routines = db.query(Routine).all()
-    # print routines
+    routines = []  # db.query(Routine).all()
     return render_template('home.html', title='FYP', routines=routines)
 
 
 @app.route('/list')
 def list_routines():
-    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).one()
+    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
     routines = db.query(Routine).filter(Routine.use == 1).all()
     for i, routine in enumerate(routines):
-        routine.index = i+1
+        routine.index = i + 1
         routine.name = routine.prettyName()
         routine.tracked = routine.isTracked(db)
         routine.framesSaved = routine.hasFramesSaved()
         routine.posed = routine.isPosed(db)
         routine.labelled = routine.isLabelled()
         routine.judged = routine.isJudged(contrib)
-        routine.score = '{}'.format(routine.getAvgScore()) if routine.judged else 'N/A'
+        routine.your_score = routine.getScore(contrib)
+        routine.avg_score = routine.getAvgScore()
         routine.thumbPath = 'images/thumbs/' + os.path.basename(routine.path).replace('.mp4', '.jpg')
 
     return render_template('list_routines.html', title='List of Routines', routines=routines)
@@ -80,14 +87,15 @@ def getNextRoutine(routine_id, contributor_id):
     return nextRoutine
 
 
-@app.route('/judge/<int:routine_id>')
+@app.route('/judge/<int:routine_id>', methods=['GET'])
 def judge_routine(routine_id):
-    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).one()
+    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
     routine = db.query(Routine).filter(Routine.id == routine_id).one()
     routine.labelled = routine.isLabelled()
 
     vidPath = os.path.join('videos/', routine.path).replace('\\', '/')
-    nextRoutine = getNextRoutine(routine.id, contrib.id)
+    # contrib_id
+    nextRoutine = None  # getNextRoutine(routine.id, contrib.id)
     userName = contrib.name if contrib else ""
 
     skills = [sk for sk in routine.bounces if sk.isJudgeable()]
@@ -114,19 +122,35 @@ def get_judging_rows(rowi, rows):
     return row_html
 
 
-# http://flask.pocoo.org/docs/0.12/patterns/sqlalchemy/
-# @app.teardown_appcontext
-# def shutdown_session(exception=None):
-#     db.remove()
-"""
-judgements
-    id
-    routine_id
-    contributer_id
+@app.route('/judge', methods=['POST'])
+def judge_routine_db():
+    # http://stackoverflow.com/questions/10434599/how-to-get-data-recieved-in-flask-request
+    print(request.values)
+    return ''
+    # # Create contributor if there's none in the db already
+    # contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
+    # if not contrib:
+    #     contrib = Contributor(request.args.get('user_name'), g.userId)
+    #     db.add(contrib)
+    #     db.flush()
+    #
+    # # Create a judgements obj
+    # judgement = Judgement(request.args.get('routine_id'), contrib.id)
+    # db.add(judgement)
+    # db.flush()  # interact with db without commiting the changes so if there's a crash nothing is updated
+    #
+    # # Create bounce deductions
+    # bounce_deductions = []
+    # # for deduction in request.args.get('deductions'):
+    # #     bounce_deductions.append([
+    # #
+    # #     ])
+    #
+    # db.add_all(bounce_deductions)
+    # db.commit()
+    #
+    # return '', 201  # CREATED
 
-    bounce_deductions
-
-"""
 
 if __name__ == '__main__':
     app.run(debug=True)

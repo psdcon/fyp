@@ -55,6 +55,42 @@ def import_pose_hg_smooth(db, routine, frames):
     print("Imported smooth hourglass pose")
 
 
+def import_monocap_preds_2d(db, routine, frames):
+    preds_file = h5py.File(routine.getAsDirPath('_blur_dark_0.6') + 'monocap_preds_2d.h5', 'r')
+    preds = preds_file.get('monocap_preds_2d')
+
+    trampolineTouches = np.array([frame.trampoline_touch for frame in frames])
+    trampolineTouches = trimTouches(trampolineTouches)
+
+    cap = helper_funcs.open_video(routine.path)
+    frame = []
+    for i, frame_data in enumerate(frames):
+        # ignore frames where trampoline is touched
+        if trampolineTouches[i] == 1:
+            continue
+        # ignore any frame that aren't tracked
+        while frame_data.frame_num != cap.get(cv2.CAP_PROP_POS_FRAMES):
+            ret, frame = cap.read()
+            if not ret:
+                print('Something went wrong')
+                return
+
+        cx = frame_data.center_pt_x
+        cy = frame_data.center_pt_y
+        # Use original background or darken
+        x1, x2, y1, y2 = helper_funcs.crop_points_constrained(frame.shape[0], frame.shape[1], cx, cy, routine.crop_length)
+        frameCropped = frame[y1:y2, x1:x2]
+        frameCropped = cv2.resize(frameCropped, (256, 256))
+
+        pose = np.array(preds['{0:04}'.format(frame_data.frame_num)].value).T
+        for p_idx in range(16):
+            color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
+            cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color, thickness=cv2.FILLED)
+
+        cv2.imshow('pose', frameCropped)
+        k = cv2.waitKey(50) & 0xff
+
+
 # Outputs
 # Not used because it didn't work with hg
 def save_cropped_video(cap, routine, db):
@@ -127,6 +163,9 @@ def save_cropped_frames(db, routine, frames, suffix=None):
 
         scaler = 1.2
         cropLength = int(np.percentile(hullLens, 95) * scaler)
+        routine.crop_length = cropLength
+        db.commit()
+
         # # plt.axhline(np.average(hullLens), label="Average Length", color="blue")
         # plt.axhline(cropLength, label="Percentile", color="blue")
         # plt.axhline(routine.crop_length, label="routine.crop_length", color="orange")
