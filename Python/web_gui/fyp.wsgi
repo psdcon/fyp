@@ -1,6 +1,7 @@
 import sys
 sys.path.insert(0, '/var/www/html/fyp')
 
-from fyp import app
 from werkzeug.debug import DebuggedApplication
+from fyp import app
+
 application = DebuggedApplication(app, True)

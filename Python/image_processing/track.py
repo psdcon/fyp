@@ -13,19 +13,18 @@ from image_processing import trampoline
 
 # Global Vars that get updated in the track loop with frame numbers
 # Used when saving data back to db
-centerPoints = {}
-hullLengths = {}
-trampolineTouches = {}
-personMasks = {}
 
 def track_and_save(db, routine):
-    track_gymnast(db, routine)
+    centerPoints, hullLengths, trampolineTouches, personMasks = track_gymnast(db, routine)
 
     if routine.use == 0:
         print("use is", routine.use, ". Frame data is not being saved.")
         return
 
     print("Saving points...")
+
+    if routine.frames:
+        print("Existing frames. What do?")
 
     helper_funcs.save_zipped_pickle(personMasks, routine.personMasksPath())
 
@@ -192,6 +191,11 @@ def isTouchingTrmpl(trmpl_top, hull):
 
 
 def track_gymnast(db, routine):
+    centerPoints = {}
+    hullLengths = {}
+    trampolineTouches = {}
+    personMasks = {}
+
     print("Starting to track gymnast")
     cap = helper_funcs.open_video(routine.path)
 
@@ -385,4 +389,4 @@ def track_gymnast(db, routine):
     cap.release()
     cv2.destroyAllWindows()
 
-    return
+    return centerPoints, hullLengths, trampolineTouches, personMasks

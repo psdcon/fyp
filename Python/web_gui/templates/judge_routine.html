@@ -1,27 +1,39 @@
 {% extends "layout.html" %}
 {% block body %}
 
-    <!--
-    <h4>
-      <?=$routine['name']?>
-      <small><?=$routine['level']?></small>
+    <h4 class="clearfix">
+        {{ routine.name }}
+        <small>
+            {{ routine.level }}
+            <button class="btn btn-secondary btn-sm pull-right" data-toggle="collapse" data-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
+                <i class="fa fa-keyboard-o" aria-hidden="true"></i>
+            </button>
+        </small>
     </h4>
-    <p>
-      Tab will move along skills. Use Up and Down arrow keys to change the deduction. If you're a bit rusty on the judging, check out the <a href="http://www.fig-gymnastics.com/publicdir/rules/files/tra/TRA-CoP_2017-2020-e.pdf">2017 - 2020 Code Of Points</a>, page 36 and on. Keyboard shortcuts include:
-      <strong>Ctrl+Enter</strong> Save.
-      <strong>n</strong> Label Next.
-      <strong>k</strong> Play/pause the video.
-      <strong>l</strong> Play next bounce.
-      <strong>j</strong> Play previous bounce.
-      <strong>i</strong> Toggle looping.
-      <strong>.</strong> Speed up video.
-      <strong>,</strong> Slow down video.
-    </p> -->
+    <div class="collapse mb-3" id="collapseExample">
+        <div class="card card-block">
+            <div class="card-text">
+                Keyboard shortcuts
+                <div class="row">
+                    <div class="col"><kbd>k</kbd> Play/pause the video.</div>
+                    <div class="col"><kbd>l</kbd> Play next bounce.</div>
+                    <div class="col"><kbd>j</kbd> Play previous bounce.</div>
+                    <div class="col"><kbd>i</kbd> Toggle looping.</div>
+                </div>
+                <div class="row">
+                    <div class="col"><kbd>.</kbd> Speed up video.</div>
+                    <div class="col"><kbd>,</kbd> Slow down video.</div>
+                    <div class="col"><kbd>n</kbd> Go to Next.</div>
+                    <div class="col"><kbd>Ctrl+Enter</kbd> Save.</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="row">
         <div class="col-md-6">
             <div class="fixedsticky">
-                <video src="{{ url_for('static', filename=vidPath) }}" controls style="max-width:100%"></video>
+                <video preload="auto" src="{{ url_for('static', filename=vidPath) }}" controls style="max-width:100%"></video>
 
                 <div style="text-align:right;">
                     <span class="js-current-playback-speed">
@@ -52,21 +64,19 @@
             {% if not routine.labelled %}
                 <p>The bounces in this routine have not been labelled yet. Please click the button, and then come back.</p>
                 <div style="text-align:center;">
-                    <a href="label/{{ routine.id }}" class="btn btn-primary">Label This Routine</a>
+                    <a href="{{ url_for('label_routine',routine_id=routine.id) }}" class="btn btn-primary">Label This Routine</a>
                 </div>
             {% else %}
 
                 <!-- Input for Contributors name -->
-                <form class="form-inline"> <!-- form is here for autocomplete to work -->
+                <form class="form-inline mb-3"> <!-- form is here for autocomplete to work -->
                     <label for="name" class="mr-2">Your Name:</label>
                     <input type="text" id="name" autocomplete="given-name" required class="form-control js-username" style="flex-grow:1" value="{{ userName }}" placeholder="Name">
                 </form>
 
-                <br>
-
                 <div class="list-group">
                     <!-- "Table" Heading -->
-                    <div class="row list-group-item">
+                    <div class="list-group-item">
                         <div class="d-flex w-100 justify-content-between">
                             <h6>Skill Name</h6>
                             <h6>Deduction</h6>
@@ -75,10 +85,10 @@
 
                     <!-- All the skils -->
                     {% for sk in skills %}
-                        <div class="row js-bounce list-group-item">
+                        <div class="js-bounce list-group-item">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6>
-                                    {{ sk.idx }}
+                                    {{ sk.idx|safe }}
 
                                     <!-- Loop button -->
                                     <button class="btn-link btn-sm js-loop-btn" title="Click to loop the video on one skill. Press i to stop looping.">
@@ -93,25 +103,27 @@
                                     {% if sk.skill_name == 'Broken' %}
                                         N/A
                                     {% else %}
-                                        <span class="js-deduction_score">0.0</span>
+                                        <span class="js-deduction_value">0.0</span>
                                     {% endif %}
                                 </h6>
                             </div>
 
                             <div class="col-12 js-deduction_categories">
-                                {{ sk.judging_rows|safe }}
+                                {{ sk.deduction_cats_html|safe }}
                             </div>
 
                         </div>
                     {% endfor %}
-                </div>
 
-                <div class="row">
-                    <div class="col" style="text-align:center">
-                        <strong>Score:</strong>
-                        <span class="js-score">0.0</span>
+                    <div class="list-group-item">
+                        <div class="col" style="text-align:center">
+                            <strong>Score:</strong>
+                            <span class="js-score">10.0</span>
+                        </div>
                     </div>
                 </div>
+
+                <br>
 
                 <div class="row">
                     <div class="col">
@@ -122,7 +134,6 @@
                         {% else %}
                             <a href="{{ url_for('list_routines') }}" class="float-right btn btn-secondary js-do-next" title="None left to judge">Back to Routines</a>
                         {% endif %}
-                        {{ nextBtn|safe }}
                     </div>
                 </div>
 

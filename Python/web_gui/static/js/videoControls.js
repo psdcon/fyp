@@ -86,20 +86,24 @@ var VideoControls = {
     loopBounce: function (index) {
         this.isLooping = true;
         this.bounceLoopedIdx = index;
-        this.updateLoopingMsg();
+        this.updateLoopingUI();
 
         this.loopStartTime = this.startEndTimes[index].start;
         this.loopEndTime = this.startEndTimes[index].end;
     },
     stopLooping: function () {
         this.isLooping = false;
-        this.updateLoopingMsg();
+        this.updateLoopingUI();
     },
-    updateLoopingMsg: function () {
-        if (this.isLooping)
+    updateLoopingUI: function () {
+        if (this.isLooping){
+            $('.js-btn-loop-skill').html('<i class="fa fa-stop" aria-hidden="true"></i>');
             this.$loopBtnIndex.text(this.loopingTrueStr + (this.bounceLoopedIdx + 1));
-        else
+        }
+        else{
+            $('.js-btn-loop-skill').html('<i class="fa fa-repeat" aria-hidden="true"></i>');
             this.$loopBtnIndex.text(this.loopingFalseStr);
+        }
     },
     startStopLoop: function () {
         if (this.isLooping)
@@ -138,8 +142,8 @@ var VideoControls = {
             return;
         }
 
-        // Ignore keypress if inside select2 input
-        if ($(":focus").is($(".select2-search__field")))
+        // Ignore keypress if inside select2 input on /label and username input on /judge
+        if ($(":focus").is($(".select2-search__field")) || $(":focus").is($(".js-username")))
             return;
 
         // console.log(e.keyCode);

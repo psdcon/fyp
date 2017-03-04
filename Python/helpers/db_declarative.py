@@ -11,7 +11,7 @@ Base = declarative_base()
 
 
 def getDb():
-    if os.path.abspath('.') == 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python\\web_gui':
+    if 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python' in os.path.abspath('.'):
         engine = create_engine('sqlite:////Users/psdco/Documents/ProjectCode/Python/db.sqlite3')
     else:
         engine = create_engine('sqlite:////var/www/html/fyp/db.sqlite3')
@@ -37,6 +37,8 @@ class Routine(Base):
     trampoline_top = Column(INTEGER)
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
+    # Temp
+    dirtyBounces = Column(INTEGER)
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
@@ -111,11 +113,19 @@ class Routine(Base):
         if not self.bounces:
             return False
         # Otherwise, check that they're all labelled
-        labelledCount = 0
         for b in self.bounces:
-            if b.skill_name:
-                labelledCount += 1
-        return labelledCount == len(self.bounces)
+            if b.skill_name == '':
+                return False
+        return True
+
+    def isBroken(self):
+        if not self.bounces:
+            return False
+        # Otherwise, check that they're all labelled
+        for b in self.bounces:
+            if b.skill_name == 'Broken':
+                return True
+        return False
 
     def isJudged(self, contributor=False):
         if contributor is None:  # has a value of none (not existing)
@@ -248,7 +258,7 @@ class Judgement(Base):
         return "Judgement(routine=%r, deductions=%r, who=%r)" % (self.routine, self.deductions, self.contributor)
 
     def getScore(self):
-        deductionValues = [d.deduction for d in self.deductions]
+        deductionValues = [d.deduction_value for d in self.deductions]
         # Only take the first 10
         score = 10 - sum(deductionValues[:10])
         return score
@@ -261,11 +271,19 @@ class Deduction(Base):
     judgement_id = Column(INTEGER, ForeignKey('judgements.id'))
     bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
     contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
-    deduction = Column(REAL)
+    deduction_value = Column(REAL)
+    deduction_json = Column(TEXT)
 
     bounce = relationship("Bounce", back_populates='deductions')
     judgement = relationship("Judgement", back_populates='deductions')
     contributor = relationship("Contributor", back_populates='deductions')
+
+    def __init__(self, judgement_id, contributor_id, bounce_id, deduction_value, deduction_json):
+        self.judgement_id = judgement_id
+        self.contributor_id = contributor_id
+        self.bounce_id = bounce_id
+        self.deduction_value = deduction_value
+        self.deduction_json = deduction_json
 
     def __repr__(self):
         return "Deduction(deduction=%r, who=%r)" % (self.deduction, self.contributor)
@@ -280,6 +298,10 @@ class Contributor(Base):
 
     deductions = relationship("Deduction", back_populates='contributor')
     judgements = relationship("Judgement", back_populates='contributor')
+
+    def __init__(self, uid, name):
+        self.uid = uid
+        self.name = name
 
     def __repr__(self):
         return "Contributor(id=%r, name=%s)" % (self.id, self.name)

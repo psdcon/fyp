@@ -10,7 +10,7 @@
     <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
     <meta name="description" content="">
     <meta name="author" content="">
-    <!-- <link rel="shortcut icon" href="images/main_icon.jpg"> -->
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/favicon.jpg') }}">
 
     <title>{{ title }}</title>
     <!-- <base href="/fyp/"> -->
@@ -19,9 +19,9 @@
     <link href="{{ url_for('static', filename='node_modules/bootstrap/dist/css/bootstrap.min.css') }}" rel="stylesheet">
 
     <!-- Styles -->
-    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='node_modules/select2/dist/css/select2.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='node_modules/fixed-sticky/fixedsticky.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
 
     <!-- Icons - For the return to top arrow -->
     <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/font-awesome/css/font-awesome.min.css') }}">
@@ -40,6 +40,11 @@
             <ul class="navbar-nav mr-auto">
                 {{ nav_link('index', 'Home') }}
                 {{ nav_link('list_routines', 'Routines') }}
+            </ul>
+            <ul class="navbar-nav pull-right">
+                <li class="nav-item ">
+                    <a class="nav-link" target="_blank" href="{{ url_for('static', filename='Guide_to_Judging.pdf') }}">Judging Guide</a>
+                </li>
             </ul>
         </div>
     </div>
@@ -68,7 +73,7 @@
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 <script src="{{ url_for('static', filename='js/videoControls.js') }}"></script>
 
-<script src="{{ url_for('static', filename='node_modules/select2/dist/js/select2.min.js') }}"></script>
+<script src="{{ url_for('static', filename='node_modules/select2/dist/js/select2.full.min.js') }}"></script>
 <script src="{{ url_for('static', filename='node_modules/chart.js/dist/Chart.js') }}"></script>
 <script src="{{ url_for('static', filename='node_modules/fixed-sticky/fixedsticky.js') }}"></script>
 

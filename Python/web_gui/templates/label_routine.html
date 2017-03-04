@@ -1,0 +1,101 @@
+{% extends "layout.html" %}
+{% block body %}
+
+    <!--
+    <h4>
+      <?=$routine['name']?>
+      <small><?=$routine['level']?></small>
+    </h4>
+    <p>
+      <strong>Ctrl+Enter</strong> Save.
+      <strong>n</strong> Label Next.
+      <strong>k</strong> Play/pause the video.
+      <strong>l</strong> Play next bounce.
+      <strong>j</strong> Play previous bounce.
+      <strong>i</strong> Toggle looping.
+      <strong>.</strong> Speed up video.
+      <strong>,</strong> Slow down video.
+    </p> -->
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="fixedsticky">
+                <video preload="auto" src="{{ url_for('static', filename=vidPath) }}" controls style="max-width:100%"></video>
+
+                <div style="text-align:right;">
+                    <span class="js-current-playback-speed">
+                        Playback Speed: 1
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="">
+                        <button type="button" class="btn btn-secondary js-btn-speed-down">-</button>
+                        <button type="button" class="btn btn-secondary js-btn-speed-up">+</button>
+                    </div>
+                </div>
+
+                <div style="text-align:right;">
+                    <span class="js-current-loop-index">
+                        No bounce looping
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="">
+                        <button type="button" class="btn btn-secondary js-btn-prev-skill">&laquo;</button>
+                        <button type="button" class="btn btn-secondary js-btn-loop-skill"><i class="fa fa-repeat" aria-hidden="true"></i></button>
+                        <button type="button" class="btn btn-secondary js-btn-next-skill">&raquo;</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="col-md-6">
+
+            {% for index in bounceIndexes %}
+
+                <div class="js-bounce" style="display:flex">
+                    <!-- Index -->
+                    <span class="index">{{ index }}.</span>
+                    <!-- Loop button -->
+                    <button class="btn-link btn-sm js-loop-btn">
+                        <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
+                    </button>
+                    <!-- Select skill -->
+                    <span style="flex-grow:1">
+                <select class="js-select2" data-bounce-id="{{ index }}" style="width:100%"></select>
+            </span>
+                </div>
+
+            {% endfor %}
+
+            <div style="padding-top: 0.5em;">
+                <button class="btn btn-primary js-save">Save</button>
+                {% if nextRoutine %}
+                    <a href="{{ url_for('label_routine',routine_id=nextRoutine.id) }}" class="float-right btn btn-secondary js-do-next"
+                       title="Label the next unlabelled routine: {{ nextRoutine.name }}">Label Next</a>
+                {% else %}
+                    <a href="{{ url_for('list_routines') }}" class="float-right btn btn-secondary js-do-next" title="None left to label">Back to Routines</a>
+                {% endif %}
+                <?=$nextBtn?>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block js %}
+
+    <script>
+
+        VideoControls.init(
+            $('video')[0],
+            {{ startEndTimes|safe }},
+            $('.js-bounce')
+        );
+
+        Label.init(
+            {{ routineId }},
+            {{ bounceIds }},
+            {{ bounceNames|safe }}
+        );
+
+    </script>
+
+{% endblock %}

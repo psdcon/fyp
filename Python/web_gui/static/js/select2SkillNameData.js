@@ -4,6 +4,10 @@ select2SkillNameData = [
       "text":"In/Out Bounce"
    },
    {
+      "id":"Landing",
+      "text":"Landing"
+   },
+   {
       "id":"Broken",
       "text":"Broken"
    },
@@ -55,16 +59,16 @@ select2SkillNameData = [
             "text":"Swivel Hips/Seat Half Twist to Seat Drop"
          },
          {
-            "id":"To Feet (from seat)",
-            "text":"To Feet (from seat)"
+            "id":"To Feet from Seat",
+            "text":"To Feet from Seat"
          },
          {
-            "id":"Half Twist to Feet (from seat)",
-            "text":"Half Twist to Feet (from seat)"
+            "id":"Half Twist to Feet from Seat",
+            "text":"Half Twist to Feet from Seat"
          },
          {
-            "id":"Full Twist to Feet (from seat)",
-            "text":"Full Twist to Feet (from seat)"
+            "id":"Full Twist to Feet from Seat",
+            "text":"Full Twist to Feet from Seat"
          },
          {
             "id":"Roller",
@@ -89,16 +93,16 @@ select2SkillNameData = [
             "text":"Full Twist to Front Drop"
          },
          {
-            "id":"To Feet (from front)",
-            "text":"To Feet (from front)"
+            "id":"To Feet from Front",
+            "text":"To Feet from Front"
          },
          {
-            "id":"Half Twist to Feet (from front)",
-            "text":"Half Twist to Feet (from front)"
+            "id":"Half Twist to Feet from Front",
+            "text":"Half Twist to Feet from Front"
          },
          {
-            "id":"Full Twist to Feet (from front)",
-            "text":"Full Twist to Feet (from front)"
+            "id":"Full Twist to Feet from Front",
+            "text":"Full Twist to Feet from Front"
          },
          {
             "id":"Log Roll",
@@ -131,16 +135,16 @@ select2SkillNameData = [
             "text":"Full Twist to Back Drop"
          },
          {
-            "id":"To Feet (from back)",
-            "text":"To Feet (from back)"
+            "id":"To Feet from Back",
+            "text":"To Feet from Back"
          },
          {
-            "id":"Half Twist to Feet (from back)",
-            "text":"Half Twist to Feet (from back)"
+            "id":"Half Twist to Feet from Back",
+            "text":"Half Twist to Feet from Back"
          },
          {
-            "id":"Full Twist to Feet (from back)",
-            "text":"Full Twist to Feet (from back)"
+            "id":"Full Twist to Feet from Back",
+            "text":"Full Twist to Feet from Back"
          },
          {
             "id":"Cat Twist",
@@ -189,8 +193,8 @@ select2SkillNameData = [
             "text":"1 and 3 Front S/S"
          },
          {
-            "id":"Porpoise/ Dolphin",
-            "text":"Porpoise/ Dolphin"
+            "id":"Porpoise/Dolphin",
+            "text":"Porpoise/Dolphin"
          },
 
       ]
@@ -279,8 +283,12 @@ select2SkillNameData = [
             "text":"Periwinkle"
          },
          {
-            "id":"Full",
-            "text":"Full"
+            "id":"Back Half",
+            "text":"Back Half"
+         },
+         {
+            "id":"Full Back",
+            "text":"Full Back"
          },
          {
             "id":"Double Full",

@@ -23,8 +23,8 @@ def main():
 
     ask = False
     # Ask the user to select routine from database
-    # routines = db.query(Routine).filter(Routine.use == 1).all()
-    routines = db.query(Routine).filter(Routine.id == 4).all()
+    routines = db.query(Routine).filter(Routine.use == 1).all()
+    # routines = db.query(Routine).filter(Routine.id == 35).all()
     if ask:
         routinesAsDict = []
         for routine in routines:
@@ -59,7 +59,10 @@ def main():
         print("Use:", routine.use)
         print()
 
-        import_output.import_monocap_preds_2d(db, routine, routine.frames)
+        # import_output.import_monocap_preds_2d(db, routine, routine.frames)
+
+        segment_bounces.segment_bounces_and_save(db, routine)
+        continue
 
         # if framesCount > 0:
         #     print("Has {} frames. Continuing to next..".format(framesCount))
@@ -83,7 +86,6 @@ def main():
         if not routine.hasFramesSaved('_blur_dark_0.6'):
             import_output.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
         else:
-            continue
             judge.compare_pose_tracking(routine)
 
         if False:

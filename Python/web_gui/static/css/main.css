@@ -125,7 +125,12 @@ a .fa, .btn-link .fa {
   /*color: #3c763d;*/
   /*background-color: #dff0d8;*/
   border-color: #5cb85c;
-    z-index: 2;
+  z-index: 2;
+}
+.highlightSkill .select2-container--default,
+.highlightSkill .select2-selection--single{
+  border-color: #5cb85c;
+  border-width: 2px;
 }
 .list-group-item{
     border-width: 2px;

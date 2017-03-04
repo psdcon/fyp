@@ -17,3 +17,222 @@
         <i class="bad fa fa-times" aria-hidden="true"></i>
     {% endif %}
 {% endmacro %}
+
+{% macro keyboard_shortcuts() %}
+    <div>shortcuts</div>
+{% endmacro %}
+
+{# Imported into fyp.py /judge/<> #}
+{% macro deduction_category_html(index, category, description=None) %}
+    <div class="js-deduction_category clearfix">
+
+        {% if 'arms' in category %}
+            Arms
+            <span class="pull-right" title="It doesn't matter which in competition but for my project, it's helpful">
+                <label>
+                    <input type="checkbox" name="arms-elbows" value="0.1"> 0.1 elbows
+                </label>
+                <label>
+                    <input type="checkbox" name="arms-windmill" value="0.1"> 0.1 windmilling
+                </label>
+
+                {% if category == 'arms_twist_half_full' %}
+                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_half_full_0.0.jpg'>">
+                        <input type="radio" name="arms_twist_half_full-{{ index }}" value="0.0"> 0.0
+                    </label>
+                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_half_full_0.1.jpg'>">
+                        <input type="radio" name="arms_twist_half_full-{{ index }}" value="0.1"> 0.1
+                    </label>
+
+                {% elif category == 'arms_twist_over_full' %}
+                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_rudi_plus_0.0.jpg'>">
+                        <input type="radio" name="arms_twist_over_full-{{ index }}" value="0.0"> 0.0
+                    </label>
+                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_rudi_plus_0.1.jpg'>" data-oldtitle="Arms >90&deg;">
+                        <input type="radio" name="arms_twist_over_full-{{ index }}" value="0.1"> 0.1
+                    </label>
+
+                {% endif %}
+            </span>
+
+        {% elif category == 'legs' %}
+            Legs
+            <span class="pull-right">
+                <label>
+                    <input type="checkbox" name="legs_knees" value="0.1"> 0.1 knees
+                </label>
+                <label>
+                    <input type="checkbox" name="legs_toes" value="0.1"> 0.1 toes
+                </label>
+                <label>
+                    <input type="checkbox" name="legs_apart" value="0.1"> 0.1 apart
+                </label>
+            </span>
+
+        {% elif category == 'body' %}
+            Body
+            <span class="pull-right" data-toggle="tooltip" title="<img src='/fyp/static/images/judging/position_of_body.jpg'>">
+                <label title="If you make a mistake">
+                    <input type="radio" name="body-{{ index }}" value="0.0"> 0.0
+                </label>
+                <label>
+                    <input type="radio" name="body-{{ index }}" value="0.1"> 0.1 loose
+                </label>
+                <label>
+                    <input type="radio" name="body-{{ index }}" value="0.2"> 0.2 very loose
+                </label>
+            </span>
+
+        {% elif category == 'angle_with_horizontal' %}
+            Legs with Horizontal
+            <span class="pull-right">
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/horz_0.0.jpg'>" data-oldtitle=">=90&deg;">
+                    <input type="radio" name="legs_horz-{{ index }}" value="0.0"> 0.0
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/horz_0.1.jpg'>" data-oldtitle=">65&deg; <90&deg;">
+                    <input type="radio" name="legs_horz-{{ index }}" value="0.1"> 0.1
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/horz_0.2.jpg'>" data-oldtitle=">45&deg; <65&deg;">
+                    <input type="radio" name="legs_horz-{{ index }}" value="0.2"> 0.2
+                </label>
+            </span>
+
+        {% elif category == 'opening_shape_jumps' %}
+            Opening
+            <span class="pull-right">
+                <label>
+                    <input type="radio" name="line_out-{{ index }}" value="0.0"> 0.0
+                </label>
+                <label>
+                    <input type="radio" name="line_out-{{ index }}" value="0.1"> 0.1 loose
+                </label>
+                <label>
+                    <input type="radio" name="line_out-{{ index }}" value="0.2"> 0.2 no line-out
+                </label>
+            </span>
+
+        {% elif 'opening_timing' in category %}
+            {% if category == 'opening_timing_back' %}
+                {% set landingPosition = 'back' %}
+            {% else %}
+                {% set landingPosition = 'feet_front' %}
+            {% endif %}
+
+            Opening in Somersault
+            <span class="pull-right">
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.0.jpg'>" data-oldtitle="Use if you made a mistake">
+                    <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.0"> 0.0
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.1.jpg'>" data-oldtitle="bet 1 &amp; 2 o'clock">
+                    <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.1"> 0.1
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.2.jpg'>" data-oldtitle="bet 2 &amp; 3 o'clock">
+                    <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.2"> 0.2
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.3.jpg'>" data-oldtitle="after 3/no opening">
+                    <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.3"> 0.3
+                </label>
+            </span>
+
+        {% elif 'after_opening' in category %}
+            {% if category == 'after_opening_back' %}
+                {% set landingPosition = 'back' %}
+            {% else %}
+                {% set landingPosition = 'feet_front' %}
+            {% endif %}
+
+            After Opening in Somersault<br>
+            <label>
+                <input class="js-after_opening" type="radio" name="after_opening_{{ landingPosition }}_shape-{{ index }}" value="pike" checked> Pike Down
+            </label>
+            <label>
+                <input class="js-after_opening" type="radio" name="after_opening_{{ landingPosition }}_shape-{{ index }}" value="tuck"> Tuck Down
+            </label>
+
+            {#Not disableded by default because straight s/s wont have kick out and it would be-a-pain/not-make-sense to have to click 0.0 to be able to deduct that.#}
+            <span class="pull-right">
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/after_opening_{{ landingPosition }}_pike_0.0.jpg'>" data-oldtitle-feet-front="bet 2 &amp; 3 o'clock" data-oldtitle-back="bet 3 &amp; 4:30 o'clock">
+                    <input type="radio" name="after_opening_{{ landingPosition }}_pike-{{ index }}" value="0.0"> <span class="js-val">0.0</span>
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/after_opening_{{ landingPosition }}_pike_0.1.jpg'>" data-oldtitle-feet-front="bet 2 &amp; 3 o'clock" data-oldtitle-back="bet 3 &amp; 4:30 o'clock">
+                    <input type="radio" name="after_opening_{{ landingPosition }}_pike-{{ index }}" value="0.1"> <span class="js-val">0.1</span>
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/after_opening_{{ landingPosition }}_pike_0.2.jpg'>" data-oldtitle-feet-front="bet 12 &amp; 2 o'clock" data-oldtitle-back="bet 12 &amp; 3 o'clock">
+                    <input type="radio" name="after_opening_{{ landingPosition }}_pike-{{ index }}" value="0.2"> <span class="js-val">0.2</span>
+                </label>
+            </span>
+
+        {% elif category == 'twist_timing' %}
+            End of Twist
+            <span class="pull-right">
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/twist_0.0.jpg'>">
+                    <input type="radio" name="twist_timing-{{ index }}" value="0.0"> 0.0
+                </label>
+                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/twist_0.1.jpg'>">
+                    <input type="radio" name="twist_timing-{{ index }}" value="0.1"> 0.1
+                </label>
+            </span>
+
+        {% elif category == 'out_bounce' %}
+            Uncontrolled movements
+            <span class="pull-right">
+                <label>
+                    <input type="checkbox" name="ob_uctrl_movements" value="0.1"> 0.1
+                </label>
+            </span>
+
+        {% elif category == 'landing' %}
+            <div class="js-deduction_category clearfix">
+                Movement of arms while standing
+                <span class="pull-right">
+                    <label>
+                        <input type="checkbox" name="ob_arm_movement" value="0.1"> 0.1
+                    </label>
+                </span>
+            </div>
+            <div class="js-deduction_category clearfix">
+                Step(s) or bounce(s)
+                <span class="pull-right">
+                    <label>
+                        <input type="radio" name="ob_steps" value="0.0"> 0.0
+                    </label>
+                    <label>
+                        <input type="radio" name="ob_steps" value="0.1"> 0.1
+                    </label>
+                    <label>
+                        <input type="radio" name="ob_steps" value="0.2"> 0.2
+                    </label>
+                </span>
+            </div>
+            <div class="js-deduction_category clearfix">
+                Not standing upright
+                <span class="pull-right">
+                    <label>
+                        <input type="checkbox" name="ob_upright" value="0.1"> 0.1
+                    </label>
+                </span>
+            </div>
+            <div class="js-deduction_category clearfix">
+                Feet > shoulder apart
+                <span class="pull-right">
+                    <label>
+                        <input type="checkbox" name="ob_feet" value="0.1"> 0.1
+                    </label>
+                </span>
+            </div>
+            <div class="js-deduction_category clearfix">
+                Turn to judges before stabilised
+                <span class="pull-right">
+                    <label>
+                        <input type="checkbox" name="ob_turn" value="0.1"> 0.1
+                    </label>
+                </span>
+            </div>
+
+        {% elif category == 'broken' %}
+            The tracking for this part of the video is broken.
+
+        {% endif %}
+
+    </div>
+{% endmacro %}
