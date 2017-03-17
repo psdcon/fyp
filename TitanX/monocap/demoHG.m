@@ -13,13 +13,13 @@
 % make sure Torch has been installed and run correctly
 tic;
 
-clear
+% clear  % dont clear when running via python. gets rid of datapath
 startup
 
 %%
 
 % datapath = C:\Users\psdco\Documents\ProjectCode\TitanX\monocap\VID_20161106_134612_blur_dark_0.6';
-datapath = '/home/titan/paul_connolly/videos/VID_20161106_115931_blur_dark_0.6';
+% datapath = '/home/titan/paul_connolly/videos/VID_20161106_115931_blur_dark_0.6';
 
 % read images
 filelist = dir([datapath '/frame*.png']);
