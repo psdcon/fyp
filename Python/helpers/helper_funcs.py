@@ -4,15 +4,15 @@ import cPickle
 import gzip
 import os
 import sys
+from math import acos, degrees
 
 import cv2
 import numpy as np
+from scipy.spatial import distance
 
-import consts
+from helpers import consts
 
 
-# Helper functions
-# Opens video with error handling
 def open_video(videoName):
     pathToVideo = os.path.join(consts.videosRootPath, videoName)
     print("Opening " + pathToVideo)
@@ -36,6 +36,7 @@ def input_was_yes():
 
 
 def read_num(limitMax, limitMin=0):
+    num = ''
     while (1):
         print('> ', end="")
         num = sys.stdin.readline()
@@ -144,3 +145,125 @@ def load_zipped_pickle(filename):
     with gzip.open(filename, 'rb') as f:
         loaded_object = cPickle.load(f)
         return loaded_object
+
+
+def trimTouches(trampolineTouches):
+    touchTransitions = np.diff(trampolineTouches)
+    for i in range(len(touchTransitions)):
+        thisTransition = touchTransitions[i]
+        if thisTransition > 0:  # spike up
+            trampolineTouches[i + 1] = 0
+            trampolineTouches[i + 2] = 0
+        elif thisTransition < 0:  # spike down
+            trampolineTouches[i] = 0
+            trampolineTouches[i - 1] = 0
+    return trampolineTouches
+
+
+def printPoseStatus(paths):
+    from collections import OrderedDict
+    import glob
+
+    class Colors:
+        BLUE = '\033[94m'
+        GREEN = '\033[92m'
+        YELLOW = '\033[93m'
+        RED = '\033[91m'
+        ENDC = '\033[0m'
+
+    def colour_str(s, color):
+        return color + s + Colors.ENDC
+
+    mdict = OrderedDict([
+        ('f', 'frame_*.png'),
+        ('HG', 'hg_heatmaps.h5'),
+        ('MATLAB', 'monocap_preds_2d.h5'),
+        ('HGIMG', 'posed_*'),
+        ('MATIMG', 'smoothed_*'),
+    ])
+
+    for path in paths:
+        # Print the number of savedFrame files found
+        for key in mdict:
+            nFiles = len(glob.glob(path + os.sep + mdict[key]))
+            if nFiles == 0:
+                print(colour_str(key, Colors.RED), end=' ')
+            else:
+                print(colour_str(key, Colors.GREEN), end=' ')
+
+            if nFiles > 1:
+                print('{:3}'.format(nFiles), end='   ')
+            else:
+                print('{:3}'.format(nFiles), end='   ')
+
+        # Print the dir/routine name at the end
+        print(os.path.basename(path))
+
+
+def selectListOption(lst):
+    for i, li in enumerate(lst):
+        print('{}) {}'.format(i + 1, li))
+    return read_num(len(lst)) - 1
+
+
+def gen_pose_angles(poses, average=False):
+    def rel_pose_to_abs_pose(pose, cx, cy, padding=100):
+        # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
+        # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
+        for p_idx in range(14):
+            pose[0, p_idx] = int((cx - padding) + pose[0, p_idx])
+            pose[1, p_idx] = int((cy - padding) + pose[1, p_idx])
+        return pose
+
+    def pose_as_point(pose, p_idx):
+        pt = np.array([pose[0, p_idx], pose[1, p_idx]])
+        return pt
+
+    def calc_angle(A, B, C):
+        a = distance.euclidean(C, B)
+        b = distance.euclidean(A, C)
+        c = distance.euclidean(A, B)
+        num = a ** 2 + b ** 2 - c ** 2
+        demon = (2.0 * a * b)
+        ang = acos(num / demon)
+        return degrees(ang)
+
+    # Make a list for each of the joints to be plotted
+    # jointNames = consts.getAngleIndices('deepcut')
+    jointNames = consts.getAngleIndices('hourglass')
+    jointAngles = {key: [] for key in jointNames.keys()}
+
+    for pose in poses:
+        # pose = rel_pose_to_abs_pose(np.array(json.loads(frame.pose)), frame.center_pt_x, routine.video_height - frame.center_pt_y)
+        # pose = np.array(json.loads(frame.pose))
+        # pose = np.array(json.loads(frame.pose_hg))
+
+        # Calculate an angle for each joint
+        # Add to the dict for that joint
+        for key in jointNames.keys():
+            # Get the 3 pose points that make up this joint
+            joint_pose_pts_idxs = jointNames[key]
+            # Calculate the angle between them
+            angle = calc_angle(pose_as_point(pose, joint_pose_pts_idxs[0]), pose_as_point(pose, joint_pose_pts_idxs[1]), pose_as_point(pose, joint_pose_pts_idxs[2]))
+            # Append it to the appropriate dict
+            jointAngles[key].append(angle)
+
+    if not average:
+        return jointAngles
+    else:
+        averagedJointAngles = {}
+        for i in range(0, len(consts.angleIndexKeys), 2):  # step from 0 to 8 in increments of 2
+            rightKey = consts.angleIndexKeys[i]
+            leftKey = consts.angleIndexKeys[i + 1]
+            jointName = rightKey.split(' ')[1].title()  # take the last word and set it to title case
+            averagedJointAngles[jointName] = np.average([jointAngles[rightKey], jointAngles[leftKey]], axis=0)
+        return averagedJointAngles
+
+
+def clip_wrap(num, lower, upper):
+    if num < lower:
+        return upper
+    elif num > upper:
+        return lower
+    else:
+        return num

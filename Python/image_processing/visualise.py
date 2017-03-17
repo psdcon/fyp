@@ -1,23 +1,20 @@
 from __future__ import print_function
-from __future__ import print_function
-from math import acos, degrees
-from scipy import interpolate
 
-from scipy.spatial import distance
 import json
+import re
 from itertools import chain
-from os import path
 
 import cv2
 import h5py
 import matplotlib.pyplot as plt
+import numpy as np
+import scipy
 import scipy.io
-from scipy import signal
+from scipy import interpolate
 from sqlalchemy.orm.exc import NoResultFound
 
-from helpers import consts
-from helpers import helper_funcs
 from helpers.db_declarative import *
+from helpers.helper_funcs import clip_wrap
 
 
 def play_skill(db, bounce_id, show_pose=None, show_full=False):
@@ -127,7 +124,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=None, show_f
             num = k - ord('0')
             frameToJumpTo = (cap.get(cv2.CAP_PROP_FRAME_COUNT) / 10) * num
             cap.set(cv2.CAP_PROP_POS_FRAMES, frameToJumpTo)
-            updateOne = True
+            playOneFrame = True
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
             break
         elif k == ord('q') or k == 27:  # q/ESC
@@ -140,6 +137,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=None, show_f
             # break
 
 
+# For comparing the track of two skills. Ideally this would be n rather than 2
 def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, start_frame2=1, end_frame2=-1, show_full=False):
     waitTime = 40
     playOneFrame = False
@@ -226,7 +224,7 @@ def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, star
                     frameCropped2 = cv2.resize(frameCropped2, (256, 256))
                     bothFrames[0:256, 256:512] = cv2.resize(frameCropped2, (256, 256))
 
-                    cv2.putText(bothFrames, '{}'.format(frame_data1.frame_num-start_frame1), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    cv2.putText(bothFrames, '{}'.format(frame_data1.frame_num - start_frame1), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     cv2.imshow('Pose', bothFrames)
 
             else:
@@ -331,127 +329,6 @@ def plot_data(routine):
     plt.show()
 
 
-def skill_into_filmstrip(cap, routine):
-    capWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    capHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    bounces = json.loads(routine['bounces'])
-    print('\nChoose a skill:')
-    for i, b in enumerate(bounces):
-        print('%d) %s' % (i + 1, b['name']))
-    choice = 10
-    # choice = readNum(len(bounces))
-
-    bounce = bounces[choice - 1]
-    start = bounce['startFrame'] + 6
-    end = bounce['endFrame'] - 6
-    step = (end - start) / 6
-    step = int(step)
-    framesToSave = range(start, end, step)
-
-    whitespace = 4
-    width = 255
-
-    startPixel = int((capWidth * 0.55) - width / 2)
-    endPixel = startPixel + width
-    filmStrip = np.ones(shape=(capHeight * 0.8, (width * len(framesToSave)) + (whitespace * len(framesToSave) - 1), 3),
-                        dtype=np.uint8)
-
-    for i, frameNum in enumerate(framesToSave):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
-        _ret, frame = cap.read()
-
-        # possible improvement
-        trackPerson = frame[0:capHeight * 0.8, startPixel:endPixel]
-        start = ((whitespace + width) * i)
-        filmStrip[0:capHeight * 0.8, start:start + width] = trackPerson
-
-    imgName = "C:/Users/psdco/Videos/{}/{}.png".format(routine['name'][:-4], bounce['name'])
-    print("Writing frame to {}".format(imgName))
-    ret = cv2.imwrite(imgName, filmStrip)
-    if not ret:
-        print("Couldn't write image {}\nAbort!".format(imgName))
-        exit()
-
-
-def gen_pose_angles(poses, average=False):
-    def rel_pose_to_abs_pose(pose, cx, cy, padding=100):
-        # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
-        # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
-        for p_idx in range(14):
-            pose[0, p_idx] = int((cx - padding) + pose[0, p_idx])
-            pose[1, p_idx] = int((cy - padding) + pose[1, p_idx])
-        return pose
-
-    def pose_as_point(pose, p_idx):
-        pt = np.array([pose[0, p_idx], pose[1, p_idx]])
-        return pt
-
-    def calc_angle(A, B, C):
-        a = distance.euclidean(C, B)
-        b = distance.euclidean(A, C)
-        c = distance.euclidean(A, B)
-        num = a ** 2 + b ** 2 - c ** 2
-        demon = (2.0 * a * b)
-        ang = acos(num / demon)
-        return degrees(ang)
-
-    # Make a list for each of the joints to be plotted
-    # jointNames = consts.getAngleIndices('deepcut')
-    jointNames = consts.getAngleIndices('hourglass')
-    jointAngles = {key: [] for key in jointNames.keys()}
-
-    for pose in poses:
-        # pose = rel_pose_to_abs_pose(np.array(json.loads(frame.pose)), frame.center_pt_x, routine.video_height - frame.center_pt_y)
-        # pose = np.array(json.loads(frame.pose))
-        # pose = np.array(json.loads(frame.pose_hg))
-
-        # Calculate an angle for each joint
-        # Add to the dict for that joint
-        for key in jointNames.keys():
-            # Get the 3 pose points that make up this joint
-            joint_pose_pts_idxs = jointNames[key]
-            # Calculate the angle between them
-            angle = calc_angle(pose_as_point(pose, joint_pose_pts_idxs[0]), pose_as_point(pose, joint_pose_pts_idxs[1]), pose_as_point(pose, joint_pose_pts_idxs[2]))
-            # Append it to the appropriate dict
-            jointAngles[key].append(angle)
-
-    if not average:
-        return jointAngles
-    else:
-        averagedJointAngles = {}
-        for i in range(0, len(consts.angleIndexKeys), 2):  # step from 0 to 8 in increments of 2
-            rightKey = consts.angleIndexKeys[i]
-            leftKey = consts.angleIndexKeys[i+1]
-            jointName = rightKey.split(' ')[1].title()  # take the last word and set it to title case
-            averagedJointAngles[jointName] = np.average([jointAngles[rightKey], jointAngles[leftKey]], axis=0)
-        return averagedJointAngles
-
-
-# def plot_frame_angles(db, routine, frames=None):
-#     if frames is None:
-#         frames = routine.frames
-#
-#     angleValues = gen_frame_angles(frames)
-#     count = len(angleValues.values()[0])
-#
-#     # Plot angles
-#     f, axarr = plt.subplots(4, sharex=True)
-#
-#     # use angleIndexKeys rather than jointNames.keys() because order matters here
-#     for i, key in enumerate(consts.angleIndexKeys):
-#         plti = int(i / 2)  # when i=0,1; plti = 0. when i=2,3; plti = 1. when i=4,5; plti = 2. when i=6,7; plti = 3
-#         axarr[plti].plot(range(count), angleValues[key], c=consts.jointAngleColors[i % 2], label=key)
-#         axarr[plti].scatter(range(count), angleValues[key], c=consts.jointAngleColors[i % 2])
-#         if i % 2 == 0:
-#             axarr[plti].set_title(key.split(' ')[1].title())
-#             nextKey = consts.angleIndexKeys[i + 1]
-#             axarr[plti].plot(range(count), np.average([angleValues[key], angleValues[nextKey]], axis=0), c='yellow')
-#             # axarr[plti].legend(loc='best')
-#     plt.savefig('C:/Users/psdco/Pictures/Tucks/' + path.basename(routine.path)[:-4] + "_{}".format(frames[0].frame_num))
-#     plt.show()
-
-
 def compare_many_angles_plot(manyRoutineAngles, labels, block=True):
     # Plot angles
     f, axarr = plt.subplots(len(manyRoutineAngles[0]), sharex=True)
@@ -502,7 +379,7 @@ def find_outlier_indices(arr, cutoff=40):
         if oli in tweenOutliers:
             continue
         normalRef = arr[oli]
-        i = oli+1
+        i = oli + 1
         while 1:
             thisDif = normalRef - arr[i]
             if abs(thisDif) > cutoff:
@@ -558,6 +435,7 @@ def find_outlier_indices(arr, cutoff=40):
     # plt.plot(xnew, yfilt)
     # plt.show()
 
+
 def is_outlier(points, thresh=3.5):
     """
     Returns a boolean array with True if points are outliers and False otherwise.
@@ -574,15 +452,16 @@ def is_outlier(points, thresh=3.5):
         mask : A numobservations-length boolean array.
     """
     if len(points.shape) == 1:
-        points = points[:,None]
+        points = points[:, None]
     median = np.median(points, axis=0)
-    diff = np.sum((points - median)**2, axis=-1)
+    diff = np.sum((points - median) ** 2, axis=-1)
     diff = np.sqrt(diff)
     med_abs_deviation = np.median(diff)
 
     modified_z_score = 0.6745 * diff / med_abs_deviation
 
     return modified_z_score > thresh
+
 
 def pose_error(routine):
     # Original hg output
@@ -618,3 +497,118 @@ def pose_error(routine):
         diff = np.diff([y_mat[i], y_hg[i]], axis=0)
         plt.plot(diff[0])
     plt.show()
+
+
+def compare_pose_tracking_techniques(routine):
+    # Get all folders that have __ suffixes.
+    # Load all the smoothed_frame_xxx.png matlab pose files in these folders
+    # Get the angles and plot them
+    # Then show all the frames with next frame prev frame.
+
+    poseDirSuffixes = []
+    imagesLists = []
+    matPoses = []
+    frameNumbers = set()
+    for poseDirName in routine.getPoseDirPaths():
+        matFile = poseDirName + os.sep + "monocap_preds_2d.mat"
+        if os.path.exists(matFile):
+            print('Found', matFile)
+
+            poseDirSuffixes.append(os.path.basename(poseDirName.replace(routine.prettyName(), 'r')))
+            imageFiles = glob.glob(poseDirName + os.sep + "smoothed_pose_frame_*.png")
+            imagesLists.append(imageFiles)
+            for f in imageFiles:
+                m = re.search('smoothed_pose_frame_(\d+)\.png', f)
+                frameNumbers.add(int(m.group(1)))
+
+                # matPoses.append(scipy.io.loadmat(matFile)['preds_2d'])
+        else:
+            print('No file', poseDirName)
+
+    # Set up pointers
+    frameNumbers = list(frameNumbers)
+    frameNumberPtr = 0
+    imageListPtrs = [0 for _ in range(len(imagesLists))]
+
+    # Do angles stuff
+    # myPoses = [[] for _ in matPoses]
+    # for imgFiles, matPose, myPose in zip(imagesLists, matPoses, myPoses):
+    #     for i, _ in enumerate(imgFiles):
+    #         myPose.append(matPose[:, :, i])
+    # manyRoutineAngles = [visualise.gen_pose_angles(myPose, average=True) for myPose in myPoses]
+    # visualise.compare_many_angles_plot(manyRoutineAngles, labels=poseDirSuffixes, block=False)
+
+    techniqueCount = len(poseDirSuffixes)
+
+    # "Video" control variables
+    waitTime = 80
+    playOneFrame = False
+    paused = False
+    scaleFactor = 0.5
+    resizeWidth = int(1630 * scaleFactor)
+    resizeHeight = int(400 * scaleFactor)
+
+    frames = np.zeros(shape=(resizeHeight * techniqueCount, resizeWidth, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
+    while 1:
+        if playOneFrame or not paused:
+
+            for techniqueIndex, imagesList, label in zip(range(techniqueCount), imagesLists, poseDirSuffixes):
+
+                thisImageListsPtr = imageListPtrs[techniqueIndex]
+                imageFilename = imagesList[thisImageListsPtr]
+
+                currentFrameNumber = frameNumbers[frameNumberPtr]
+                frameIndexKey = "{0:04}".format(currentFrameNumber)
+
+                if frameIndexKey in imageFilename:  # if the number is in the file name string, it's an image for the current frame
+                    # Show the img
+                    frame = cv2.imread(imageFilename)
+                    if frame is None:
+                        frame = np.zeros((resizeHeight, resizeWidth, 3), np.uint8)
+                    else:
+                        height, width = frame.shape[:2]
+                        frame = frame[65:height - 79, 210:width - 180]
+                        frame = cv2.resize(frame, (resizeWidth, resizeHeight))
+                    cv2.putText(frame, "{:4}".format(currentFrameNumber), (10, resizeHeight - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+
+                    # Increment the pointer
+                    imageListPtrs[techniqueIndex] += 1
+                else:
+                    continue
+                    # Black frame
+                    # frame = np.zeros((resizeHeight, resizeWidth, 3), np.uint8)
+
+                cv2.putText(frame, label, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                frames[resizeHeight * techniqueIndex:resizeHeight * (techniqueIndex + 1), 0:resizeWidth] = frame
+
+            cv2.imshow("Frames", frames)
+            frameNumberPtr += 1
+            if playOneFrame:
+                playOneFrame = False
+
+        k = cv2.waitKey(waitTime) & 0xff
+        if k == ord('k'):  # play pause
+            paused = not paused
+        elif k == ord('j'):  # prev frame
+            frameNumberPtr = clip_wrap(frameNumberPtr - 2, 0, len(frameNumbers) - 1)
+            imageListPtrs = [clip_wrap(imagesListPointer - 2, 0, len(imagesLists[i]) - 1) for i, imagesListPointer in enumerate(imageListPtrs)]
+            playOneFrame = True
+        elif k == ord('l'):  # next frame
+            playOneFrame = True
+        elif k == ord('.'):  # speed up
+            waitTime -= 5
+            print(waitTime)
+        elif k == ord(','):  # slow down
+            waitTime += 5
+            print(waitTime)
+        elif k == ord('\n') or k == ord('\r'):  # return/enter key
+            break
+        elif k == ord('q') or k == 27:  # q/ESC
+            print("Exiting...")
+            exit()
+
+        if frameNumberPtr >= len(frameNumbers):
+            frameNumberPtr = 0
+            imageListPtrs = [0 for _ in range(len(imagesLists))]
+
+    print("Finished comparing tracking techniques")

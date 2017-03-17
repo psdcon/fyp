@@ -13,6 +13,10 @@ local imgdir = arg[1]
 
 model = torch.load('/home/titan/paul_connolly/pose-hourglass/umich-stacked-hourglass.t7')   -- Load pre-trained model
 
+-- User defined
+saveImages = false
+print('Saving images: \27[94m'.. tostring(saveImages) ..'\27[0m') -- \decimalNumber lua converts to ascii eq. \27 = \033 bach ESC char
+
 -- Open file for heatmaps
 local heatmapsH5Name = paths.concat(imgdir,'hg_heatmaps.h5')
 print('Opening ' .. heatmapsH5Name)
@@ -37,6 +41,7 @@ for file in paths.files(imgdir) do
     end
 end
 table.sort(files)
+table.sort(frame_nums)
 
 -- Loop to predict
 done_count = 0
@@ -72,19 +77,22 @@ for i,file in ipairs(files) do
     -- predFileFrame:close()
     
     -- Save predicition image
-    -- if false then
-    --     preds_hm:mul(4)
-    --     local displayImg = drawOutput(inp, hm, preds_hm[1])
-    --     posed_image_filepath = paths.concat(imgdir,'posed_'..file)
-    --     image.save(posed_image_filepath, displayImg)
-    --     -- w = image.display{image=displayImg, win=w}
-    --     -- sys.sleep(1)
-    -- end
+    if saveImages then
+        preds_hm:mul(4)
+        local displayImg = drawOutput(inp, hm, preds_hm[1])
+        posed_image_filepath = paths.concat(imgdir,'posed_'..file)
+        image.save(posed_image_filepath, displayImg)
+        -- w = image.display{image=displayImg, win=w}
+        -- sys.sleep(1)
+    end
 
     -- Print progress
     done_count = done_count + 1
-    print(file .. ', ' .. done_count  .. ' of '..file_count .. ', ' 
-        .. string.format('%.1f', (done_count/file_count)*100) .. '%')
+    percent_complete = string.format('%.1f', (done_count/file_count)*100)
+
+    -- 'File: frame_0000.png. Frame num: 0000. 1 of 100 = 1.1%'
+    print('File: '.. file ..'. Frame num: '.. frame_num ..'. '..done_count ..' of '.. file_count..' = '.. percent_complete ..'%')
+
 end
 
 print('Closing ' .. heatmapsH5Name)

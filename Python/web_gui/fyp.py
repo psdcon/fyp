@@ -74,7 +74,7 @@ def list_routines():
         routine.name = routine.prettyName()
         routine.tracked = routine.isTracked(db)
         routine.framesSaved = routine.hasFramesSaved()
-        routine.posed = routine.isPosed(db)
+        routine.posed = routine.isPoseImported(db)
         routine.labelled = routine.isLabelled()
         routine.judged = routine.isJudged(contrib)
         routine.your_score = routine.getScore(contrib)

@@ -1,5 +1,5 @@
 
-
+% This script converts old format h5s to new format where each pose is named by frame number
 dirsToClean = {
     'VID_20161106_113020_blur_dark_0.6'
     'VID_20161106_113151_blur_dark_0.6'

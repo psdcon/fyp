@@ -1,11 +1,13 @@
+import glob
 import os
 
 from sqlalchemy import Column, ForeignKey, INTEGER, REAL, TEXT
-from sqlalchemy import create_engine, select, func
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
 from helpers import consts
+from helpers import helper_funcs
 
 Base = declarative_base()
 
@@ -28,17 +30,15 @@ class Routine(Base):
     use = Column(INTEGER)
     crop_length = Column(INTEGER)  # padding (in pixels) from the center point
     note = Column(TEXT)
-    # performer_id = Column(INTEGER)
     competition = Column(TEXT)
     level = Column(TEXT)
     video_height = Column(INTEGER)
     video_width = Column(INTEGER)
     video_fps = Column(REAL)
+    frame_count = Column(INTEGER)
     trampoline_top = Column(INTEGER)
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
-    # Temp
-    dirtyBounces = Column(INTEGER)
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
@@ -50,35 +50,41 @@ class Routine(Base):
     def __repr__(self):
         return "Routine(path=%r, bounces=%r)" % (self.path, self.bounces)
 
-    def framesAsDict(self):
-        # Dictionary Comprehension
-        return {frame.frame_num: frame for frame in self.frames}
+    # Path related getters
+    def getAsDirPath(self, suffix=None, create=False):
+        if suffix:
+            path = consts.videosRootPath + self.path.replace('.mp4', suffix + os.sep)
+        else:
+            path = consts.videosRootPath + self.path.replace('.mp4', os.sep)
+        if create and not os.path.exists(path):
+            print("Creating " + path)
+            os.makedirs(path)
+        return path
 
-    def framesCount(self, db):
-        return db.execute(
-            select([func.count('*')])
-                .select_from(Frame)
-                .where(Frame.routine_id == self.id)
-        ).fetchone()[0]
+    def prettyName(self):
+        return os.path.splitext(os.path.basename(self.path))[0]
 
-    # def createJudgements(self, db):
-    #     bounceDeductions = []
-    #     for bounce in self.bounces:
-    #         if bounce.deductions != []:
-    #             bounceDeductions.append(bounce.deductions)
-    #
-    #     # Transpose all deduction objects using zip. http://stackoverflow.com/questions/6473679/transpose-list-of-lists
-    #     routineDeductions = zip(*bounceDeductions) # This assumes same number of deductions for all judgements.
-    #
-    #     for judgement in routineDeductions:
-    #         deduction = judgement[0]
-    #         j = Judgement(deduction.bounce.routine_id, deduction.contributor.id)
-    #         db.add(j)
-    #         db.flush()
-    #         for d in judgement:
-    #             d.judgement_id = j.id
-    #     db.commit()
-    #     return
+    def getPoseDirPaths(self):
+        return [poseDir for poseDir in glob.glob(os.path.dirname(self.getAsDirPath()) + '*') if os.path.isdir(poseDir)]
+
+    # File related attributes
+    def hasFramesSaved(self, suffix=None):
+        nFiles = len(glob.glob(self.getAsDirPath(suffix) + 'frame_*'))
+        return nFiles > 0
+
+    def hasMonocapImgs(self, suffix=None):
+        nFiles = len(glob.glob(self.getAsDirPath(suffix) + 'smoothed_*'))
+        return nFiles > 0
+
+    def personMasksPath(self):
+        return os.path.dirname(self.getAsDirPath()) + '_person_masks.gzip'
+
+    # Db related values
+    def getTrampolineTouches(self):
+        from numpy import array
+        trampolineTouches = array([frame.trampoline_touch for frame in self.frames])
+        trampolineTouches = helper_funcs.trimTouches(trampolineTouches)
+        return trampolineTouches
 
     def getScore(self, contributor):
         if not contributor:
@@ -95,19 +101,14 @@ class Routine(Base):
         scores = [j.getScore() for j in self.judgements]
         return '{0:.1f}'.format(np.average(scores))
 
-    def isTracked(self, db):
-        return self.framesCount(db) > 0
+    # Db related attributes
+    def isTracked(self):
+        return len(self.frames) > 0
 
-    def isPosed(self, db):
+    def isPoseImported(self, db):
         # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=''
-        # s = select([func.count('*')])\
-        #     .select_from(Frame)\
-        #     .where(
-        #         and_(Frame.pose != '', Frame.routine_id == self.id)
-        #     )
-        # count = db.execute(s).fetchone()[0]
-        # return count > 0
-        return os.path.exists(self.getAsDirPath(create=False) + 'preds_2d.mat')
+        count = db.query(Frame).filter(Frame.pose != '', Frame.routine_id == self.id).count()
+        return count > 0
 
     def isLabelled(self):
         if not self.bounces:
@@ -128,38 +129,15 @@ class Routine(Base):
         return False
 
     def isJudged(self, contributor=False):
-        if contributor is None:  # has a value of none (not existing)
-            return False
-        elif contributor:  # has a value, the database Contributor obj
+        if contributor:  # has a value, the database Contributor obj
             for j in self.judgements:
                 if j.contributor_id == contributor.id:
                     return True
             return False
-        elif not contributor:  # contributor is false so tell me the general case
+        elif not contributor or contributor is None:  # contributor is false or non existent so tell me the general case
             if self.judgements:
                 return True
             return False
-
-    def getAsDirPath(self, suffix=None, create=True):
-        if suffix:
-            path = consts.videosRootPath + self.path.replace('.mp4', suffix + os.sep)
-        else:
-            path = consts.videosRootPath + self.path.replace('.mp4', os.sep)
-        if create and not os.path.exists(path):
-            print("Creating " + path)
-            os.makedirs(path)
-        return path
-
-    def hasFramesSaved(self, suffix=None):
-        import glob
-        nFiles = len(glob.glob(self.getAsDirPath(suffix, create=False) + 'frame_*'))
-        return nFiles > 0
-
-    def prettyName(self):
-        return os.path.basename(self.path[:-4])
-
-    def personMasksPath(self):
-        return os.path.join(os.path.normpath(self.getAsDirPath(create=False) + '..'), self.prettyName() + '_person_masks.gzip')
 
 
 class Frame(Base):
