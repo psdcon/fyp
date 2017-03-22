@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import json
 import re
 from itertools import chain
 
@@ -24,20 +23,19 @@ def play_skill(db, bounce_id, show_pose=None, show_full=False):
     play_frames(db, routine, bounce.start_frame, bounce.end_frame, show_pose, show_full)
 
 
-def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=None, show_full=False):
+def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_full=False):
     waitTime = 40
     playOneFrame = False
     paused = False
+    prevBounceName = ''
 
     cap = helper_funcs.open_video(routine.path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
     if end_frame == -1:
         end_frame = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
-    firstFrame = db.query(Frame).filter_by(routine_id=routine.id, frame_num=start_frame).one()
-    # firstFrameId = firstFrame.id
-    if show_pose is None:  # if not deliberately set to ellipse, then gracefully fallback to pose if available or ellipse if not
-        show_pose = False if firstFrame.pose is None else True  # if pose is none, show ellipse
+    f, axarr = plt.subplots(12, sharex=True)
+    f.canvas.set_window_title(routine.prettyName())
 
     while True:
         if playOneFrame or not paused:
@@ -49,21 +47,18 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=None, show_f
             except NoResultFound:
                 continue
 
+            thisBounce = frame_data.getBounce(db)
+            if thisBounce and prevBounceName != thisBounce.skill_name:
+                # plot_frame_angles(thisBounce.skill_name, thisBounce.getFrames(db), axarr)
+                prevBounceName = thisBounce.skill_name
+
             cx = frame_data.center_pt_x
             cy = frame_data.center_pt_y
-            # Graceful degredation
-            if frame_data.crop_length:
-                cropLength = frame_data.crop_length
-            elif routine.crop_length:
-                cropLength = routine.crop_length
-            else:
-                cropLength = 256
 
-            x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine.video_height, routine.video_width, cx, cy, cropLength)
+            x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine.video_height, routine.video_width, cx, cy, routine.crop_length)
 
-            if show_pose:
+            if frame_data.pose != '':
                 pose = np.array(json.loads(frame_data.pose))
-                # pose_rough = np.array(json.loads(frame_data.pose_hg))
                 # Show full frame
                 if show_full:
                     cv2.putText(frame, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX,
@@ -78,30 +73,25 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=None, show_f
                 # Show cropped
                 else:
                     frameCropped = frame[y1:y2, x1:x2]
-                    # frameCropped = cv2.resize(frameCropped, (256, 256))
-                    cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
-                    # frameCroppedCopy = np.copy(frameCropped)
+                    frameCropped = cv2.resize(frameCropped, (256, 256))
+                    cv2.putText(frameCropped, '{}'.format(prevBounceName), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     for p_idx in range(16):
                         color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
                         cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color, thickness=cv2.FILLED)
-                    cv2.imshow('HG Smooth', frameCropped)
-
-                    # for p_idx in range(16):
-                    #     color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                    #     cv2.circle(frameCroppedCopy, (int(pose_rough[0, p_idx]), int(pose_rough[1, p_idx])), 5, color, thickness=cv2.FILLED)  # -ve thickness = filled
-                    # cv2.imshow('HG Rough', frameCroppedCopy)
+                    cv2.imshow(routine.prettyName(), frameCropped)
 
             else:
+                # Ignore frames that haven't got pose info
+                if show_pose:
+                    continue
+
                 cv2.circle(frame, (cx, cy), 3, (0, 0, 255), cv2.FILLED)
-                ellipse = ((cx, cy), (frame_data.ellipse_len_major, frame_data.ellipse_len_minor), frame_data.ellipse_angle)
-                cv2.ellipse(frame, ellipse, color=(0, 255, 0), thickness=2)
                 if show_full:
-                    # (x, y), (MA, ma), angle
-                    # ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)), frame_data.ellipse_angle)
-                    cv2.imshow('bounce.skill_name', frame)
+                    cv2.imshow(routine.prettyName(), frame)
                 else:
                     frameCropped = frame[y1:y2, x1:x2]
-                    cv2.imshow('bounce.skill_name', frameCropped)
+                    cv2.imshow(routine.prettyName(), frameCropped)
 
             if playOneFrame:
                 playOneFrame = False
@@ -329,6 +319,31 @@ def plot_data(routine):
     plt.show()
 
 
+def plot_frame_angles(bounceName, frames, axarr):
+    angles = []
+    xpts = []
+    for frame in frames:
+        if frame.angles:
+            xpts.append(frame.frame_num)
+            angles.append(np.array(json.loads(frame.angles)))
+    angles = np.array(angles)
+
+    # Plot angles
+    for plti, label in zip(range(12), consts.extendedAngleIndexKeys):
+        thisJoint = angles[:, plti, 0]
+
+        axarr[plti].cla()
+        axarr[plti].clear()
+
+        axarr[plti].set_title(label)
+
+        axarr[plti].plot(range(len(angles)), thisJoint, label=label)
+
+    # plt.legend(loc='best')
+    plt.show(block=False)
+
+
+
 def compare_many_angles_plot(manyRoutineAngles, labels, block=True):
     # Plot angles
     f, axarr = plt.subplots(len(manyRoutineAngles[0]), sharex=True)
@@ -502,20 +517,19 @@ def pose_error(routine):
 def compare_pose_tracking_techniques(routine):
     # Get all folders that have __ suffixes.
     # Load all the smoothed_frame_xxx.png matlab pose files in these folders
-    # Get the angles and plot them
-    # Then show all the frames with next frame prev frame.
 
     poseDirSuffixes = []
     imagesLists = []
     matPoses = []
     frameNumbers = set()
     for poseDirName in routine.getPoseDirPaths():
-        matFile = poseDirName + os.sep + "monocap_preds_2d.mat"
-        if os.path.exists(matFile):
-            print('Found', matFile)
+        # matFile = poseDirName + os.sep + "monocap_preds_2d.mat"
+        # if os.path.exists(matFile):
+        imageFiles = glob.glob(poseDirName + os.sep + "smoothed_pose_frame_*.png")
+        if len(imageFiles) > 0:
+            print('Found monocap images in ', poseDirName)
 
-            poseDirSuffixes.append(os.path.basename(poseDirName.replace(routine.prettyName(), 'r')))
-            imageFiles = glob.glob(poseDirName + os.sep + "smoothed_pose_frame_*.png")
+            poseDirSuffixes.append(os.path.basename(poseDirName.replace(routine.prettyName(), '_')))
             imagesLists.append(imageFiles)
             for f in imageFiles:
                 m = re.search('smoothed_pose_frame_(\d+)\.png', f)
@@ -523,7 +537,7 @@ def compare_pose_tracking_techniques(routine):
 
                 # matPoses.append(scipy.io.loadmat(matFile)['preds_2d'])
         else:
-            print('No file', poseDirName)
+            print('No MATLAB monocap files found ', poseDirName)
 
     # Set up pointers
     frameNumbers = list(frameNumbers)
@@ -581,7 +595,7 @@ def compare_pose_tracking_techniques(routine):
                 cv2.putText(frame, label, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                 frames[resizeHeight * techniqueIndex:resizeHeight * (techniqueIndex + 1), 0:resizeWidth] = frame
 
-            cv2.imshow("Frames", frames)
+            cv2.imshow(routine.prettyName(), frames)
             frameNumberPtr += 1
             if playOneFrame:
                 playOneFrame = False
@@ -612,3 +626,4 @@ def compare_pose_tracking_techniques(routine):
             imageListPtrs = [0 for _ in range(len(imagesLists))]
 
     print("Finished comparing tracking techniques")
+    return

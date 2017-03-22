@@ -165,3 +165,13 @@ a .fa, .btn-link .fa {
 .tooltip-inner img {
   width: 184px;
 }
+
+/* GUI */
+.bounces-container {
+    height: 200px;
+    overflow-y: scroll;
+}
+
+[data-toggle="collapse"] {
+    cursor: pointer;
+}

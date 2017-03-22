@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import cPickle
 import gzip
+import json
 import os
 import sys
 from math import acos, degrees
@@ -147,6 +148,18 @@ def load_zipped_pickle(filename):
         return loaded_object
 
 
+def save_pickle(obj, filename):
+    cPickle.dump(obj, open(filename, 'wb'))
+
+
+def load_pickle(filename):
+    return cPickle.load(open(filename, 'rb'))
+
+
+def roundListFloatsIntoStr(mList, precision):
+    return json.dumps(json.loads(json.dumps(mList), parse_float=lambda x: round(float(x), precision)))
+
+
 def trimTouches(trampolineTouches):
     touchTransitions = np.diff(trampolineTouches)
     for i in range(len(touchTransitions)):
@@ -200,10 +213,49 @@ def printPoseStatus(paths):
         print(os.path.basename(path))
 
 
+def getPoseStatuses(paths, routinePrettyName):
+    import glob
+    '''
+    [
+        {
+            path:'VID_0000__technique',
+            hourglass_pose: True,
+            monocap_pose: True,
+            frames: 200,
+            hourglass_frames: 200,
+            monocap_frames: 200
+        },
+        {...},
+        ...
+    ]
+    '''
+    pathsData = []
+    for path in paths:
+        # Print the number of savedFrame files found
+        thisPathData = dict()
+        thisPathData['path'] = os.path.basename(path.replace(routinePrettyName, '_'))
+        thisPathData['hourglass_pose'] = os.path.exists(path + os.sep + 'hg_heatmaps.h5')
+        thisPathData['monocap_pose'] = os.path.exists(path + os.sep + 'monocap_preds_2d.h5')
+        for key, globLookup in zip(['frames', 'hourglass_frames', 'monocap_frames'], ['frame_*.png', 'posed_*', 'smoothed_*', ]):
+            nFiles = len(glob.glob(path + os.sep + globLookup))
+            thisPathData[key] = nFiles
+        pathsData.append(thisPathData)
+    return pathsData
+
+
 def selectListOption(lst):
     for i, li in enumerate(lst):
         print('{}) {}'.format(i + 1, li))
     return read_num(len(lst)) - 1
+
+
+def pose2OrderedAngles(pose):
+    angles = gen_pose_angles([pose])
+    orderedAngles = []
+    for key in consts.extendedAngleIndexKeys:
+        angle = angles[key][0]
+        orderedAngles.append(angle)
+    return orderedAngles
 
 
 def gen_pose_angles(poses, average=False):
@@ -215,7 +267,7 @@ def gen_pose_angles(poses, average=False):
             pose[1, p_idx] = int((cy - padding) + pose[1, p_idx])
         return pose
 
-    def pose_as_point(pose, p_idx):
+    def pose2pt(pose, p_idx):
         pt = np.array([pose[0, p_idx], pose[1, p_idx]])
         return pt
 
@@ -229,22 +281,27 @@ def gen_pose_angles(poses, average=False):
         return degrees(ang)
 
     # Make a list for each of the joints to be plotted
-    # jointNames = consts.getAngleIndices('deepcut')
     jointNames = consts.getAngleIndices('hourglass')
-    jointAngles = {key: [] for key in jointNames.keys()}
+    jointSpecial = consts.getSpecialAngleIndices('hourglass')
+    jointAngles = {key: [] for key in jointNames.keys() + jointSpecial.keys()}
 
     for pose in poses:
-        # pose = rel_pose_to_abs_pose(np.array(json.loads(frame.pose)), frame.center_pt_x, routine.video_height - frame.center_pt_y)
-        # pose = np.array(json.loads(frame.pose))
-        # pose = np.array(json.loads(frame.pose_hg))
-
         # Calculate an angle for each joint
         # Add to the dict for that joint
         for key in jointNames.keys():
             # Get the 3 pose points that make up this joint
-            joint_pose_pts_idxs = jointNames[key]
+            jointIndexs = jointNames[key]
             # Calculate the angle between them
-            angle = calc_angle(pose_as_point(pose, joint_pose_pts_idxs[0]), pose_as_point(pose, joint_pose_pts_idxs[1]), pose_as_point(pose, joint_pose_pts_idxs[2]))
+            angle = calc_angle(pose2pt(pose, jointIndexs[0]), pose2pt(pose, jointIndexs[1]), pose2pt(pose, jointIndexs[2]))
+            # Append it to the appropriate dict
+            jointAngles[key].append(angle)
+
+        # Special angles
+        for key in jointSpecial.keys():
+            jointIndexs = jointSpecial[key]
+            specialsOffset = np.array(consts.specialOffsets[key])
+            # Calculate the angle between them
+            angle = calc_angle(pose2pt(pose, jointIndexs[0]) + specialsOffset, pose2pt(pose, jointIndexs[1]), pose2pt(pose, jointIndexs[2]))
             # Append it to the appropriate dict
             jointAngles[key].append(angle)
 

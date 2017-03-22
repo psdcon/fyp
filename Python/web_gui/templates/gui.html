@@ -1,0 +1,101 @@
+{% from "macros.html" import check_or_cross with context %}
+
+{% extends "layout.html" %}
+{% block body %}
+    <p>
+        <button type="button" class="btn btn-secondary btn-only-posed">Show Posed</button>
+        <button type="button" class="btn btn-secondary btn-only-not-posed">Show not Posed</button>
+        <button type="button" class="btn btn-secondary btn-show-all">Show All</button>
+    </p>
+    <div class="row">
+        {% for routine in routines %}
+            <div class="col-3 js-routine {% if not routine.use %}routine-unused{% endif %} {% if routine.posed %}routine-posed{% endif %}">
+                <div class="card mb-3" data-routineid="{{ routine.id }}">
+                    <div class="card-header" style="overflow: hidden; white-space: nowrap;">
+                        {{ routine.name }}
+                    </div>
+
+                    <div class="card-block">
+                        <img src="{{ url_for( 'static', filename=routine.thumbPath) }}"> <br>
+                        ID: {{ routine.id }} Level: {{ routine.level_name }} <br>
+
+                        {#            {{ check_or_cross(routine.broken) }} Broken <br>#}
+                        {{ check_or_cross(routine.tracked) }} Track
+                        {#            {{ check_or_cross(routine.framesSaved) }} Frames <br>#}
+                        {{ check_or_cross(routine.posed) }} Pose <br>
+
+                        <hr>
+                        <div data-toggle="collapse" data-target="#{{ routine.name }}" aria-expanded="false" aria-controls="{{ routine.name }}">
+                            Bounces: {{ routine.numBounces }}
+                        </div>
+                        <div class="collapse" id="{{ routine.name }}">
+                            <div class="bounces-container">
+                                {% for bounce in routine.bounces %}
+                                    <button type="button" class="btn btn-link btn-sm" data-action="play_bounce">
+                                        <i class="fa fa-play" aria-hidden="true"></i>
+                                    </button>
+                                    {{ bounce.skill_name }}<br>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <hr>
+                        {% for status in routine.poseStatuses %}
+                            <div style="overflow: hidden; white-space: nowrap;">
+                                <span title="Routine video has been split into individual frames">{{ status.frames }}</span>
+                                <span title="Hourglass Pose">{{ check_or_cross(status.hourglass_pose) }}</span>
+                                <span title="Monocap Pose">{{ check_or_cross(status.monocap_pose) }}</span>
+                                {#                                <span title="Hourglass Frames">  {{ status.hourglass_frames }}</span>#}
+                                <span title="Monocap Pose">{{ status.monocap_frames }}</span>
+                                <span title="{{ status.path }}">{{ status.path }}</span>
+                            </div>
+                        {% endfor %}
+                        <hr>
+                        {#                        <button type="button" class="btn btn-secondary btn-sm">Track</button>#}
+                        {#                        <button type="button" class="btn btn-secondary btn-sm">Bounces</button>#}
+                        {#                        <button type="button" class="btn btn-secondary btn-sm">Plot</button>#}
+                        {#                        <button type="button" class="btn btn-secondary btn-sm">Save Frames</button>#}
+
+                        <div class="btn-group" role="group" aria-label="Pose">
+                            <button type="button" class="btn btn-secondary btn-sm" {% if routine.posed %}disabled{% endif %} data-action="import_pose">Pose Import</button>
+                            <button type="button" class="btn btn-secondary btn-sm" {% if not routine.posed %}disabled{% endif %} data-action="delete_pose">Delete</button>
+                        </div>
+
+                        <div class="btn-group" role="group" aria-label="Visualise">
+                            <button type="button" class="btn btn-outline-primary btn-sm" {% if not routine.posed %}disabled{% endif %} data-action="play_pose">Visualise Pose</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-action="play_monocap">Monocap</button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+{% endblock %}
+
+{% block js %}
+
+    <script>
+        // Set up button listener
+        GUIControls.init();
+
+        $('.collapse').collapse();
+
+        $('.btn-toggle-posed').on('click', function () {
+            $('.routine-posed').toggle()
+        });
+        $('.btn-only-posed').on('click', function () {
+            // To show only routines with pose, hide routines that are not pose
+            $('.js-routine').not('.routine-posed').hide();
+        });
+        $('.btn-only-not-posed').on('click', function () {
+            // To show only routines that don't have pose, hide all the ones that are pose
+            $('.routine-posed').hide();
+        });
+        $('.btn-show-all').on('click', function () {
+            $('.js-routine').show();
+        });
+
+    </script>
+
+{% endblock %}

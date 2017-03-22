@@ -22,16 +22,16 @@
     <div class="col-md-7 col-8 {% if not routine.use %}unused{% endif %}" style="word-break: break-word;">
         <span class="pull-left mr-3">{{ routine.index }}</span>
         <img class="pull-left mr-3" src="{{ url_for( 'static', filename=routine.thumbPath) }}" style="max-height: 3em;">
-        {{ routine.name }}
+        {#        {{ routine.name }}#}
+        ID: {{ routine.id }}. Name: {{ routine.name }} <br>
 {#        {{ check_or_cross(routine.broken) }} Broken#}
-{#        ID: {{ routine.id }}. Name: {{ routine.name }} <br>#}
-{#        {{ check_or_cross(routine.tracked) }} Track#}
+        {#        {{ check_or_cross(routine.tracked) }} Track #}
 {#        {{ check_or_cross(routine.framesSaved) }} Frames#}
-{#        {{ check_or_cross(routine.posed) }} Pose#}
+        {{ check_or_cross(routine.posed) }} Pose
 {#        {{ check_or_cross(routine.dirtyBounces) }} dirtyBounces#}
     </div>
     <div class="col-md-2 col-4">
-      {{ routine.level }}
+        {{ routine.level_name }}
       {# <?=($isBroken)?'<i class="fa fa-frown-o" aria-hidden="true" title="Indicates one of the skills are broken"></i>':''?> #}
     </div>
     <div class="col-md-2 col-8">

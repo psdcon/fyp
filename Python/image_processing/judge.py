@@ -1,4 +1,6 @@
-import json
+from __future__ import print_function
+
+from operator import itemgetter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -70,81 +72,139 @@ def judge(db):
             visualise.play_frames_of_2(db, skills[5].routine, skill.routine, skills[5].start_frame + 5, skills[5].end_frame - 5, skill.start_frame + 5, skill.end_frame - 5)
 
 
-def judge_real_basic():
-    # Started 22:54
-    # Open the database and find all the straddle jumps
-    db = sqlite3.connect(c.dbPath)
-    db.row_factory = sqlite3.Row
+def tariff(db, thisRoutine):
+    import time
 
-    # Get all the routines with straddle jumps
-    routines = db.execute("SELECT * FROM routines WHERE bounces LIKE '%Straddle%'")
-    routines = routines.fetchall()  # copy everything pointed to by the cursor into an object.
+    def getPosedBounces(db, thisRoutine):
+        # Get all bounces that have pose in this level
+        posedBounces = db.query(Bounce).filter(
+            Bounce.angles != None,
+            Bounce.routine_id != thisRoutine.id
+        ).all()
 
-    deductionCats = {
-        "0.0": {"x": [], "y": []},
-        "0.1": {"x": [], "y": []},
-        "0.2": {"x": [], "y": []},
-        "0.3": {"x": [], "y": []},
-        "0.4": {"x": [], "y": []},
-        "0.5": {"x": [], "y": []}
-    }
-    colors = ['r', 'g', 'b', 'cyan', 'magenta', 'yellow']
+        for bounce in posedBounces:
+            bounce.jointAngles = np.array(json.loads(bounce.angles))
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    deductionColors = {
-        "0.0": 'r',
-        "0.1": 'g',
-        "0.2": 'b',
-        "0.3": 'cyan',
-        "0.4": 'magenta',
-        "0.5": 'yellow'
-    }
+        return posedBounces
 
-    # For each one, get the frame no for midpoint, its major and minor ellipse axis at that frame, it's deduction
-    for ri, routine in enumerate(routines):
-        if ri == 3:
+    def getNumAvailable():
+        numAvailableToFind = 0
+        for posedBounce in posedBounces:
+            if posedBounce.skill_name == thisBounce.skill_name:
+                numAvailableToFind += 1
+        return numAvailableToFind
+
+    def compareAngles(thisAnglesAsCoords, posedAnglesAsCoords, cutoff):
+        thisBounceFrameCount = len(thisAnglesAsCoords[0])
+        tariffedBounce = {}
+        totalDistance = 0
+        saveBounceMatch = True
+        for i in range(12):  # the number of different angles = 12
+            thisJoint = thisAnglesAsCoords[i]
+            posedJoint = posedAnglesAsCoords[i]
+
+            alignedPosedJoint = signal.resample(posedJoint, thisBounceFrameCount)
+            distance = np.sum(np.absolute(np.subtract(thisJoint, alignedPosedJoint)))
+
+            # distance, _path = fastdtw(thisJoint, posedJoint, dist=euclidean)
+            totalDistance += distance
+            # Don't bother with skills that're way off
+            if totalDistance > cutoff:
+                saveBounceMatch = False
+                break
+
+        # Only store as a match if we didn't exit early
+        if saveBounceMatch:
+            tariffedBounce['totalDistance'] = totalDistance
+            tariffedBounce['bounce'] = posedBounce
+            return tariffedBounce
+        else:
+            return None
+
+    start_time = time.time()
+
+    # Setup
+    print('Setting up for tariff...')
+    posedBounces = getPosedBounces(db, thisRoutine)
+    # Set up angles with the right dimensions.
+    # for posedBounce in posedBounces:
+    #     posedBounce.anglesAsCoords = posedBounce.getAnglesAsCoords(db)
+    posedBounces[:] = [posedBounce for posedBounce in posedBounces if posedBounce.skill_name != 'In/Out Bounce']
+    posedBounces[:] = [posedBounce for posedBounce in posedBounces if posedBounce.skill_name != 'Landing']
+    timeTaken = time.time() - start_time
+    print("Took {:.2f}s = {:.2f}m to coordinate bounces.".format(timeTaken, timeTaken / 60))
+
+    #
+    # Start processing this routine
+    print('Found {} bounces with pose'.format(len(posedBounces)))
+    print('\n----------------------')
+    print('Tariffing ' + thisRoutine.__repr__())
+
+    # Get angles per tariffedBounce in this routine
+    tariffedBounces = []  # List matches for each bounce
+    actualTariff = 0.0
+    for thisBounce in thisRoutine.bounces:
+        if thisBounce.skill_name == 'In/Out Bounce' or thisBounce.skill_name == 'Landing':
             continue
-        deductionsQuery = db.execute("SELECT * FROM judgements WHERE routine_id=? ORDER BY id ASC LIMIT 1", (routine['id'],))
-        deductionsQuery = deductionsQuery.fetchone()
 
-        deductions = json.loads(deductionsQuery[2])
-        bounces = json.loads(routine['bounces'])
-        ellipses = json.loads(routine['ellipses'])
+        # Check that this bounce has angles. May have been skipped by pose estimator
+        # thisBounce.anglesAsCoords = thisBounce.getAnglesAsCoords(db)
+        if thisBounce.angles is None:
+            continue
+        thisBounce.jointAngles = np.array(json.loads(thisBounce.angles))
 
-        for i, bounce in enumerate(bounces):
-            if bounce['name'] == "Straddle Jump":
-                startFrame = bounce['startFrame']
-                endFrame = bounce['endFrame']
-                # (frame, (cx, cy), (MA, ma), angle)
-                ellipsePts = ellipses[startFrame: endFrame]
-                cx = np.array([float(pt[1][0]) for pt in ellipsePts])
-                cx /= cx[0] # normalise
-                cy = np.array([float(pt[1][1]) for pt in ellipsePts])
-                cy /= cy[0] # normalise
-                z = range(len(ellipsePts))
+        # Add up actual tariff
+        actualTariff += thisBounce.getTariff(db)
 
-                deduction = deductions[i]
-                color = deductionColors[deduction]
-                # deductionCats[deduction]["x"].append(major)
-                # deductionCats[deduction]["y"].append(minor)
+        # Start looking
+        print("")
+        print('Looking for {}. There are {} of these in the posedBounces.'.format(thisBounce, getNumAvailable()))
+        skill_start_time = time.time()
 
-                ax.scatter(z, cx, cy, c=color)
+        #
+        # Compare the angles of this bounce to every other bounce's angles
+        cutoff = 30000
+        bounceMatches = [compareAngles(thisBounce.jointAngles, posedBounce.jointAngles, cutoff) for posedBounce in posedBounces]
+        bounceMatches[:] = [bm for bm in bounceMatches if bm is not None]  # remove None results
+        bounceMatches = sorted(bounceMatches, key=itemgetter('totalDistance'))
 
-        if ri == 5:
-            break
+        print(bounceMatches)
+        timeTaken = time.time() - skill_start_time
+        print("Took {:.2f}s = {:.2f}m to find this skill. ".format(timeTaken, timeTaken / 60))
+        print("Found {} matches with error below {}.".format(len(bounceMatches), cutoff))
 
-    # print(deductionCats)
-    # Plot
+        tariffedBounces.append({
+            'bounceToMatch': thisBounce,
+            'timeTaken': timeTaken,
+            'matches': bounceMatches,
+        })
 
-    # handles = []
-    # for i, cat in enumerate(deductionCats):
-    #     handles.append(mpatches.Patch(color=colors[i], label=cat))
-    #     thisdict = deductionCats[cat]
-    #     plt.scatter(thisdict['x'], thisdict['y'], color=colors[i], marker='o')
-    # plt.legend(handles=handles)
-    ax.set_ylabel('Horizontal Travel')
-    ax.set_zlabel('Height')
-    ax.set_xlabel('Time (Frames)')
+    timeTaken = time.time() - start_time
+    print("---")
+    print("Took {:.2f}s = {:.2f}m to estimate all skills".format(timeTaken, timeTaken / 60))
 
-    plt.show()
+    # helper_funcs.save_pickle(tariffedBounces, thisRoutine.tariffPath())
+    # tariffedBounces = helper_funcs.load_pickle(thisRoutine.tariffPath())
+    # return
+
+    foundCorrectlyCount = 0
+    foundInFirst2Count = 0
+    estimatedTariff = 0.0
+    for tariffedBounce in tariffedBounces:
+        thisSkillName = tariffedBounce['bounceToMatch'].skill_name
+        matches = tariffedBounce['matches']
+        if not matches:
+            continue
+
+        estimatedTariff += matches[0]['bounce'].getTariff(db)
+
+        if thisSkillName == matches[0]['bounce'].skill_name:
+            foundCorrectlyCount += 1
+        if thisSkillName == matches[0]['bounce'].skill_name or thisSkillName == matches[1]['bounce'].skill_name:
+            foundInFirst2Count += 1
+
+    accuracy1stDeg = (foundCorrectlyCount / float(len(tariffedBounces))) * 100
+    accuracy2ndDeg = (foundInFirst2Count / float(len(tariffedBounces))) * 100
+    print('Accuracy: {:.0f}%. Within the first 2: {:.0f}%'.format(accuracy1stDeg, accuracy2ndDeg))
+    print('Actual tariff: {:.1f}, Estimated tariff: {:.1f}, difference: {:.1f}'.format(actualTariff, estimatedTariff, abs(actualTariff - estimatedTariff)))
+    print("Finished tariff\n")

@@ -1,5 +1,4 @@
 # Constants
-import os
 
 videosRootPath = 'C:\\Users\\psdco\\Videos\\'
 # databasePath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/db.sqlite3'
@@ -14,14 +13,22 @@ comps = [
     'Trainings',
     'Inhouse'
 ]
+
+levelsDict = {
+    'Novice': 0,
+    'Intermediate': 1,
+    'Intervanced': 2,
+    'Advanced': 3,
+    'Elite': 4,
+    'Elite Pro': 5,
+}
 levels = [
     'Novice',
     'Intermediate',
     'Intervanced',
     'Advanced',
     'Elite',
-    'idk',
-    "All"
+    'Elite Pro',
 ]
 
 # Right and leftFrom the perspective of the person
@@ -63,30 +70,58 @@ poseAliai = {
 }
 
 
-def getAngleIndices(poseMethod):
+def getAngleIndices(poseMethodKey):
     # poseJointLabels
-    pjl = poseAliai[poseMethod]
+    pjls = poseAliai[poseMethodKey]
     return {
-        "Right hip": [pjl.index('rshoulder'), pjl.index('rknee'), pjl.index('rhip')],
-        "Left hip": [pjl.index('lshoulder'), pjl.index('lknee'), pjl.index('lhip')],
-        "Right knee": [pjl.index('rhip'), pjl.index('rfoot'), pjl.index('rknee')],
-        "Left knee": [pjl.index('lhip'), pjl.index('lfoot'), pjl.index('lknee')],
-        "Right shoulder": [pjl.index('relbow'), pjl.index('rhip'), pjl.index('rshoulder')],
-        "Left shoulder": [pjl.index('lelbow'), pjl.index('lhip'), pjl.index('lshoulder')],
-        "Right elbow": [pjl.index('rshoulder'), pjl.index('rhand'), pjl.index('relbow')],
-        "Left elbow": [pjl.index('lshoulder'), pjl.index('lhand'), pjl.index('lelbow')],
+        # Angles order as A, B, C, where C is the one you want to find.
+        "Right elbow": [pjls.index('rshoulder'), pjls.index('rhand'), pjls.index('relbow')],
+        "Left elbow": [pjls.index('lshoulder'), pjls.index('lhand'), pjls.index('lelbow')],
+        "Right shoulder": [pjls.index('relbow'), pjls.index('rhip'), pjls.index('rshoulder')],
+        "Left shoulder": [pjls.index('lelbow'), pjls.index('lhip'), pjls.index('lshoulder')],
+        "Right hip": [pjls.index('rshoulder'), pjls.index('rknee'), pjls.index('rhip')],
+        "Left hip": [pjls.index('lshoulder'), pjls.index('lknee'), pjls.index('lhip')],
+        "Right knee": [pjls.index('rhip'), pjls.index('rfoot'), pjls.index('rknee')],
+        "Left knee": [pjls.index('lhip'), pjls.index('lfoot'), pjls.index('lknee')],
+        "Head": [pjls.index('chest'), pjls.index('head'), pjls.index('neck')],
     }
 
 
+def getSpecialAngleIndices(poseMethodKey):
+    # poseJointLabels
+    pjls = poseAliai[poseMethodKey]
+    return {
+        # Angles order as A, B, C, where C is the one you want to find.
+        # And A is the one to be tampered with
+        "Right leg with horz": [pjls.index('rhip'), pjls.index('rknee'), pjls.index('rhip')],
+        "Left leg with horz": [pjls.index('lhip'), pjls.index('lknee'), pjls.index('lhip')],
+        "Torso with horz": [pjls.index('centerhip'), pjls.index('chest'), pjls.index('centerhip')],
+    }
+
+
+specialOffsets = {
+    # x, y offsets
+    "Right leg with horz": [10, 0],
+    "Left leg with horz": [10, 0],
+    "Torso with horz": [0, 10],
+}
+
+# Maintains order
 angleIndexKeys = [
+    "Right elbow",
+    "Left elbow",
+    "Right shoulder",
+    "Left shoulder",
     "Right knee",
     "Left knee",
     "Right hip",
     "Left hip",
-    "Right shoulder",
-    "Left shoulder",
-    "Right elbow",
-    "Left elbow",
+    "Head"
+]
+extendedAngleIndexKeys = angleIndexKeys + [
+    "Right leg with horz",
+    "Left leg with horz",
+    "Torso with horz",
 ]
 angleAverageKeys = [
     'Knee',
@@ -95,7 +130,7 @@ angleAverageKeys = [
     'Elbow',
 ]
 
-# part_name: [name, bgr]. for plot and opencv
+# part_name: [color_name, bgr]. for pyplot, and opencv
 poseColors = {
     'rfoot': ['red', (0, 0, 255)],
     'rknee': ['green', (0, 255, 0)],

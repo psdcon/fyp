@@ -9,13 +9,15 @@ from flask import Flask, request, g, render_template
 from flask import after_this_request
 from flask import get_template_attribute
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import case
 from sqlalchemy import text
 
 import judging_rows_html
+from helpers import consts
+from helpers import helper_funcs
 from helpers.db_declarative import Routine, Contributor, Judgement, Bounce, Deduction
+from image_processing import import_output
+from image_processing import visualise
 
-# create our little application :)
 app = Flask(__name__)
 
 # Load default config and override config from an environment variable
@@ -59,20 +61,62 @@ def index():
     return render_template('home.html', title='FYP', routines=routines)
 
 
-@app.route('/list')
-def list_routines():
+@app.route('/gui')
+def gui():
     contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
-    routines = db.query(Routine).filter(Routine.use == 1).order_by(
-        case(((Routine.level == 'Novice', 0),
-              (Routine.level == 'Intermediate', 1),
-              (Routine.level == 'Intervanced', 2),
-              (Routine.level == 'Advanced', 3),
-              (Routine.level == 'Elite', 4)))
-    ).all()
+    routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
     for i, routine in enumerate(routines):
         routine.index = i + 1
         routine.name = routine.prettyName()
-        routine.tracked = routine.isTracked(db)
+        routine.level_name = consts.levels[routine.level]
+        routine.tracked = routine.isTracked()
+        # routine.framesSaved = routine.hasFramesSaved()
+        routine.posed = routine.isPoseImported(db)
+        # routine.labelled = routine.isLabelled()
+        # routine.judged = routine.isJudged(contrib)
+        # routine.your_score = routine.getScore(contrib)
+        # routine.avg_score = routine.getAvgScore()
+        routine.thumbPath = 'images/thumbs/' + os.path.basename(routine.path).replace('.mp4', '.jpg')
+        # routine.broken = routine.isBroken()
+        routine.poseStatuses = helper_funcs.getPoseStatuses(routine.getPoseDirPaths(), routine.name)
+        routine.numBounces = len(routine.bounces)
+
+    return render_template('gui.html', title='List of Routines', routines=routines)
+
+
+@app.route('/gui_action', methods=['POST'])
+def handleAction():
+    print(request.values)
+    action = request.values.get('action')
+    routine_id = json.loads(request.values.get('routine_id'))
+    routine = db.query(Routine).filter(Routine.id == routine_id).first()
+    if action == 'play_monocap':
+        # threading.Thread(target=visualise.compare_pose_tracking_techniques, args=(routine,)).start()
+        visualise.compare_pose_tracking_techniques(routine)
+    elif action == 'play_pose':
+        visualise.play_frames(db, routine, show_pose=True)
+    elif action == 'import_pose':
+        import_output.import_monocap_preds_2d(db, routine)
+    elif action == 'delete_pose':
+        for frame in routine.frames:
+            frame.pose = ''
+        db.commit()
+        print('Delete saved')
+    else:
+        return 'Action "{}" not found'.format(action)
+
+    return ''
+
+
+@app.route('/list')
+def list_routines():
+    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
+    routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+    for i, routine in enumerate(routines):
+        routine.index = i + 1
+        routine.name = routine.prettyName()
+        routine.level_name = consts.levels[routine.level]
+        routine.tracked = routine.isTracked()
         routine.framesSaved = routine.hasFramesSaved()
         routine.posed = routine.isPoseImported(db)
         routine.labelled = routine.isLabelled()

@@ -21,6 +21,44 @@ $('#return-to-top').on('click', function (e) {
 });
 
 
+var GUIControls = {
+    init: function () {
+        this.bindUIActions();
+    },
+    bindUIActions: function () {
+        $('button').on('click', this.handleAction);
+    },
+    handleAction: function () {
+        action = $(this).data('action');
+        routineId = $(this).closest('.card').data('routineid');
+
+        if (action == 'delete_pose') {
+            isSure = confirm('Are you sure you want to detele the pose on this routine?');
+            if (!isSure) {
+                // Don't do anything
+                return
+            }
+        }
+
+        // Send to server
+        $.post({
+            url: "/gui_action",
+            data: "&routine_id=" + routineId
+            + "&action=" + action,
+            dataType: "text",
+            success: function (data) {
+                if (data.length === 0) {
+                }
+                else {
+                    alert(data);
+                    console.log(data);
+                }
+            }
+        });
+    }
+};
+
+
 var Label = {
     bounces: [],
     skillNames: select2SkillNameData, // imported from js file
@@ -463,3 +501,5 @@ var Tally = {
 
     }
 };
+
+

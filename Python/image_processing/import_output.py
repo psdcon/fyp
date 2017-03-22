@@ -9,7 +9,6 @@ import scipy
 import scipy.io
 
 from helpers import helper_funcs
-from helpers.helper_funcs import trimTouches
 from image_processing import track
 
 
@@ -62,6 +61,7 @@ def import_monocap_preds_2d(db, routine):
     else:
         suffix = poseDirSuffixes[0]
 
+    # Load chosen tracking technique
     preds_file = h5py.File(routine.getAsDirPath(suffix) + 'monocap_preds_2d.h5', 'r')
     preds = preds_file.get('monocap_preds_2d')
 
@@ -69,10 +69,18 @@ def import_monocap_preds_2d(db, routine):
         frameNumKey = '{0:04}'.format(frame_data.frame_num)
         try:
             pose = preds[frameNumKey].value.T
-            frame_data.pose = json.dumps(pose.tolist())
+            frame_data.pose = helper_funcs.roundListFloatsIntoStr(pose.tolist(), 1)
+            frame_data.angles = helper_funcs.roundListFloatsIntoStr(helper_funcs.pose2OrderedAngles(pose), 1)
         except KeyError:
             continue
     db.commit()
+
+    for bounce in routine.bounces:
+        angles = [json.loads(frame.angles, parse_float=lambda x: round(float(x), 1)) for frame in bounce.frames]
+        anglesPerFrameAsBounceAngles = zip(*angles)
+        bounce.angles = json.dumps(anglesPerFrameAsBounceAngles)
+
+    print("Pose Imported")
     return
 
 
@@ -113,7 +121,7 @@ def save_cropped_frames(db, routine, frames, suffix=None):
     # plt.show(block=False)
 
     trampolineTouches = np.array([frame.trampoline_touch for frame in routine.frames])
-    trampolineTouches = trimTouches(trampolineTouches)
+    trampolineTouches = helper_funcs.trimTouches(trampolineTouches)
 
     personMasks = helper_funcs.load_zipped_pickle(routine.personMasksPath())
 

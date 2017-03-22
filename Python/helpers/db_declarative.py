@@ -1,6 +1,8 @@
 import glob
+import json
 import os
 
+from numpy import array
 from sqlalchemy import Column, ForeignKey, INTEGER, REAL, TEXT
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -31,7 +33,7 @@ class Routine(Base):
     crop_length = Column(INTEGER)  # padding (in pixels) from the center point
     note = Column(TEXT)
     competition = Column(TEXT)
-    level = Column(TEXT)
+    level = Column(INTEGER)
     video_height = Column(INTEGER)
     video_width = Column(INTEGER)
     video_fps = Column(REAL)
@@ -48,7 +50,7 @@ class Routine(Base):
         self.path = path
 
     def __repr__(self):
-        return "Routine(path=%r, bounces=%r)" % (self.path, self.bounces)
+        return "Routine(id=%r, path=%r, level=%r)" % (self.id, self.path, self.level)
 
     # Path related getters
     def getAsDirPath(self, suffix=None, create=False):
@@ -79,9 +81,11 @@ class Routine(Base):
     def personMasksPath(self):
         return os.path.dirname(self.getAsDirPath()) + '_person_masks.gzip'
 
+    def tariffPath(self):
+        return os.path.dirname(self.getAsDirPath()) + '_tariff.p'
+
     # Db related values
     def getTrampolineTouches(self):
-        from numpy import array
         trampolineTouches = array([frame.trampoline_touch for frame in self.frames])
         trampolineTouches = helper_funcs.trimTouches(trampolineTouches)
         return trampolineTouches
@@ -97,9 +101,8 @@ class Routine(Base):
     def getAvgScore(self):
         if not self.judgements:
             return 'N/A'
-        import numpy as np
         scores = [j.getScore() for j in self.judgements]
-        return '{0:.1f}'.format(np.average(scores))
+        return '{0:.1f}'.format(sum(scores) / len(scores))
 
     # Db related attributes
     def isTracked(self):
@@ -145,14 +148,17 @@ class Frame(Base):
 
     id = Column(INTEGER, primary_key=True)
     routine_id = Column(INTEGER, ForeignKey('routines.id'))
+    bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
     frame_num = Column(INTEGER)
     center_pt_x = Column(INTEGER)
     center_pt_y = Column(INTEGER)
     hull_max_length = Column(INTEGER)
     trampoline_touch = Column(INTEGER)
     pose = Column(TEXT)
+    angles = Column(TEXT)
 
     routine = relationship("Routine", back_populates='frames')
+    bounce = relationship("Bounce", back_populates='frames')
 
     def __init__(self, routine_id, frame_num, center_pt_x, center_pt_y, hull_max_length, trampoline_touch):
         self.routine_id = routine_id
@@ -162,6 +168,16 @@ class Frame(Base):
         self.hull_max_length = hull_max_length
         self.trampoline_touch = trampoline_touch
         self.pose = ""
+
+    def __repr__(self):
+        return "Frame(id=%r, r_id=%r, b_id=%r)" % (self.id, self.routine_id, self.bounce_id)
+
+    def getBounce(self, db):
+        return db.query(Bounce).filter(
+            Bounce.routine_id == self.routine_id,
+            self.frame_num >= Bounce.start_frame,
+            self.frame_num <= Bounce.end_frame
+        ).first()
 
 
 class Bounce(Base):
@@ -184,8 +200,11 @@ class Bounce(Base):
     max_height = Column(INTEGER)
     end_height = Column(INTEGER)
 
+    angles = Column(TEXT)
+
     routine = relationship("Routine", back_populates='bounces')
     deductions = relationship("Deduction", back_populates='bounce')
+    frames = relationship("Frame", back_populates='bounce')
 
     def __init__(self, routine_id, bounce_index, skill_name, start_frame, max_height_frame, end_frame, start_time,
                  max_height_time, end_time, start_height, max_height, end_height):
@@ -206,14 +225,45 @@ class Bounce(Base):
         self.end_height = end_height
 
     def __repr__(self):
-        return "Bounce(skill_name=%r)" % (self.skill_name)
-        # return "Bounce(name=%r, routine=%r)" % (self.name, self.routine)
+        return "Bounce(id=%r, r_id=%r, skill_name=%r)" % (self.id, self.routine_id, self.skill_name)
 
     def isJudgeable(self):
         return self.skill_name != "In/Out Bounce"  # and self.skill_name != "Broken"
 
+    # Used in segment bounces to set up the frame to bounce relationship
     def getFrames(self, db):
-        return db.query(Frame).filter(Frame.routine_id == self.routine_id, Frame.frame_num >= self.start_frame, Frame.frame_num <= self.end_frame).all()
+        return db.query(Frame).filter(
+            Frame.routine_id == self.routine_id,
+            Frame.frame_num >= self.start_frame,
+            Frame.frame_num < self.end_frame
+        ).all()
+
+    def getAngles(self):
+        # import numpy as np
+        angles = []
+        for frame in self.frames:
+            if frame.angles:
+                angles.append(array(json.loads(frame.angles)))
+        return angles
+
+    def getAnglesAsCoords(self, db):
+        anglesAsCoords = []
+        bounceJointsAngles = array(self.getAngles()).T  # = 12 list of angles
+        if bounceJointsAngles.size == 0:
+            return None
+        # Make each angle a 2d point by adding on the x coordinate as an index.
+        # TODO check if 2d distance give better accuracy than 1d
+        return bounceJointsAngles
+        # numFrames = len(bounceJointsAngles[0])
+        # for i, bounceJointAngles in enumerate(bounceJointsAngles):
+        #     angleCoords = array([range(numFrames), bounceJointAngles]).T
+        #     anglesAsCoords.append(angleCoords)
+        # return anglesAsCoords
+
+    def getTariff(self, db):
+        # Get tariff for this bounce i.e. 0.x
+        skill = db.query(Skill).filter(Skill.name == self.skill_name).one()
+        return skill.tariff
 
 
 class Judgement(Base):
@@ -283,3 +333,15 @@ class Contributor(Base):
 
     def __repr__(self):
         return "Contributor(id=%r, name=%s)" % (self.id, self.name)
+
+
+class Skill(Base):
+    __tablename__ = 'skills'
+
+    id = Column(INTEGER, primary_key=True)
+    name = Column(TEXT)
+    fig_notation = Column(TEXT)
+    tariff = Column(REAL)
+    shape_bonus = Column(REAL)
+    start_position = Column(TEXT)
+    end_position = Column(TEXT)
