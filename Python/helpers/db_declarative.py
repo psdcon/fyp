@@ -167,7 +167,6 @@ class Frame(Base):
         self.center_pt_y = center_pt_y
         self.hull_max_length = hull_max_length
         self.trampoline_touch = trampoline_touch
-        self.pose = ""
 
     def __repr__(self):
         return "Frame(id=%r, r_id=%r, b_id=%r)" % (self.id, self.routine_id, self.bounce_id)
@@ -187,6 +186,7 @@ class Bounce(Base):
     routine_id = Column(INTEGER, ForeignKey('routines.id'))
     bounce_index = Column(INTEGER)
     skill_name = Column(TEXT)
+    shape = Column(TEXT)
 
     start_frame = Column(INTEGER)
     max_height_frame = Column(INTEGER)
@@ -225,7 +225,10 @@ class Bounce(Base):
         self.end_height = end_height
 
     def __repr__(self):
-        return "Bounce(id=%r, r_id=%r, skill_name=%r)" % (self.id, self.routine_id, self.skill_name)
+        if self.shape:
+            return "Bounce(id=%r, r_id=%r, skill_name=%r, shape=%r)" % (self.id, self.routine_id, self.skill_name, self.shape)
+        else:
+            return "Bounce(id=%r, r_id=%r, skill_name=%r)" % (self.id, self.routine_id, self.skill_name)
 
     def isJudgeable(self):
         return self.skill_name != "In/Out Bounce"  # and self.skill_name != "Broken"
@@ -263,7 +266,11 @@ class Bounce(Base):
     def getTariff(self, db):
         # Get tariff for this bounce i.e. 0.x
         skill = db.query(Skill).filter(Skill.name == self.skill_name).one()
-        return skill.tariff
+        tariff = skill.tariff
+        if self.shape and self.shape != 'Tuck':
+            tariff += skill.shape_bonus
+
+        return tariff
 
 
 class Judgement(Base):

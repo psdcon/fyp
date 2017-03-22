@@ -78,6 +78,7 @@ def import_monocap_preds_2d(db, routine):
     for bounce in routine.bounces:
         angles = [json.loads(frame.angles, parse_float=lambda x: round(float(x), 1)) for frame in bounce.frames]
         anglesPerFrameAsBounceAngles = zip(*angles)
+        # TODO Make sure this doesn't add quotes to the db entry
         bounce.angles = json.dumps(anglesPerFrameAsBounceAngles)
 
     print("Pose Imported")

@@ -189,22 +189,37 @@ def tariff(db, thisRoutine):
 
     foundCorrectlyCount = 0
     foundInFirst2Count = 0
+    ignoreStraddlePikeCount = 0
     estimatedTariff = 0.0
+    straddlePike = ['Straddle Jump', 'Pike Jump']
     for tariffedBounce in tariffedBounces:
         thisSkillName = tariffedBounce['bounceToMatch'].skill_name
         matches = tariffedBounce['matches']
         if not matches:
             continue
+        matchedSkillName = matches[0]['bounce'].skill_name
 
         estimatedTariff += matches[0]['bounce'].getTariff(db)
 
-        if thisSkillName == matches[0]['bounce'].skill_name:
-            foundCorrectlyCount += 1
-        if thisSkillName == matches[0]['bounce'].skill_name or thisSkillName == matches[1]['bounce'].skill_name:
-            foundInFirst2Count += 1
+        if thisSkillName == matchedSkillName:
+            # If the move has a shape, then they should match
+            if tariffedBounce['bounceToMatch'].shape and tariffedBounce['bounceToMatch'].shape == matches[0]['bounce'].shape:
+                foundCorrectlyCount += 1
+                ignoreStraddlePikeCount += 1
+            # it makes sense, alright!..
+            elif not tariffedBounce['bounceToMatch'].shape:
+                foundCorrectlyCount += 1
+                ignoreStraddlePikeCount += 1
+        elif thisSkillName in straddlePike \
+                and matchedSkillName in straddlePike:
+            ignoreStraddlePikeCount += 1
+
+            # if thisSkillName == matchedSkillName or thisSkillName == matches[1]['bounce'].skill_name:
+            #     foundInFirst2Count += 1
 
     accuracy1stDeg = (foundCorrectlyCount / float(len(tariffedBounces))) * 100
-    accuracy2ndDeg = (foundInFirst2Count / float(len(tariffedBounces))) * 100
-    print('Accuracy: {:.0f}%. Within the first 2: {:.0f}%'.format(accuracy1stDeg, accuracy2ndDeg))
+    # accuracy2ndDeg = (foundInFirst2Count / float(len(tariffedBounces))) * 100
+    accuracyIgnoringStraddlePike = (ignoreStraddlePikeCount / float(len(tariffedBounces))) * 100
+    print('Accuracy: {:.0f}%. Ignoring Straddle <=> Pike {:.0f}%'.format(accuracy1stDeg, accuracyIgnoringStraddlePike))
     print('Actual tariff: {:.1f}, Estimated tariff: {:.1f}, difference: {:.1f}'.format(actualTariff, estimatedTariff, abs(actualTariff - estimatedTariff)))
     print("Finished tariff\n")

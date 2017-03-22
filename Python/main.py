@@ -18,6 +18,14 @@ def main():
     # judge.judge(db)
     # exit()
 
+    # Back S/S to Seat, Cody, Barani Ball Out , Rudolph / Rudi.
+    # somis = db.query(Bounce).filter(Bounce.skill_name == 'Back S/S to Seat', Bounce.shape == None, Bounce.angles != None).all()
+    # for i, somi in enumerate(somis, start=1):
+    #     visualise.play_skill(db, somi.id, True)
+    #     print("{} of {}".format(i, len(somis)))
+    #
+    # exit()
+
     routines = db.query(Routine).filter(Routine.use == 1, Routine.level > 1).order_by(Routine.level).all()
     for routine in routines:
         if routine.isPoseImported(db):  # and not os.path.exists(routine.tariffPath()):

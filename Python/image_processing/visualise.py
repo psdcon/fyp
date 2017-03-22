@@ -16,7 +16,7 @@ from helpers.db_declarative import *
 from helpers.helper_funcs import clip_wrap
 
 
-def play_skill(db, bounce_id, show_pose=None, show_full=False):
+def play_skill(db, bounce_id, show_pose=True, show_full=False):
     bounce = db.query(Bounce).filter_by(id=bounce_id).one()
     routine = bounce.routine
 
@@ -34,20 +34,24 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
     if end_frame == -1:
         end_frame = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
-    f, axarr = plt.subplots(12, sharex=True)
-    f.canvas.set_window_title(routine.prettyName())
+    # f, axarr = plt.subplots(12, sharex=True)
+    # f.canvas.set_window_title(routine.prettyName())
 
     while True:
         if playOneFrame or not paused:
 
             _ret, frame = cap.read()
 
+            # Loop forever
+            if cap.get(cv2.CAP_PROP_POS_FRAMES) >= end_frame:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+
             try:
                 frame_data = db.query(Frame).filter_by(routine_id=routine.id, frame_num=cap.get(cv2.CAP_PROP_POS_FRAMES)).one()
             except NoResultFound:
                 continue
 
-            thisBounce = frame_data.getBounce(db)
+            thisBounce = frame_data.bounce
             if thisBounce and prevBounceName != thisBounce.skill_name:
                 # plot_frame_angles(thisBounce.skill_name, thisBounce.getFrames(db), axarr)
                 prevBounceName = thisBounce.skill_name
@@ -57,7 +61,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
 
             x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine.video_height, routine.video_width, cx, cy, routine.crop_length)
 
-            if frame_data.pose != '':
+            if frame_data.pose is not None:
                 pose = np.array(json.loads(frame_data.pose))
                 # Show full frame
                 if show_full:
@@ -116,15 +120,24 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
             cap.set(cv2.CAP_PROP_POS_FRAMES, frameToJumpTo)
             playOneFrame = True
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
+            cv2.destroyAllWindows()
             break
         elif k == ord('q') or k == 27:  # q/ESC
             print("Exiting...")
             exit()
 
-        # Loop forever
-        if cap.get(cv2.CAP_PROP_POS_FRAMES) == end_frame:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-            # break
+        elif k == ord('p'):
+            thisBounce.shape = 'Pike'
+            db.commit()
+            print('Changed shape to Pike')
+        elif k == ord('t'):
+            thisBounce.shape = 'Tuck'
+            db.commit()
+            print('Changed shape to Tuck')
+        elif k == ord('s'):
+            thisBounce.shape = 'Straight'
+            db.commit()
+            print('Changed shape to Straight')
 
 
 # For comparing the track of two skills. Ideally this would be n rather than 2
