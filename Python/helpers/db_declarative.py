@@ -205,6 +205,8 @@ class Bounce(Base):
     routine = relationship("Routine", back_populates='bounces')
     deductions = relationship("Deduction", back_populates='bounce')
     frames = relationship("Frame", back_populates='bounce')
+    tariff_match = relationship("TariffMatches", back_populates='bounce', foreign_keys='TariffMatches.bounce_id')
+    # bounces_i_match = relationship("TariffMatches", back_populates='matched_bounce')
 
     def __init__(self, routine_id, bounce_index, skill_name, start_frame, max_height_frame, end_frame, start_time,
                  max_height_time, end_time, start_height, max_height, end_height):
@@ -352,3 +354,29 @@ class Skill(Base):
     shape_bonus = Column(REAL)
     start_position = Column(TEXT)
     end_position = Column(TEXT)
+
+
+class TariffMatches(Base):
+    __tablename__ = 'tariff_matches'
+
+    id = Column(INTEGER, primary_key=True)
+    bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
+    matched_bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
+    matched_bounces_ids = Column(TEXT)
+    matched_bounces_distances = Column(TEXT)
+    time_taken = Column(REAL)
+
+    bounce = relationship("Bounce", back_populates='tariff_match', foreign_keys=[bounce_id])
+    # matched_bounce = relationship("Bounce", back_populates='bounces_i_match', foreign_keys=[matched_bounce_id])
+    matched_bounce = relationship("Bounce", foreign_keys=[matched_bounce_id])
+
+    def __init__(self, bounce_id, matched_bounce_id, matched_bounces_ids, matched_bounces_distances, time_taken):
+        self.bounce_id = bounce_id
+        self.matched_bounce_id = matched_bounce_id
+        self.matched_bounces_ids = matched_bounces_ids
+        self.matched_bounces_distances = matched_bounces_distances
+        self.time_taken = time_taken
+
+    def __repr__(self):
+        return "TariffMatch(id={}, b_id={}, ids={!r}, dists={!r}, time={})"\
+            .format(self.id, self.bounce_id, self.matched_bounces_ids, self.matched_bounces_distances, self.time_taken)

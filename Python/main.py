@@ -1,11 +1,14 @@
 from __future__ import division
 from __future__ import print_function
 
+import json
+
 import cv2
 
+import image_processing.tariff
 from helpers import consts
 from helpers import helper_funcs
-from helpers.db_declarative import Routine, getDb
+from helpers.db_declarative import Routine, getDb, TariffMatches
 from image_processing import judge
 from image_processing import trampoline, visualise, track, segment_bounces, import_output
 
@@ -26,10 +29,13 @@ def main():
     #
     # exit()
 
-    routines = db.query(Routine).filter(Routine.use == 1, Routine.level > 1).order_by(Routine.level).all()
+    routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+    routinesToTariff = []
     for routine in routines:
         if routine.isPoseImported(db):  # and not os.path.exists(routine.tariffPath()):
-            judge.tariff(db, routine)
+            routinesToTariff.append(routine)
+    image_processing.tariff.tariff_many(db, routinesToTariff)
+    image_processing.tariff.accuracy_of_many(db, routinesToTariff)
 
     # routine = db.query(Routine).filter(Routine.id == 14).first()
 
