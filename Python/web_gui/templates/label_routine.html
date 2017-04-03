@@ -67,9 +67,9 @@
 
             <div style="padding-top: 0.5em;">
                 <button class="btn btn-primary js-save">Save</button>
-                {% if nextRoutine %}
-                    <a href="{{ url_for('label_routine',routine_id=nextRoutine.id) }}" class="float-right btn btn-secondary js-do-next"
-                       title="Label the next unlabelled routine: {{ nextRoutine.name }}">Label Next</a>
+                {% if nextRoutine is not none %}
+                    <a href="{{ url_for('label_routine', routine_id=nextRoutine.id) }}" class="float-right btn btn-secondary js-do-next"
+                       title="Label the next unlabelled routine">Label {{ nextRoutine.name }}</a>
                 {% else %}
                     <a href="{{ url_for('list_routines') }}" class="float-right btn btn-secondary js-do-next" title="None left to label">Back to Routines</a>
                 {% endif %}

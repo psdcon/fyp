@@ -9,7 +9,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
 from helpers import consts
-from helpers import helper_funcs
 
 Base = declarative_base()
 
@@ -41,13 +40,20 @@ class Routine(Base):
     trampoline_top = Column(INTEGER)
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
+    original_path = Column(TEXT, unique=True)
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
     judgements = relationship("Judgement", back_populates='routine')
 
-    def __init__(self, path=None):
+    def __init__(self, path, original_path, competition, video_height, video_width, video_fps, frame_count):
         self.path = path
+        self.original_path = original_path
+        self.competition = competition
+        self.video_height = video_height
+        self.video_width = video_width
+        self.video_fps = video_fps
+        self.frame_count = frame_count
 
     def __repr__(self):
         return "Routine(id=%r, path=%r, level=%r)" % (self.id, self.path, self.level)
@@ -86,6 +92,7 @@ class Routine(Base):
 
     # Db related values
     def getTrampolineTouches(self):
+        from helpers import helper_funcs
         trampolineTouches = array([frame.trampoline_touch for frame in self.frames])
         trampolineTouches = helper_funcs.trimTouches(trampolineTouches)
         return trampolineTouches
@@ -169,7 +176,7 @@ class Frame(Base):
         self.trampoline_touch = trampoline_touch
 
     def __repr__(self):
-        return "Frame(id=%r, r_id=%r, b_id=%r)" % (self.id, self.routine_id, self.bounce_id)
+        return "Frame(id=%r, r_id=%r, b_id=%r, f_num=%r)" % (self.id, self.routine_id, self.bounce_id, self.frame_num)
 
     def getBounce(self, db):
         return db.query(Bounce).filter(
@@ -186,6 +193,7 @@ class Bounce(Base):
     routine_id = Column(INTEGER, ForeignKey('routines.id'))
     bounce_index = Column(INTEGER)
     skill_name = Column(TEXT)
+    code_name = Column(TEXT)
     shape = Column(TEXT)
 
     start_frame = Column(INTEGER)
@@ -201,6 +209,9 @@ class Bounce(Base):
     end_height = Column(INTEGER)
 
     angles = Column(TEXT)
+    angles_count = Column(INTEGER)
+    match_count = Column(INTEGER)
+    ref_or_test = Column(TEXT)
 
     routine = relationship("Routine", back_populates='bounces')
     deductions = relationship("Deduction", back_populates='bounce')
@@ -233,7 +244,7 @@ class Bounce(Base):
             return "Bounce(id=%r, r_id=%r, skill_name=%r)" % (self.id, self.routine_id, self.skill_name)
 
     def isJudgeable(self):
-        return self.skill_name != "In/Out Bounce"  # and self.skill_name != "Broken"
+        return self.skill_name != "Straight Bounce"  # and self.skill_name != "Broken"
 
     # Used in segment bounces to set up the frame to bounce relationship
     def getFrames(self, db):
@@ -306,12 +317,16 @@ class Deduction(Base):
 
     id = Column(INTEGER, primary_key=True)
     judgement_id = Column(INTEGER, ForeignKey('judgements.id'))
+    # bounce_id = Column(INTEGER, ForeignKey('bounces_OLD.id'))
     bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
     contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
     deduction_value = Column(REAL)
     deduction_json = Column(TEXT)
 
+    old_bounce_id = Column(INTEGER)
+
     bounce = relationship("Bounce", back_populates='deductions')
+    # bounce = relationship("OldBounce", back_populates='deductions')
     judgement = relationship("Judgement", back_populates='deductions')
     contributor = relationship("Contributor", back_populates='deductions')
 
@@ -323,7 +338,7 @@ class Deduction(Base):
         self.deduction_json = deduction_json
 
     def __repr__(self):
-        return "Deduction(deduction=%r, who=%r)" % (self.deduction, self.contributor)
+        return "Deduction(deduction=%r, who=%r)" % (self.deduction_value, self.contributor)
 
 
 class Contributor(Base):
@@ -349,11 +364,13 @@ class Skill(Base):
 
     id = Column(INTEGER, primary_key=True)
     name = Column(TEXT)
+    code = Column(TEXT)
     fig_notation = Column(TEXT)
     tariff = Column(REAL)
     shape_bonus = Column(REAL)
     start_position = Column(TEXT)
     end_position = Column(TEXT)
+    # ref_count = Column(INTEGER)
 
 
 class TariffMatches(Base):

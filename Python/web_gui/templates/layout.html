@@ -34,12 +34,13 @@
         <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#collapsingNavbar" aria-controls="collapsingNavbar" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <a class="navbar-brand" href="index.php" style="Final Year Project">FYP</a>
+        <a class="navbar-brand" href="{{ url_for('index') }}" title="Final Year Project">FYP</a>
 
         <div class="collapse navbar-collapse" id="collapsingNavbar">
             <ul class="navbar-nav mr-auto">
                 {{ nav_link('index', 'Home') }}
                 {{ nav_link('gui', 'GUI') }}
+                {{ nav_link('bounces_gui', 'Bounces') }}
                 {{ nav_link('list_routines', 'Routines') }}
             </ul>
             <ul class="navbar-nav pull-right">

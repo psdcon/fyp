@@ -27,10 +27,23 @@ var GUIControls = {
     },
     bindUIActions: function () {
         $('button').on('click', this.handleAction);
+        $('.level-select').on('change', this.setLevel)
+    },
+    setLevel: function () {
+        var level = $(this).val();
+        var routineId = $(this).closest('.card').data('routineid');
+
+        // Send to server
+        $.post({
+            url: "/set_level",
+            data: "&routine_id=" + routineId
+            + "&level=" + level,
+            dataType: "text"
+        });
     },
     handleAction: function () {
-        action = $(this).data('action');
-        routineId = $(this).closest('.card').data('routineid');
+        var action = $(this).data('action');
+        var routineId = $(this).closest('.card').data('routineid');
 
         if (action == 'delete_pose') {
             isSure = confirm('Are you sure you want to detele the pose on this routine?');
@@ -146,7 +159,7 @@ var Label = {
 
         // Send to server
         $.post({
-            url: "/fyp/label",
+            url: "/label",
             data: "&id=" + that.routineId
             + "&bounceIds=" + JSON.stringify(that.bounceIds)
             + "&bounceNames=" + JSON.stringify(that.bounceNames),
@@ -374,7 +387,7 @@ var Judge = {
                 skillDeductions[deduction_cat_name] = $(this).val();
             });
         });
-        // In the context of a routine with in/out bounces removed, bounces are referred to as skills to differentiate. This is probably confusing...
+        // In the context of a routine with straight Bounces removed, bounces are referred to as skills to differentiate. This is probably confusing...
         return skillDeductions
     },
     collectRoutineDeductions: function () {
@@ -408,7 +421,7 @@ var Judge = {
 
         // Send to server
         $.post({
-            url: "/fyp/judge",
+            url: "/judge",
             data: "routine_id=" + that.routineId
             + "&username=" + $username.val().trim()
             + "&skill_ids=" + JSON.stringify(that.skillIds)

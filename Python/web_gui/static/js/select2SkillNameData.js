@@ -1,7 +1,7 @@
 select2SkillNameData = [
    {
-      "id":"In/Out Bounce",
-      "text":"In/Out Bounce"
+       "id": "Straight Bounce",
+       "text": "Straight Bounce"
    },
    {
       "id":"Landing",

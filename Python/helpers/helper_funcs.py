@@ -14,8 +14,12 @@ from scipy.spatial import distance
 from helpers import consts
 
 
-def open_video(videoName):
-    pathToVideo = os.path.join(consts.videosRootPath, videoName)
+# from helpers.db_declarative import Bounce, Routine, Skill
+# from image_processing import visualise, import_output
+
+
+def open_video(routine_path):
+    pathToVideo = os.path.join(consts.videosRootPath, routine_path)
     print("Opening " + pathToVideo)
 
     if not os.path.exists(pathToVideo):
@@ -110,7 +114,7 @@ def find_if_close(cnt1, cnt2):
 
 def simple_downsample(a, num):
     if len(a) < num:
-        print("No can do. Cannot upsample list with {} elements to one with {}".format(len(a), num))
+        print("No can do. Cannot upsample list with {} elements into one with {}".format(len(a), num))
         return a
     b = []
     spacing = len(a) / float(num)
@@ -127,7 +131,7 @@ def prettyPrintRoutine(bounces):
     count = 0
     paddingLen = max([len(b.skill_name) for b in bounces]) + 2
     for b in bounces:
-        if b.skill_name != "In/Out Bounce":
+        if b.skill_name != "Straight Bounce":
             count += 1
         # Print any associated juding info
         if b.deductions:
@@ -324,3 +328,38 @@ def clip_wrap(num, lower, upper):
         return lower
     else:
         return num
+
+
+def getCropLength(hullLengths):
+    scaler = 1.2
+    cropLength = int(np.percentile(hullLengths, 95) * scaler)
+    return cropLength
+
+#
+# # Quick database fixes
+# def assign_shape(db):
+#     # Back S/S to Seat, Cody, Barani Ball Out , Rudolph / Rudi.
+#     # TODO this hasnt been tested in awhile
+#     # TODO it should check skills.shape_bonus
+#     bouncesNeedingShape = db.query(Bounce).filter(Bounce.shape == None, Bounce.angles != None).all()
+#     for i, somi in enumerate(bouncesNeedingShape, start=1):
+#         # skills
+#         visualise.play_skill(db, somi.id, True)
+#         print("{} of {}".format(i, len(bouncesNeedingShape)))
+#
+#     exit()
+#
+#
+# def shoulders_to_twist_angle(db):
+#     routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+#     for routine in routines:
+#         if not routine.isPoseImported(db):
+#             continue
+#         import_output.shoulder_width_to_angle(db, routine)
+#
+#
+# def assign_code_name_to_bounce(db):
+#     for bounce in db.query(Bounce).filter(Bounce.skill_name != None, Bounce.angles != None):
+#         bounceCode = db.query(Skill).filter(Skill.name == bounce.skill_name).one().code
+#         bounce.code_name = bounceCode.upper()
+#     db.commit()

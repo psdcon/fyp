@@ -10,6 +10,15 @@
     {% endif %}
 {% endmacro %}
 
+{% macro progress_bar(progress) %}
+    <div class="progress">
+        <div class="progress-bar bg-info" role="progressbar"
+             style="width: {{ progress }}%" aria-valuenow="{{ progress }}"
+             aria-valuemin="0" aria-valuemax="100">{{ progress }}%
+        </div>
+    </div>
+{% endmacro %}
+
 {% macro check_or_cross(condition) %}
     {% if condition %}
         <i class="good fa fa-check" aria-hidden="true"></i>

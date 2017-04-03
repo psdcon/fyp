@@ -32,8 +32,8 @@ def find_trampoline(routine):
     # Take a best guess at where it might be
     trampoline = {
         'top': routine.trampoline_top if routine.trampoline_top else _trampoline_top_best_guess(frame),
-        'center': routine.trampoline_center if routine.trampoline_center else routine.video_width / 2,  # TODO this is a poor default
-        'width': routine.trampoline_width if routine.trampoline_width else 135,
+        'center': routine.trampoline_center if routine.trampoline_center else routine.video_width / 2,  # TODO this is a reasonable default, a poor solution
+        'width': routine.trampoline_width if routine.trampoline_width else 236,
     }
     trampoline['ends'] = calcTrampolineEnds(trampoline['width'])
     use = routine.use
@@ -59,7 +59,7 @@ def find_trampoline(routine):
         cv2.imshow('Frame', frame)
         cv2.imshow('Frame Cropped', frameCropped)
 
-        k = cv2.waitKey(100)
+        k = cv2.waitKey(10)
         # TODO this is broken... DONE: Fixed it with asdw
         # print 'You pressed %d (0x%x), LSB: %d (%s)' % (k, k, k % 256,repr(chr(k % 256)) if k % 256 < 128 else '?')
         if k == ord('u'):  # 2490368:  # up

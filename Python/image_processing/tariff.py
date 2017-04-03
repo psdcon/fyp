@@ -4,139 +4,112 @@ from operator import itemgetter
 
 import numpy as np
 from scipy import signal
+from sqlalchemy import text
 
-from helpers.db_declarative import Bounce, TariffMatches
+from helpers.db_declarative import Bounce, TariffMatches, Routine
 
-CUTOFF = 30000
+CUTOFF = 20000
 
 
-def tariff_verbose(db, thisRoutine):
-    startTime = time.time()
+def do_tariff(db):
+    routines = db.query(Routine).filter(Routine.use == 1, Routine.id < 89, Routine.level < 5).order_by(Routine.level).all()
+    routinesToTariff = []
+    for routine in routines:
+        if routine.isPoseImported(db):  # and not os.path.exists(routine.tariffPath()):
+            routinesToTariff.append(routine)
 
-    # Setup
-    print('Setting up for tariff...')
-    posedBounces = getPosedBounces(db, thisRoutine.id)
-    # Set up angles with the right dimensions.
-    # for posedBounce in posedBounces:
-    #     posedBounce.anglesAsCoords = posedBounce.getAnglesAsCoords(db)
-    posedBounces[:] = [posedBounce for posedBounce in posedBounces if posedBounce.skill_name != 'In/Out Bounce']
-    posedBounces[:] = [posedBounce for posedBounce in posedBounces if posedBounce.skill_name != 'Landing']
-    timeTaken = time.time() - startTime
-    print("Took {:.2f}s = {:.2f}m to coordinate bounces.".format(timeTaken, timeTaken / 60))
+    # Tariff
+    tariff_many_routines(db, routinesToTariff)
+    # Print accuracy
+    accuracy_of_many_routines(db, routinesToTariff)
 
-    #
-    # Start processing this routine
-    print('Found {} bounces with pose'.format(len(posedBounces)))
-    print('\n----------------------')
-    print('Tariffing ' + thisRoutine.__repr__())
+    # Accuracy on a skill basis
+    accuracy_per_skill(db)
 
-    # Get angles per tariffedBounce in this routine
-    tariffedBounces = []  # List matches for each bounce
-    actualTariff = 0.0
-    for thisBounce in thisRoutine.bounces:
-        if thisBounce.skill_name == 'In/Out Bounce' or thisBounce.skill_name == 'Landing':
+
+def chose_reference_skills(db, referenceCountPerSkill):
+    shapedSkillCounter = {}
+    # print('Changing reference set to have {} bounces as a reference for each skill'.format(referenceCountPerSkill))
+    print('Num Refs = {}'.format(referenceCountPerSkill))
+    bounces = db.query(Bounce).filter(Bounce.angles != None).order_by(Bounce.match_count.desc()).all()
+
+    # The bounces to exclude from the reference set should be bounce
+    # What if I have more references of a bounce than examples of it.
+    # excludeBounces = skill_names_count_below(db, referenceCountPerSkill+1)
+    excludeBounces = [u'Back Half', u'Cody', u'Front Drop', u'Full Back', u'Full Front', u'Lazy Back', u'Rudolph / Rudi', u'To Feet from Front']
+    print("Excluding {}".format(excludeBounces))
+
+    # Reset the labels first
+    for bounce in bounces:
+        bounce.ref_or_test = None
+
+    for bounce in bounces:
+        # Don't assign skill's that've too few examples to be tested
+        if bounce.skill_name in excludeBounces:
             continue
 
-        # Check that this bounce has angles. May have been skipped by pose estimator
-        # thisBounce.anglesAsCoords = thisBounce.getAnglesAsCoords(db)
-        if thisBounce.angles is None:
-            continue
-        thisBounce.jointAngles = np.array(json.loads(thisBounce.angles))
-
-        # Add up actual tariff
-        actualTariff += thisBounce.getTariff(db)
-
-        # Start looking
-        print("")
-        print('Looking for {}. There are {} of these in the posedBounces.'.format(thisBounce, getNumAvailable(posedBounces, thisBounce)))
-        skillStartTime = time.time()
-
-        #
-        # Compare the angles of this bounce to every other bounce's angles
-        bounceMatches = [compareAngles(thisBounce.jointAngles, posedBounce.jointAngles, CUTOFF, posedBounce) for posedBounce in posedBounces]
-        bounceMatches[:] = [bm for bm in bounceMatches if bm is not None]  # remove None results
-        bounceMatches = sorted(bounceMatches, key=itemgetter('totalDistance'))
-
-        print(bounceMatches)
-        timeTaken = time.time() - skillStartTime
-        print("Took {:.2f}s = {:.2f}m to find this skill. ".format(timeTaken, timeTaken / 60))
-        print("Found {} matches with error below {}.".format(len(bounceMatches), CUTOFF))
-
-        tariffedBounces.append({
-            'bounceToMatch': thisBounce,
-            'timeTaken': timeTaken,
-            'matches': bounceMatches,
-        })
-
-    timeTaken = time.time() - startTime
-    print("---")
-    print("Took {:.2f}s = {:.2f}m to estimate all skills".format(timeTaken, timeTaken / 60))
-
-    # helper_funcs.save_pickle(tariffedBounces, thisRoutine.tariffPath())
-    # tariffedBounces = helper_funcs.load_pickle(thisRoutine.tariffPath())
-    # return
-
-    foundCorrectlyCount = 0
-    foundInFirst2Count = 0
-    ignoreStraddlePikeCount = 0
-    estimatedTariff = 0.0
-    straddlePike = ['Straddle Jump', 'Pike Jump']
-    for tariffedBounce in tariffedBounces:
-        thisSkillName = tariffedBounce['bounceToMatch'].skill_name
-        matches = tariffedBounce['matches']
-        if not matches:
-            continue
-        matchedSkillName = matches[0]['bounce'].skill_name
-
-        estimatedTariff += matches[0]['bounce'].getTariff(db)
-
-        if thisSkillName == matchedSkillName:
-            # If the move has a shape, then they should match
-            if tariffedBounce['bounceToMatch'].shape and tariffedBounce['bounceToMatch'].shape == matches[0]['bounce'].shape:
-                foundCorrectlyCount += 1
-                ignoreStraddlePikeCount += 1
-            # it makes sense, alright!..
-            elif not tariffedBounce['bounceToMatch'].shape:
-                foundCorrectlyCount += 1
-                ignoreStraddlePikeCount += 1
-        elif thisSkillName in straddlePike \
-                and matchedSkillName in straddlePike:
-            ignoreStraddlePikeCount += 1
-
-            # if thisSkillName == matchedSkillName or thisSkillName == matches[1]['bounce'].skill_name:
-            #     foundInFirst2Count += 1
-
-    accuracy1stDeg = (foundCorrectlyCount / float(len(tariffedBounces))) * 100
-    # accuracy2ndDeg = (foundInFirst2Count / float(len(tariffedBounces))) * 100
-    accuracyIgnoringStraddlePike = (ignoreStraddlePikeCount / float(len(tariffedBounces))) * 100
-    print("Accuracy: {:.0f}%. Ignoring Straddle <=> Pike {:.0f}%".format(accuracy1stDeg, accuracyIgnoringStraddlePike))
-    print("Actual tariff: {:.1f}, Estimated tariff: {:.1f}, difference: {:.1f}".format(actualTariff, estimatedTariff, abs(actualTariff - estimatedTariff)))
-    print("Finished tariff\n")
+        # Get a name which includes the bounces shape
+        shapedName = bounce.skill_name + " {}".format(bounce.shape)
+        # If the reference set is full, it goes in the test set
+        if shapedSkillCounter.get(shapedName, 0) >= referenceCountPerSkill:
+            bounce.ref_or_test = 'test'
+        else:
+            shapedSkillCounter[shapedName] = shapedSkillCounter.get(shapedName, 0) + 1
+            bounce.ref_or_test = 'ref'
+    db.commit()
 
 
-def tariff_many(db, routines):
+def tariff_many_routines(db, routines):
     startTime = time.time()
 
     # Setup
     print("Setting up for tariff...")
-    posedBounces = getPosedBounces(db, None)
-    # posedBounces[:] = [posedBounce for posedBounce in posedBounces if posedBounce.skill_name != 'In/Out Bounce']
-    # posedBounces[:] = [posedBounce for posedBounce in posedBounces if posedBounce.skill_name != 'Landing']
+    refBounces = get_reference_set(db)
     timeTaken = time.time() - startTime
     print("Took {:.2f}s = {:.2f}m to coordinate bounces.".format(timeTaken, timeTaken / 60))
-    print("Found {} bounces with pose".format(len(posedBounces)))
+    print("Found {} bounces with pose".format(len(refBounces)))
 
     print("Looking at {} routines".format(len(routines)))
     # Tariff all the routines in the list
-    # posedBounces that belong to the routine being tariffed are ignored when finding matches
+    # refBounces that belong to the routine being tariffed are ignored when finding matches
     for routine in routines:
-        tariff_lean(db, routine, posedBounces)
+        # Do tariff
+        tariff(db, routine.bounces, refBounces)
+        # Print accuracy
+        accuracy_of_bounces(db, routine)
 
     timeTaken = time.time() - startTime
-    print("Finished tariffing many. Took {:.2f}s = {:.2f}m to coordinate bounces.".format(timeTaken, timeTaken / 60))
+    print("")
+    print("Finished tariffing many. Took {:.2f}s = {:.2f}m.".format(timeTaken, timeTaken / 60))
+    print("")
 
 
-def tariff_lean(db, thisRoutine, posedBounces):
+def tariff_bounces_test_set(db):
+    startTime = time.time()
+
+    # Setup
+    # print("Setting up to tariff bounces...")
+    refBounces = get_reference_set(db)
+    timeTaken = time.time() - startTime
+    # print("Took {:.2f}s = {:.2f}m to collect reference bounces.".format(timeTaken, timeTaken / 60))
+    print("Reference set contains {} bounces".format(len(refBounces)))
+
+    # testBounces = db.query(Bounce).filter(Bounce.ref_or_test == "test", Bounce.skill_name != 'Landing').all()
+    testBounces = db.query(Bounce).filter(Bounce.angles != None, Bounce.skill_name != 'Landing').all()
+    print("Test set contains {} bounces".format(len(testBounces)))
+
+    # Do tariff
+    tariff(db, testBounces, refBounces)
+    # Print accuracy
+    accuracy_of_bounces(db, testBounces)
+
+    timeTaken = time.time() - startTime
+    print("")
+    print("Finished tariffing bounces. Took {:.2f}s = {:.2f}m.".format(timeTaken, timeTaken / 60))
+    print("")
+
+
+def tariff(db, thisBounces, refBounces, verbose=False):
     """
     This is designed to be used by tariff_many
     For this to work, all the posedBounces must be fetched and kept in memory before hand.
@@ -146,31 +119,47 @@ def tariff_lean(db, thisRoutine, posedBounces):
     startTime = time.time()
 
     # Start processing this routine
-    print("\n----------------------")
-    print('Tariffing ' + thisRoutine.__repr__())
+    # print("\n----------------------")
+    # print('Tariffing {}'.format(thisRoutine))
 
     tariffedBounces = []  # List of matches for each bounce in thisRoutine
-    for thisBounce in thisRoutine.bounces:
+    for thisBounce in thisBounces:
         # Check that this bounce has angles. May have been skipped by pose estimator
-        # if thisBounce.skill_name == 'In/Out Bounce' or thisBounce.skill_name == 'Landing' or thisBounce.angles is None:
-        if thisBounce.angles is None:
+        # if thisBounce.skill_name == 'Straight Bounce' or thisBounce.skill_name == 'Landing' or thisBounce.angles is None:
+        if thisBounce.angles is None \
+                or thisBounce.tariff_match \
+                or thisBounce.angles_count == 1:
+            # TODO Change this as desired
+            print("No angles or already matched or angle count too low")
             continue
+
+        if verbose:
+            print('\nLooking for {}. There are {} of these in the posedBounces.'.format(thisBounce, getNumAvailable(refBounces, thisBounce) - 1))
 
         # Start looking
         skillStartTime = time.time()
         thisBounceJointAngles = np.array(json.loads(thisBounce.angles))
 
         # Compare the angles of this bounce to every other bounce's angles
-        # Creates a dict {'bounce':Bounce(), 'totalDistance':0.0}. This makes sorting them convenient.
-        bounceMatches = [compareAngles(thisBounceJointAngles, posedBounce.jointAngles, CUTOFF, posedBounce) for posedBounce in posedBounces if posedBounce.routine_id != thisRoutine.id]
+        # Creates a dict {'bounce':Bounce(), 'MSE':0.0}. This makes sorting them convenient.
+        # bounceMatches = [compareAngles(thisBounceJointAngles, refBounce.jointAngles, CUTOFF, refBounce)
+        #                  for refBounce in refBounces if refBounce.routine_id != thisBounce.routine_id]
+        bounceMatches = [compareAngles(thisBounceJointAngles, refBounce.jointAngles, CUTOFF, refBounce)
+                         for refBounce in refBounces if refBounce.id != thisBounce.id]
         bounceMatches[:] = [bm for bm in bounceMatches if bm is not None]  # remove None results
-        bounceMatches = sorted(bounceMatches, key=itemgetter('totalDistance'))
+        bounceMatches = sorted(bounceMatches, key=itemgetter('MSE'))
 
         # Store first 5 results into a TariffMatches object
         timeTaken = time.time() - skillStartTime
         matchedBouncesIds = [bounceMatch['bounce'].id for bounceMatch in bounceMatches[:5]]
-        matchedBouncesDistances = [bounceMatch['totalDistance'] for bounceMatch in bounceMatches[:5]]
+        matchedBouncesDistances = [bounceMatch['MSE'] for bounceMatch in bounceMatches[:5]]
         tariffMatch = TariffMatches(thisBounce.id, matchedBouncesIds[0], json.dumps(matchedBouncesIds), json.dumps(matchedBouncesDistances), timeTaken)
+
+        if verbose:
+            print(bounceMatches[:5])
+            print(tariffMatch)
+            print("Took {:.2f}s = {:.2f}m to find this skill. ".format(timeTaken, timeTaken / 60))
+            print("Found {} matches with error below {}.".format(len(bounceMatches), CUTOFF))
 
         tariffedBounces.append(tariffMatch)
 
@@ -185,17 +174,33 @@ def tariff_lean(db, thisRoutine, posedBounces):
 ###############################
 # Helper functions used in Tariff_lean & Tariff_verbose
 ###############################
-def getPosedBounces(db, thisRoutineId):
+def skill_names_count_below(db, count):
+    sql = text("SELECT skill_name, count(1) FROM bounces WHERE skill_name NOTNULL AND angles NOTNULL GROUP BY skill_name")
+    results = db.execute(sql)
+
+    skillsWithCountsBelow = []
+    for res in results:
+        if res[1] < count:
+            skillsWithCountsBelow.append(res[0])
+
+    return skillsWithCountsBelow
+
+
+def get_reference_set(db):
     # Get all bounces that have pose in this level
-    posedBounces = db.query(Bounce).filter(
-        Bounce.angles != None,
-        Bounce.routine_id != thisRoutineId
+    refBounces = db.query(Bounce).filter(
+        # Bounce.angles != None,
+        Bounce.ref_or_test == 'ref',
+        # Bounce.angles_count > 18,
+        # Bounce.routine_id != thisRoutineId,  # will be none
+        # Bounce.skill_name != 'Straight Bounce',
+        Bounce.skill_name != 'Landing',
     ).all()
 
-    for bounce in posedBounces:
+    for bounce in refBounces:
         bounce.jointAngles = np.array(json.loads(bounce.angles))
 
-    return posedBounces
+    return refBounces
 
 
 def getNumAvailable(posedBounces, thisBounce):
@@ -209,27 +214,48 @@ def getNumAvailable(posedBounces, thisBounce):
 def compareAngles(thisAnglesAsCoords, posedAnglesAsCoords, cutoff, posedBounce):
     thisBounceFrameCount = len(thisAnglesAsCoords[0])
     tariffedBounce = {}
-    totalDistance = 0
+    absDiff = 0
+    sqErr = 0
     saveBounceMatch = True
-    for i in range(12):  # the number of different angles = 12
+    weights = [0.3, 0.3, 0.5, 0.5, 1, 1, 1, 1, 0.3, 1, 1, 1, 1]
+    """[
+        "Right elbow",
+        "Left elbow",
+        "Right shoulder",
+        "Left shoulder",
+        "Right knee",
+        "Left knee",
+        "Right hip",
+        "Left hip",
+        "Head"
+        "Right leg with horz",
+        "Left leg with horz",
+        "Torso with horz",
+        "Twist Angle"
+    ]"""
+    numAngles = 13
+    for i in range(numAngles):  # the number of different angles = 13
+        weight = weights[i]
         thisJoint = thisAnglesAsCoords[i]
         posedJoint = posedAnglesAsCoords[i]
-        if posedJoint.size < 15:
-            continue
 
         alignedPosedJoint = signal.resample(posedJoint, thisBounceFrameCount)
         distance = np.sum(np.absolute(np.subtract(thisJoint, alignedPosedJoint)))
 
         # distance, _path = fastdtw(thisJoint, posedJoint, dist=euclidean)
-        totalDistance += distance
-        # Don't bother with skills that're way off
-        if totalDistance > cutoff:
+        distance *= weight
+        absDiff += distance
+        sqErr += distance ** 2
+
+        # Early exit clause
+        if absDiff > cutoff:
             saveBounceMatch = False
             break
 
     # Only store as a match if we didn't exit early
     if saveBounceMatch:
-        tariffedBounce['totalDistance'] = int(round(totalDistance, 0))
+        tariffedBounce['SAD'] = int(round(absDiff, 0))
+        tariffedBounce['MSE'] = int(round(sqErr, 0)) / numAngles
         tariffedBounce['bounce'] = posedBounce
         return tariffedBounce
     else:
@@ -239,24 +265,24 @@ def compareAngles(thisAnglesAsCoords, posedAnglesAsCoords, cutoff, posedBounce):
 ################################
 # Accuracy
 ################################
-def accuracy_of_many(db, routines):
+def accuracy_of_many_routines(db, routines):
     averageAccuracy = 0
     averageAccuracyIgnoringShape = 0
     averageTariffError = 0
 
     for routine in routines:
-        accuracy, accuracyIgnoringShape, tariffError = tariff_routine_accuracy(db, routine)
+        accuracy, accuracyIgnoringShape, tariffError = accuracy_of_bounces(db, routine.bounces)
         averageAccuracy += accuracy
         averageAccuracyIgnoringShape += accuracyIgnoringShape
         averageTariffError += tariffError
 
     print('')
     print('Average accuracy {:.2f}%'.format(averageAccuracy / len(routines)))
-    print('Average accuracy {:.2f}%'.format(averageAccuracyIgnoringShape / len(routines)))
-    print('Average tariff error {:.2f}%'.format(averageTariffError / len(routines)))
+    print('Average accuracy ignoring somi shape {:.2f}%'.format(averageAccuracyIgnoringShape / len(routines)))
+    print('Average tariff error {:.3f}'.format(averageTariffError / len(routines)))
 
 
-def tariff_routine_accuracy(db, routine):
+def accuracy_of_bounces(db, bounces):
     bounceCount = 0
     correctCount = 0
     correctIgnoringShapeCount = 0
@@ -267,8 +293,11 @@ def tariff_routine_accuracy(db, routine):
 
     straddlePike = ['Straddle Jump', 'Pike Jump']
 
-    for thisBounce in routine.bounces:
-        # Ignore In/Out Bounce and Landings
+    maxTariff = 0
+    minTariff = 99
+
+    for thisBounce in bounces:
+        # Ignore Straight Bounce and Landings
         if not thisBounce.tariff_match:
             continue
 
@@ -277,7 +306,13 @@ def tariff_routine_accuracy(db, routine):
         matchedBounce = thisBounce.tariff_match[0].matched_bounce
         matchedBounceName = matchedBounce.skill_name
 
-        actualTariff += thisBounce.getTariff(db)
+        thisTariff = thisBounce.getTariff(db)
+        if thisTariff > maxTariff:
+            maxTariff = thisTariff
+        elif thisTariff < minTariff:
+            minTariff = thisTariff
+
+        actualTariff += thisTariff
         estimatedTariff += matchedBounce.getTariff(db)
 
         if thisBounceName == matchedBounceName:
@@ -294,11 +329,43 @@ def tariff_routine_accuracy(db, routine):
             ignoreStraddlePikeCount += 1
 
     accuracy = (correctCount / float(bounceCount)) * 100
-    accuracyIgnoringShape = (correctIgnoringShapeCount / float(bounceCount)) * 100
+    accuracyIgnoringSomiShape = (correctIgnoringShapeCount / float(bounceCount)) * 100
     accuracyIgnoringStraddlePike = (ignoreStraddlePikeCount / float(bounceCount)) * 100
     tariffDifference = abs(actualTariff - estimatedTariff)
-    print("Accuracy: {:.0f}%. Ignoring Straddle <=> Pike {:.0f}%".format(accuracy, accuracyIgnoringStraddlePike))
-    print("Actual tariff: {:.1f}, Estimated tariff: {:.1f}, difference: {:.1f}"
-          .format(actualTariff, estimatedTariff, tariffDifference))
+    print("Accuracy: {:.1f}%. Ignoring Straddle/Pike {:.1f}%. Ignoring somi shape {:.1f}%".format(accuracy, accuracyIgnoringStraddlePike, accuracyIgnoringSomiShape))
+    print("Actual tariff: {:.1f}, Estimated tariff: {:.1f}, difference: {:.1f}, "
+          "average tariff error {:.1f} in range {:.1f} to {:.1f}, average % error {:.1f}%"
+          .format(actualTariff, estimatedTariff, tariffDifference,
+                  tariffDifference / float(bounceCount), minTariff, maxTariff, (tariffDifference / actualTariff) * 100))
 
-    return accuracy, accuracyIgnoringShape, tariffDifference
+    return accuracy, accuracyIgnoringSomiShape, tariffDifference
+
+
+def accuracy_per_skill(db):
+    totalOfEachBounce = {}
+    hitsForEachBounce = {}
+
+    tariffMatches = db.query(TariffMatches).all()
+    for thisMatch in tariffMatches:
+        thisBounce = thisMatch.bounce
+        matchedBounce = thisMatch.matched_bounce
+
+        totalOfEachBounce[thisBounce.skill_name] = totalOfEachBounce.get(thisBounce.skill_name, 0) + 1
+
+        if thisBounce.skill_name == matchedBounce.skill_name:
+            if thisBounce.shape and thisBounce.shape == matchedBounce.shape:
+                hitsForEachBounce[thisBounce.skill_name] = hitsForEachBounce.get(thisBounce.skill_name, 0) + 1
+            elif not thisBounce.shape:
+                hitsForEachBounce[thisBounce.skill_name] = hitsForEachBounce.get(thisBounce.skill_name, 0) + 1
+
+    accuracyPerSkill = {}
+    for bounceNameKey in totalOfEachBounce:
+        bounceCount = totalOfEachBounce[bounceNameKey]
+        hitCount = hitsForEachBounce.get(bounceNameKey, 0)  # may not have got any hits on this skill
+        accuracyPerSkill[bounceNameKey] = (hitCount / float(bounceCount)) * 100
+
+    accuracySorted = sorted(accuracyPerSkill.items(), key=itemgetter(1))
+    print(accuracySorted)
+    print('wait')
+
+#     (u'Back Half', 0.0), (u'Rudolph / Rudi', 0.0), (u'Landing', 0.0), (u'Full Front', 0.0), (u'Front Drop', 0.0), (u'Cody', 0.0), (u'To Feet from Front', 20.0), (u'Half Twist Jump', 22.22222222222222), (u'Half Twist to Seat Drop', 30.0), (u'Lazy Back', 33.33333333333333), (u'Full Twist Jump', 36.84210526315789), (u'To Feet from Back', 42.857142857142854), (u'Full Back', 50.0), (u'Half Twist to Feet from Back', 53.84615384615385), (u'Front S/S', 63.63636363636363), (u'Barani', 71.15384615384616), (u'Straddle Jump', 71.42857142857143), (u'Barani Ball Out', 71.42857142857143), (u'To Feet from Seat', 72.72727272727273), (u'Seat Drop', 76.92307692307693), (u'Crash Dive', 77.77777777777779), (u'Back Drop', 80.0), (u'Pike Jump', 82.5), (u'Back S/S', 85.52631578947368), (u'Half Twist to Feet from Seat', 87.5), (u'Tuck Jump', 93.10344827586206), (u'Straight Bounce', 96.85314685314685), (u'Back S/S to Seat', 100.0), (u'Swivel Hips/Seat Half Twist to Seat Drop', 100.0)]

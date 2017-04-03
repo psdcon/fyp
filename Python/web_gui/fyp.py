@@ -4,18 +4,23 @@ from __future__ import print_function
 import json
 import os
 import uuid
+from operator import itemgetter
 
 from flask import Flask, request, g, render_template
 from flask import after_this_request
 from flask import get_template_attribute
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import text
+from sqlalchemy import text, func, distinct
 
 import judging_rows_html
 from helpers import consts
 from helpers import helper_funcs
+from helpers import sql_queries
 from helpers.db_declarative import Routine, Contributor, Judgement, Bounce, Deduction
 from image_processing import import_output
+from image_processing import segment_bounces
+from image_processing import track
+from image_processing import trampoline
 from image_processing import visualise
 
 app = Flask(__name__)
@@ -57,49 +62,151 @@ def create_user_id_cookie():
 
 @app.route('/')
 def index():
-    routines = []  # db.query(Routine).all()
-    return render_template('home.html', title='FYP', routines=routines)
+    counts = {}
+    counts['routines'] = db.query(func.count(Routine.id)).scalar()
+    counts['routinesUse'] = db.query(func.count(Routine.id)).filter(Routine.use == 1).scalar()
+    counts['routinesUsePose'] = db.execute(sql_queries.num_use_pose_routines).scalar()
+
+    # Bounce total in db
+    counts['bounces'] = db.query(func.count(Bounce.id)).scalar()
+    counts['bouncesJudgeable'] = db.execute(sql_queries.num_judgeable_bounces).scalar()
+
+    # Bounces to be used, total
+    counts['bouncesJudgeableUse'] = db.execute(sql_queries.num_judgeable_use_bounces).scalar()
+    counts['bouncesJudgeableUsePose'] = db.execute(sql_queries.num_judgeable_use_pose_bounces).scalar()
+    # TODO
+    counts['bouncesUseJudgedOld'] = None
+
+    # Bounces to be used, done so far
+    # counts['bouncesUsePose'] = db.execute(sql_queries.num_use_pose_bounces).scalar()
+    counts['bouncesUsePoseJudgedOld'] = None
+
+    counts['bouncesJudgedNew'] = db.query(func.count(distinct(Deduction.bounce_id))).filter(Deduction.deduction_json != None).scalar()
+    counts['bouncesJudgedOld'] = db.query(func.count(distinct(Deduction.bounce_id))).filter(Deduction.deduction_json == None).scalar()
+
+    percentCompletes = {}
+    percentCompletes['routinePose'] = int((counts['routinesUsePose'] / float(counts['routinesUse'])) * 100)
+    percentCompletes['bouncePose'] = int((counts['bouncesJudgeableUsePose'] / float(counts['bouncesJudgeableUse'])) * 100)
+
+    return render_template('home.html', title='FYP', counts=counts, percentCompletes=percentCompletes)
+
+
+@app.route('/bounces_gui')
+def bounces_gui():
+    # Get all skill names
+    # skills = db.execute(text("SELECT count(*), skill_name FROM bounces GROUP BY skill_name ")).fetchall()
+    skills = db.execute(text("SELECT skill_name, (SELECT id FROM skills WHERE skills.name=bounces.skill_name) AS sort_order, count(*) AS c FROM bounces  WHERE sort_order NOTNULL GROUP BY skill_name ORDER BY sort_order")).fetchall()
+    # Get all bounce with that name sorted from best to worst (deduction = 0.0 to 0.5)
+    sortedBounceClasses = []
+    for skill in skills:  # ignore Blank and Broken
+        skillName = skill[0]
+        skillBounces = db.query(Bounce).filter(Bounce.skill_name == skillName, Bounce.angles != None).all()
+        bouncesWithDeductions = []
+        for bounce in skillBounces:
+            deductions = bounce.deductions
+            if not deductions:
+                averageDeduction = 99.
+            else:
+                averageDeduction = deductions[0].deduction_value
+            bouncesWithDeductions.append([bounce, averageDeduction])
+        # Sort bounces by best to worst
+        sortedBounces = sorted(bouncesWithDeductions, key=itemgetter(1))
+        sortedBounceClasses.append([skillName, sortedBounces])
+
+    # routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).order_by(Routine.level).all()
+    # routines = db.query(Routine).filter(Routine.use == 1, Routine.id == 127).order_by(Routine.level).all()
+    # for i, routine in enumerate(routines):
+    #     routine.index = i + 1
+    #     routine.name = routine.prettyName()
+    #     routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
+    #     routine.tracked = routine.isTracked()
+    #     routine.posed = routine.isPoseImported(db)
+    #     # routine.labelled = routine.isLabelled()
+    #     # routine.judged = routine.isJudged(contrib)
+    #     routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
+    #     routine.poseStatuses = helper_funcs.getPoseStatuses(routine.getPoseDirPaths(), routine.name)
+    #     routine.numBounces = len(routine.bounces)
+
+    return render_template('bounces_gui.html', title='Bounces', bounceClassesAndBounces=sortedBounceClasses)
 
 
 @app.route('/gui')
 def gui():
-    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
-    routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+    # routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).order_by(Routine.level).all()
+    routines = db.query(Routine).filter(Routine.use == 1, Routine.id == 127).order_by(Routine.level).all()
     for i, routine in enumerate(routines):
         routine.index = i + 1
         routine.name = routine.prettyName()
-        routine.level_name = consts.levels[routine.level]
+        routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
         routine.tracked = routine.isTracked()
-        # routine.framesSaved = routine.hasFramesSaved()
         routine.posed = routine.isPoseImported(db)
         # routine.labelled = routine.isLabelled()
         # routine.judged = routine.isJudged(contrib)
-        # routine.your_score = routine.getScore(contrib)
-        # routine.avg_score = routine.getAvgScore()
-        routine.thumbPath = 'images/thumbs/' + os.path.basename(routine.path).replace('.mp4', '.jpg')
-        # routine.broken = routine.isBroken()
+        routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
         routine.poseStatuses = helper_funcs.getPoseStatuses(routine.getPoseDirPaths(), routine.name)
         routine.numBounces = len(routine.bounces)
 
     return render_template('gui.html', title='List of Routines', routines=routines)
 
 
+@app.route('/set_level', methods=['POST'])
+def setLevel():
+    print(request.values)
+
+    routine_id = int(request.values.get('routine_id'))
+    routine = db.query(Routine).filter(Routine.id == routine_id).first()
+
+    level = request.values.get('level')
+    if level == 'None':
+        routine.level = None
+    else:
+        routine.level = consts.levels.index(level)
+    db.commit()
+
+    return ''
+
+
 @app.route('/gui_action', methods=['POST'])
 def handleAction():
     print(request.values)
     action = request.values.get('action')
-    routine_id = json.loads(request.values.get('routine_id'))
+    routine_id = int(request.values.get('routine_id'))
     routine = db.query(Routine).filter(Routine.id == routine_id).first()
-    if action == 'play_monocap':
+
+    # If this routine is selected, automatically prompt to locate trampoline.
+    if not routine.trampoline_top or not routine.trampoline_center or not routine.trampoline_width:
+        # Detect Trampoline
+        trampoline.detect_trampoline(db, routine)
+
+    # Do the action
+    if action == 'track':
+        track.track_and_save(db, routine)
+
+    elif action == 'segment_bounces':
+        segment_bounces.segment_bounces_and_save(db, routine)
+        # visualise.plot_data(routine)
+
+    elif action == 'save_frames':
+        import_output.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
+
+    elif action == 'play_monocap':
         # threading.Thread(target=visualise.compare_pose_tracking_techniques, args=(routine,)).start()
         visualise.compare_pose_tracking_techniques(routine)
+
     elif action == 'play_pose':
         visualise.play_frames(db, routine, show_pose=True)
+
     elif action == 'import_pose':
         import_output.import_monocap_preds_2d(db, routine)
+
     elif action == 'delete_pose':
         for frame in routine.frames:
-            frame.pose = ''
+            frame.pose = None
+            frame.angles = None
+
+        for bounce in routine.bounces:
+            bounce.angles = None
+            bounce.angles_count = None
         db.commit()
         print('Delete saved')
     else:
@@ -115,7 +222,7 @@ def list_routines():
     for i, routine in enumerate(routines):
         routine.index = i + 1
         routine.name = routine.prettyName()
-        routine.level_name = consts.levels[routine.level]
+        routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
         routine.tracked = routine.isTracked()
         routine.framesSaved = routine.hasFramesSaved()
         routine.posed = routine.isPoseImported(db)
@@ -123,7 +230,7 @@ def list_routines():
         routine.judged = routine.isJudged(contrib)
         routine.your_score = routine.getScore(contrib)
         routine.avg_score = routine.getAvgScore()
-        routine.thumbPath = 'images/thumbs/' + os.path.basename(routine.path).replace('.mp4', '.jpg')
+        routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
         routine.broken = routine.isBroken()
 
     return render_template('list_routines.html', title='List of Routines', routines=routines)
@@ -208,12 +315,12 @@ def judge_routine(routine_id):
     for skill in routine.bounces:
         if skill.skill_name == 'Broken':
             continue
-        if skill.skill_name == 'In/Out Bounce' and not lookForOutBounce:
+        if skill.skill_name == 'Straight Bounce' and not lookForOutBounce:
             continue
         else:
             lookForOutBounce = True
         # Found an out-bounce
-        if skill.skill_name == 'In/Out Bounce' or skill.skill_name == 'Landing':
+        if skill.skill_name == 'Straight Bounce' or skill.skill_name == 'Landing':
             skill.idx = '&nbsp;&nbsp;'
             lookForOutBounce = False  # stop looking once we've found one. Any following this considered landing phase
         else:

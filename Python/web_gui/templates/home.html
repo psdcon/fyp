@@ -1,14 +1,33 @@
+{% from "macros.html" import progress_bar with context %}
+
 {% extends "layout.html" %}
 {% block body %}
-  <div class="jumbotron jumbotron-fluid">
-    <div class="container">
-      <h1 style="font-weight: 300;">Final Year Project</h1>
-      <p class="lead">This website was made to help label and judge trampoline routine videos.</p>
-      <div>Click the <a href="list">Routines</a> link to get to the meat.</div>
+    <div class="jumbotron jumbotron-fluid">
+        <div class="container">
+            <h1 style="font-weight: 300;">Final Year Project</h1>
+            <p class="lead">This website was made to help label and judge trampoline routine videos.</p>
+            <div>Click the <a href="list">Routines</a> link to get to the meat.</div>
+        </div>
     </div>
-  </div>
-{##}
-{#  <h3>Tally</h3>#}
-{##}
-{#  TODO#}
+
+    <h3>Tallies</h3>
+    <h4>Routines</h4>
+    Using {{ counts['routinesUse'] }} of {{ counts['routines'] }} routines. <br>
+    <div style="padding-bottom: 1rem">
+        Pose for {{ counts['routinesUsePose'] }} of {{ counts['routinesUse'] }} usable routines.
+        {{ progress_bar(percentCompletes['routinePose']) }}
+    </div>
+
+    <h4>Bounces</h4>
+    Using {{ counts['bouncesJudgeableUse'] }} of {{ counts['bouncesJudgeable'] }} judgeable bounces ({{ counts['bounces'] }} incl StB & Broken). <br>
+    <div style="padding-bottom: 1rem">
+        Pose for {{ counts['bouncesJudgeableUsePose'] }} of {{ counts['bouncesJudgeableUse'] }} used judgeable bounces.
+        {{ progress_bar(percentCompletes['bouncePose']) }}
+    </div>
+
+    <h4>Bounces with Deductions</h4>
+    Bounces with new {{ counts['bouncesJudgedNew'] }}, old {{ counts['bouncesJudgedOld'] }} deductions. <br>
+
+    Deductions for  of  posed judgeable bounces
+
 {% endblock %}

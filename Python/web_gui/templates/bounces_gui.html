@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+{% block body %}
+
+    {% for bounceClassAndBounces in bounceClassesAndBounces %}
+        {% set className = bounceClassAndBounces[0] %}
+        {% set bouncesWithDeduction = bounceClassAndBounces[1] %}
+        <h1>{{ className }}</h1>
+
+        {% for bounceWithDeduction in bouncesWithDeduction %}
+            {% set bounce = bounceWithDeduction[0] %}
+            {% set deduction = bounceWithDeduction[1] %}
+            {{ bounce.id }}
+            {{ deduction }}
+            <br>
+        {% endfor %}
+    {% endfor %}
+
+{% endblock %}

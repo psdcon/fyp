@@ -5,15 +5,18 @@ from itertools import chain
 
 import cv2
 import h5py
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import scipy
 import scipy.io
 from scipy import interpolate
+from scipy import signal
 from sqlalchemy.orm.exc import NoResultFound
 
+from  helpers import helper_funcs
 from helpers.db_declarative import *
-from helpers.helper_funcs import clip_wrap
 
 
 def play_skill(db, bounce_id, show_pose=True, show_full=False):
@@ -141,108 +144,131 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
 
 
 # For comparing the track of two skills. Ideally this would be n rather than 2
+def play_frames_of_2_bounces(db, bounce1, bounce2):
+    print("\nCreating angle comparison plot")
+    # Create plot
+    fig, axes = plt.subplots(nrows=6, ncols=2, sharex=True, sharey=True)
+
+    b1Angles = np.array(json.loads(bounce1.angles))
+    b1Angles = np.delete(b1Angles, 8, 0)  # delete "head" angle
+    numFrames = len(b1Angles[0])
+
+    # Prepare b2 angles
+    b2Angles = json.loads(bounce2.angles)
+    b2Angles = np.delete(b2Angles, 8, 0)  # delete "head" angle
+    b2ResampAngles = np.array([signal.resample(ang, numFrames) for ang in b2Angles])
+
+    # Get distances for label
+    distances = [np.sum(np.absolute(np.subtract(ang1, ang2))) for ang1, ang2 in zip(b1Angles, b2ResampAngles)]
+
+    b1Handle = plot_angles_from_frames(axes, b1Angles)
+    b2Handle = plot_angles_from_frames(axes, b2ResampAngles)
+
+    # Add labels
+    labels = list(consts.extendedAngleIndexKeys)  # make a copy
+    labels.remove('Head')
+    for ax, label, dist in zip(axes.flat, labels, distances):
+        ax.set_ylim([0, 180])
+        ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
+        ax.set_title("{} ({:.0f})".format(label, dist))
+
+    fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances)), fontsize=16)
+    fig.legend((b1Handle, b2Handle), (bounce1.skill_name, bounce2.skill_name))
+    fig.tight_layout()
+
+    plt.show(block=False)
+
+    #
+    print("Starting video")
+    play_frames_of_2(db, bounce1.routine, bounce2.routine,
+                     bounce1.start_frame, bounce1.end_frame,
+                     bounce2.start_frame, bounce2.end_frame)
+
+
 def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, start_frame2=1, end_frame2=-1, show_full=False):
-    waitTime = 40
+    waitTime = 80
     playOneFrame = False
     paused = False
 
     cap1 = helper_funcs.open_video(routine1.path)
-    cap1.set(cv2.CAP_PROP_POS_FRAMES, start_frame1)
     if end_frame1 == -1:
         end_frame1 = cap1.get(cv2.CAP_PROP_FRAME_COUNT)
-    # TODO
-    # frameIndexes = [f.frame_num for f in fr]
 
     cap2 = helper_funcs.open_video(routine2.path)
-    cap2.set(cv2.CAP_PROP_POS_FRAMES, start_frame2)
     if end_frame2 == -1:
         end_frame2 = cap2.get(cv2.CAP_PROP_FRAME_COUNT)
 
-    firstFrame = db.query(Frame).filter_by(routine_id=routine1.id, frame_num=start_frame1).one()
-    show_pose = False if firstFrame.pose is None else True  # if pose is none, show ellipse
+    show_pose = True
 
     bothFrames = np.zeros(shape=(256, 256 * 2, 3), dtype=np.uint8)
+
+    # Create a list of frames from each to be played
+    frame_datas1 = db.query(Frame).filter(Frame.routine_id == routine1.id, Frame.frame_num >= start_frame1, Frame.frame_num < end_frame1, Frame.pose != None).all()
+    frame_datas2 = db.query(Frame).filter(Frame.routine_id == routine2.id, Frame.frame_num >= start_frame2, Frame.frame_num < end_frame2, Frame.pose != None).all()
+    frame_nums1 = [frame_data.frame_num for frame_data in frame_datas1]
+    frame_nums2 = [frame_data.frame_num for frame_data in frame_datas2]
+    num_frames1 = len(frame_datas1)
+    num_frames2 = len(frame_datas2)
+    frame_data1_ptr = 0
+    frame_data2_ptr = 0
+
+    cap1.set(cv2.CAP_PROP_POS_FRAMES, frame_nums1[0])
+    cap2.set(cv2.CAP_PROP_POS_FRAMES, frame_nums2[0])
+    _ret, frame1 = cap1.read()
+    _ret, frame2 = cap2.read()
 
     while True:
         if playOneFrame or not paused:
 
-            _ret, frame1 = cap1.read()
-            _ret, frame2 = cap2.read()
-
-            try:
-                frame_data1 = db.query(Frame).filter_by(routine_id=routine1.id, frame_num=cap1.get(cv2.CAP_PROP_POS_FRAMES)).one()
-                frame_data2 = db.query(Frame).filter_by(routine_id=routine2.id, frame_num=cap2.get(cv2.CAP_PROP_POS_FRAMES)).one()
-            except NoResultFound:
-                continue
+            frame_data_ptr_video = [cap1.get(cv2.CAP_PROP_POS_FRAMES), cap2.get(cv2.CAP_PROP_POS_FRAMES)]
+            frame_data1 = frame_datas1[frame_data1_ptr]
+            frame_data2 = frame_datas2[frame_data2_ptr]
 
             cx1 = frame_data1.center_pt_x
             cy1 = frame_data1.center_pt_y
-            if frame_data1.crop_length:
-                cropLength1 = frame_data1.crop_length
-            elif routine1.crop_length:
-                cropLength1 = routine1.crop_length
-            else:
-                cropLength1 = 256
 
             cx2 = frame_data2.center_pt_x
             cy2 = frame_data2.center_pt_y
-            if frame_data2.crop_length:
-                cropLength2 = frame_data2.crop_length
-            elif routine2.crop_length:
-                cropLength2 = routine2.crop_length
-            else:
-                cropLength2 = 256
 
             if show_pose:
-                pose1 = np.array(json.loads(frame_data1.pose))
-                pose2 = np.array(json.loads(frame_data2.pose))
+                # if pose is None, skip showing this frame
+                try:
+                    pose1 = np.array(json.loads(frame_data1.pose))
+                    pose2 = np.array(json.loads(frame_data2.pose))
+                except TypeError:
+                    continue
 
                 # Show full frame
                 if show_full:
                     pass
-                    # cv2.putText(frame1, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX,
-                    #             0.4, (255, 255, 255))
-                    # for p_idx in range(14):
-                    #     pose_x = int((cx - routine.padding) + pose[0, p_idx])
-                    #     pose_y = int((cy - routine.padding) + pose[1, p_idx])
-                    #     color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                    #     cv2.circle(frame1, (pose_x, pose_y), 5, color, thickness=cv2.FILLED)
-                    # cv2.imshow('HG Smooth', frame1)
 
                 # Show cropped
                 else:
-                    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine1.video_height, routine1.video_width, cx1, cy1, cropLength1)
+                    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine1.video_height, routine1.video_width, cx1, cy1, routine1.crop_length)
                     frameCropped1 = frame1[y1:y2, x1:x2]
-                    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine2.video_height, routine2.video_width, cx2, cy2, cropLength2)
+                    frameCropped1 = cv2.resize(frameCropped1, (256, 256))
+
+                    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine2.video_height, routine2.video_width, cx2, cy2, routine2.crop_length)
                     frameCropped2 = frame2[y1:y2, x1:x2]
+                    frameCropped2 = cv2.resize(frameCropped2, (256, 256))
 
                     for p_idx in range(16):
                         color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
                         cv2.circle(frameCropped1, (int(pose1[0, p_idx]), int(pose1[1, p_idx])), 5, color, thickness=cv2.FILLED)
-                    bothFrames[0:256, 0:256] = cv2.resize(frameCropped1, (256, 256))
+                    bothFrames[0:256, 0:256] = frameCropped1
+                    cv2.putText(bothFrames, '{}'.format(frame_nums1[frame_data1_ptr]), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
 
                     for p_idx in range(16):
                         color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
                         cv2.circle(frameCropped2, (int(pose2[0, p_idx]), int(pose2[1, p_idx])), 5, color, thickness=cv2.FILLED)
-                    frameCropped2 = cv2.resize(frameCropped2, (256, 256))
-                    bothFrames[0:256, 256:512] = cv2.resize(frameCropped2, (256, 256))
+                    bothFrames[0:256, 256:512] = frameCropped2
+                    cv2.putText(bothFrames, '{}'.format(frame_nums2[frame_data2_ptr]), (266, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
 
-                    cv2.putText(bothFrames, '{}'.format(frame_data1.frame_num - start_frame1), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    cv2.putText(bothFrames, '{}'.format(max(frame_data1_ptr, frame_data2_ptr)), (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     cv2.imshow('Pose', bothFrames)
 
-            else:
-                pass
-                # cv2.circle(frame1, (cx, cy), 3, (0, 0, 255), cv2.FILLED)
-                # ellipse = ((cx, cy), (frame_data.ellipse_len_major, frame_data.ellipse_len_minor), frame_data.ellipse_angle)
-                # cv2.ellipse(frame1, ellipse, color=(0, 255, 0), thickness=2)
-                # if show_full:
-                #     # (x, y), (MA, ma), angle
-                #     # ellipse = ((cx, cy), (float(frame_data.ellipse_len_major), float(frame_data.ellipse_len_minor)), frame_data.ellipse_angle)
-                #     cv2.imshow('bounce.skill_name', frame1)
-                # else:
-                #     frameCropped = frame1[y1:y2, x1:x2]
-                #     cv2.imshow('bounce.skill_name', frameCropped)
-
+            frame_data1_ptr += 1
+            frame_data2_ptr += 1
             if playOneFrame:
                 playOneFrame = False
 
@@ -251,8 +277,10 @@ def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, star
             paused = not paused
         elif k == ord('j'):  # prev frame
             playOneFrame = True
-            cap1.set(cv2.CAP_PROP_POS_FRAMES, cap1.get(cv2.CAP_PROP_POS_FRAMES) - 2)
-            cap2.set(cv2.CAP_PROP_POS_FRAMES, cap2.get(cv2.CAP_PROP_POS_FRAMES) - 2)
+            frame_data1_ptr = helper_funcs.clip_wrap(frame_data1_ptr - 2, 0, num_frames1 - 1)
+            frame_data2_ptr = helper_funcs.clip_wrap(frame_data2_ptr - 2, 0, num_frames2 - 1)
+            cap1.set(cv2.CAP_PROP_POS_FRAMES, frame_nums1[frame_data1_ptr])
+            cap2.set(cv2.CAP_PROP_POS_FRAMES, frame_nums2[frame_data2_ptr])
         elif k == ord('l'):  # next frame
             playOneFrame = True
         elif k == ord('.'):  # speed up
@@ -267,10 +295,39 @@ def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, star
             print("Exiting...")
             exit()
 
-        # Loop forever
-        if cap1.get(cv2.CAP_PROP_POS_FRAMES) == end_frame1 or cap2.get(cv2.CAP_PROP_POS_FRAMES) == end_frame2:
-            cap1.set(cv2.CAP_PROP_POS_FRAMES, start_frame1)
-            cap2.set(cv2.CAP_PROP_POS_FRAMES, start_frame2)
+        # Loop forever, allowing shorter sequence to pause for longer sequence
+        if frame_data1_ptr >= num_frames1 and frame_data2_ptr >= num_frames2:
+            frame_data1_ptr = 0
+            frame_data2_ptr = 0
+            cap1.set(cv2.CAP_PROP_POS_FRAMES, frame_nums1[frame_data1_ptr])
+            cap2.set(cv2.CAP_PROP_POS_FRAMES, frame_nums2[frame_data2_ptr])
+        elif frame_data1_ptr >= num_frames1:
+            frame_data1_ptr -= 1
+        elif frame_data2_ptr >= num_frames2:
+            frame_data2_ptr -= 1
+
+        # Let video capture catch up
+        if frame_data1_ptr <= num_frames1:
+            while True:
+                desiredFNum = frame_nums1[frame_data1_ptr]
+                vidFNum = cap1.get(cv2.CAP_PROP_POS_FRAMES)
+                if vidFNum < desiredFNum:
+                    _ret, frame1 = cap1.read()
+                elif vidFNum == desiredFNum:
+                    break
+                elif vidFNum > desiredFNum:  # if the video is further ahead than we want, force it back. This is slow...
+                    cap1.set(cv2.CAP_PROP_POS_FRAMES, desiredFNum)
+
+        if frame_data2_ptr <= num_frames2:
+            while True:
+                desiredFNum = frame_nums2[frame_data2_ptr]
+                vidFNum = cap2.get(cv2.CAP_PROP_POS_FRAMES)
+                if vidFNum < desiredFNum:
+                    _ret, frame2 = cap2.read()
+                elif vidFNum == desiredFNum:
+                    break
+                elif vidFNum > desiredFNum:  # if the video is further ahead than we want, force it back. This is slow...
+                    cap2.set(cv2.CAP_PROP_POS_FRAMES, desiredFNum)
 
 
 def plot_data(routine):
@@ -283,8 +340,7 @@ def plot_data(routine):
     y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
 
     # List inside list gets flattened
-    peaks_x = list(chain.from_iterable(
-        (bounce.start_time, bounce.max_height_frame / routine.video_fps) for bounce in routine.bounces))
+    peaks_x = list(chain.from_iterable((bounce.start_time, bounce.max_height_frame / routine.video_fps) for bounce in routine.bounces))
     peaks_x.append(routine.bounces[-1].end_time)
     peaks_y = list(chain.from_iterable((bounce.start_height, bounce.max_height) for bounce in routine.bounces))
     peaks_y.append(routine.bounces[-1].end_height)
@@ -332,29 +388,42 @@ def plot_data(routine):
     plt.show()
 
 
-def plot_frame_angles(bounceName, frames, axarr):
-    angles = []
-    xpts = []
-    for frame in frames:
-        if frame.angles:
-            xpts.append(frame.frame_num)
-            angles.append(np.array(json.loads(frame.angles)))
-    angles = np.array(angles)
+def plot_angles_from_frames(axes, framesInEachAngle):
+    # angles = []
+    # xTicks = []
+    # for frame in frames:
+    #     if frame.angles:
+    #         xTicks.append(frame.frame_num)
+    #         angles.append(np.array(json.loads(frame.angles)))
+    #         # else:
+    #         #     angles.append(None)
+    # anglesInEachFrame = np.array(angles)
+    # framesInEachAngle = anglesInEachFrame.T
+
+    """[
+        "Right elbow",
+        "Left elbow",
+        "Right shoulder",
+        "Left shoulder",
+        "Right knee",
+        "Left knee",
+        "Right hip",
+        "Left hip",
+        "Head"
+        "Right leg with horz",
+        "Left leg with horz",
+        "Torso with horz",
+        "Twist Angle"
+    ]"""
+
+    numFrames = len(framesInEachAngle[0])
+    handle = None
 
     # Plot angles
-    for plti, label in zip(range(12), consts.extendedAngleIndexKeys):
-        thisJoint = angles[:, plti, 0]
+    for jointAngles, ax in zip(framesInEachAngle, axes.flat):
+        handle, = ax.plot(range(numFrames), jointAngles)
 
-        axarr[plti].cla()
-        axarr[plti].clear()
-
-        axarr[plti].set_title(label)
-
-        axarr[plti].plot(range(len(angles)), thisJoint, label=label)
-
-    # plt.legend(loc='best')
-    plt.show(block=False)
-
+    return handle
 
 
 def compare_many_angles_plot(manyRoutineAngles, labels, block=True):
@@ -553,7 +622,7 @@ def compare_pose_tracking_techniques(routine):
             print('No MATLAB monocap files found ', poseDirName)
 
     # Set up pointers
-    frameNumbers = list(frameNumbers)
+    frameNumbers = list(frameNumbers)  # set() makes sure all unique frames get played.
     frameNumberPtr = 0
     imageListPtrs = [0 for _ in range(len(imagesLists))]
 
@@ -617,8 +686,8 @@ def compare_pose_tracking_techniques(routine):
         if k == ord('k'):  # play pause
             paused = not paused
         elif k == ord('j'):  # prev frame
-            frameNumberPtr = clip_wrap(frameNumberPtr - 2, 0, len(frameNumbers) - 1)
-            imageListPtrs = [clip_wrap(imagesListPointer - 2, 0, len(imagesLists[i]) - 1) for i, imagesListPointer in enumerate(imageListPtrs)]
+            frameNumberPtr = helper_funcs.clip_wrap(frameNumberPtr - 2, 0, len(frameNumbers) - 1)
+            imageListPtrs = [helper_funcs.clip_wrap(imagesListPointer - 2, 0, len(imagesLists[i]) - 1) for i, imagesListPointer in enumerate(imageListPtrs)]
             playOneFrame = True
         elif k == ord('l'):  # next frame
             playOneFrame = True
@@ -639,4 +708,136 @@ def compare_pose_tracking_techniques(routine):
             imageListPtrs = [0 for _ in range(len(imagesLists))]
 
     print("Finished comparing tracking techniques")
+    return
+
+
+# Error plots
+def plot_tariff_confusion_matrix(tariffMatches):
+    def plot_confusion_matrix(df_confusion, title='Confusion matrix'):
+        # from matplotlib import rcParams
+        # rcParams.update({'figure.autolayout': True})
+        # http://stackoverflow.com/questions/24521296/matplotlib-function-conventions-subplots-vs-one-figure
+
+        fig, ax = plt.subplots()
+        fig.set_size_inches(6.4, 6)
+        # ax.set_title(title)
+
+        cmap = matplotlib.cm.get_cmap('Greys')
+        im = ax.matshow(df_confusion, cmap=cmap)  # imshow
+        # fig.colorbar(im, orientation='horizontal')
+
+        tick_marks = np.arange(len(df_confusion.columns))
+        # plt.xticks(tick_marks, df_confusion.columns, rotation='vertical', verticalalignment='top')
+        plt.xticks(tick_marks, df_confusion.columns, rotation='vertical')
+        plt.yticks(tick_marks, df_confusion.index)
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_ylabel(df_confusion.index.name)
+        ax.set_xlabel(df_confusion.columns.name)
+
+        fig.tight_layout(pad=0)
+
+        imgName = consts.confImgPath + "confusion_matrix.pdf"
+        print("Writing image to {}".format(imgName))
+        plt.savefig(imgName)
+
+        plt.show()
+        return
+
+    actual = []
+    predicted = []
+    excludedMatched = [u'Back Half', u'Cody', u'Front Drop', u'Full Back', u'Full Front', u'Lazy Back', u'Rudolph / Rudi', u'To Feet from Front']
+    for thisMatch in tariffMatches:
+        thisBounce = thisMatch.bounce
+        matchedBounce = thisMatch.matched_bounce
+
+        if thisBounce.skill_name in excludedMatched or matchedBounce.skill_name in excludedMatched:
+            continue
+
+        actual.append(thisBounce.code_name)
+        predicted.append(matchedBounce.code_name)
+
+        # visualise.play_frames_of_2(db, thisBounce.routine, matchedBounce.routine, thisBounce.start_frame, thisBounce.end_frame, matchedBounce.start_frame, matchedBounce.end_frame)
+    y_actu = pd.Series(actual, name='Actual Skill Class')
+    y_pred = pd.Series(predicted, name='Predicted Skill Class')
+    df_confusion = pd.crosstab(y_actu, y_pred)
+    # df_confusion = pd.crosstab(y_actu, y_pred, rownames=['Actual'], colnames=['Predicted'], margins=True)  # add's sum col and row
+
+    df_conf_norm = df_confusion / df_confusion.sum(axis=1)
+    df_conf_norm.columns.name = "Predicted Skill Class"
+
+    # plot_confusion_matrix(df_confusion, 'Confusion Matrix')
+    plot_confusion_matrix(df_conf_norm, 'Normalised Confusion Matrix')
+    # plt.show()
+
+    return
+
+
+# Plot angles
+def plot_bounce_angles(bounce):
+    imgName = "{path}{filename}_angles.jpg".format(path=consts.bouncesRootPath, filename=bounce.id)
+    if os.path.exists(imgName):
+        print('File exists: {}'.format(imgName))
+        return
+
+    print("\nCreating angle comparison plot")
+    # Create plot
+    fig, axes = plt.subplots(nrows=1, ncols=6, sharex=True, sharey=True, figsize=(16, 2))
+
+    framesInEachAngle = np.array(json.loads(bounce.angles))
+    framesInEachAngle = framesInEachAngle[:, :30]
+    framesInEachAngle = np.delete(framesInEachAngle, 8, 0)  # delete "head" angle
+    numFrames = len(framesInEachAngle[0])
+    xTicks = np.arange(numFrames) / 30.
+
+    # indexOrders = [0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]
+    # indexOrders = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11]
+    indexOrders = [0, 2, 4, 6, 8, 10]
+
+    # Plot angles
+    for i, ax in zip(indexOrders, axes.flat[:5]):
+        jointAngles = framesInEachAngle[i]
+        rHandle, = ax.plot(xTicks, jointAngles, label="Right")
+        jointAngles = framesInEachAngle[i + 1]
+        lHandle, = ax.plot(xTicks, jointAngles, label="Left")
+    # add other 2
+    torsoHandle, = axes[5].plot(xTicks, framesInEachAngle[10], c='purple', label="Torso with Vertical")
+    twistHandle, = axes[5].plot(xTicks, framesInEachAngle[11], c='orange', label="Twist Angle")
+
+    # Place a legend to the right of this smaller subplot.
+    plt.legend(handles=[rHandle, lHandle, torsoHandle, twistHandle], bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    labels = [
+        'Elbow',
+        'Shoulder',
+        'Hip',
+        'Knee',
+        'Leg with Horizontal',
+        'Torso & Twist'
+    ]
+
+    # Add labels
+    # labels = list(consts.extendedAngleIndexKeys)  # make a copy
+    # labels.remove('Head')
+    for label, ax in zip(labels, axes.flat):
+        ax.set_title(label)
+
+    axes[0].set_ylim([0, 180])
+    # axes[0].set_xlim([0, 1])
+    axes[0].yaxis.set_ticks([0, 45, 90, 135, 180])
+    axes[0].xaxis.set_ticks([.5, 1])
+    # ax.xaxis.set_ticks([0, 60, 120, 180])
+    # ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
+
+    # axes[0].set_ylabel('Angle (deg)')
+    # fig.text(0.5, 0.01, 'Time (s)', ha='center')
+
+    # fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances)), fontsize=16)
+    # fig.legend((b1Handle, b2Handle), (bounce1.skill_name, bounce2.skill_name))
+    fig.tight_layout(pad=0)
+    fig.subplots_adjust(bottom=.2, right=0.82)
+
+    print("Writing image to {}".format(imgName))
+    plt.savefig(imgName)
+    # plt.show()
+    plt.close(fig)
     return

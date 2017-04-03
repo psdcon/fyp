@@ -1,9 +1,7 @@
 import json
-import os
 
 import cv2
 import numpy as np
-from scipy.spatial import distance
 
 from helpers import consts
 from helpers import helper_funcs
@@ -42,6 +40,7 @@ def track_and_save(db, routine):
 
     db.add_all(frames)
     db.commit()
+    print("Frames Saved")
 
 
 def prepareBgSubt(pKNN, cap, framesToAverage):
@@ -60,53 +59,71 @@ def prepareBgSubt(pKNN, cap, framesToAverage):
 
 def getPersonContour(fgMaskPrevPersonOverlap, contours):
     # Find contours in the combo mask and get their centers
-    _im2, overlapContours, _hierarchy = cv2.findContours(np.copy(fgMaskPrevPersonOverlap), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # _im2, overlapContours, _hierarchy = cv2.findContours(np.copy(fgMaskPrevPersonOverlap), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     # Sort the contours and find their centers
-    overlapContours = sorted(overlapContours, key=cv2.contourArea, reverse=True)
-    overlapContourCenters = [helper_funcs.calcContourCenter(contour) for contour in overlapContours if helper_funcs.calcContourCenter(contour) is not None]
+    # overlapContours = sorted(overlapContours, key=cv2.contourArea, reverse=True)
+    # overlapContourCenters = [helper_funcs.calcContourCenter(contour) for contour in overlapContours if helper_funcs.calcContourCenter(contour) is not None]
 
     # Show the contours with their numbers
-    overlapColor = cv2.cvtColor(fgMaskPrevPersonOverlap, cv2.COLOR_GRAY2RGB)
-    for i, cpt in enumerate(overlapContourCenters):
-        cv2.putText(overlapColor, '{}'.format(i), cpt, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255))
+    # overlapColor = cv2.cvtColor(fgMaskPrevPersonOverlap, cv2.COLOR_GRAY2RGB)
+    # for i, cpt in enumerate(overlapContourCenters):
+    #     cv2.putText(overlapColor, '{}'.format(i), cpt, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255))
     # cv2.imshow("overlap", cv2.resize(overlapColor, (resizeWidth, resizeHeight)))
 
     # Get contours in this errodedilate mask
-    thisFrameContourCenters = [helper_funcs.calcContourCenter(contour) for contour in contours if helper_funcs.calcContourCenter(contour) is not None]
+    # thisFrameContourCenters = [helper_funcs.calcContourCenter(contour) for contour in contours if helper_funcs.calcContourCenter(contour) is not None]
 
     # Match the contours in both frames based on min distance to their center points
-    contourGuessesIndices = []  # list where the index refers to the overlaContour and the value is the index of the closest thisContour
-    for i, overlapCenter in enumerate(overlapContourCenters):
-        minDist = 99999
-        minDistIndex = 0
-        for ii, thisCenter in enumerate(thisFrameContourCenters):
-            dist = distance.euclidean(thisCenter, overlapCenter)
-            if dist < minDist:
-                minDist = dist
-                minDistIndex = ii
-        contourGuessesIndices.append(minDistIndex)
+    # contourGuessesIndices = []  # list where the index refers to the overlaContour and the value is the index of the closest thisContour
+    # for i, overlapCenter in enumerate(overlapContourCenters):
+    #     minDist = 99999
+    #     minDistIndex = 0
+    #     for ii, thisCenter in enumerate(thisFrameContourCenters):
+    #         dist = distance.euclidean(thisCenter, overlapCenter)
+    #         if dist < minDist:
+    #             minDist = dist
+    #             minDistIndex = ii
+    #     contourGuessesIndices.append(minDistIndex)
 
     # Draw the last body detection as a mask
     # cv2.imshow("prevPersonFgMask", cv2.resize(prevPersonFgMask, (resizeWidth, resizeHeight)))
 
-    # Update it
+    # Create a mask to draw the selected regions of the person onto
     prevPersonFgMask = np.zeros_like(fgMaskPrevPersonOverlap)
-    if False and contourGuessesIndices and 0 in contourGuessesIndices:
+
+    # Decide which regions to select.
+    # 1 Use previous frame masked with this frame to find regions that overlap.
+    # 2 Use any contour that are close to the biggest
+    # 3 Use the biggest contour
+    if False:  # and contourGuessesIndices and 0 in contourGuessesIndices:
+        pass
         # check if the biggest and smallest have close edges so that if they're difting apart, the smaller one gets kicked out
         # if not helper_funcs.find_if_close(contours[0], contours[contourGuessesIndices[-1]]):
         #     print('throwing away')
         #     contourGuessesIndices = contourGuessesIndices[:-1]  # throw away the last index
 
-        foundContours = [contours[i] for i in contourGuessesIndices]
-        personContour = np.concatenate(foundContours)
-        for contour in foundContours:
+        # foundContours = [contours[i] for i in contourGuessesIndices]
+        # personContourConcat = np.concatenate(foundContours)
+        # for contour in foundContours:
+        #     cv2.drawContours(prevPersonFgMask, [contour], 0, (255, 255, 255), cv2.FILLED)
+    elif False:
+        # Concat contours if they're "near"
+        personContours = [contours[0]]
+        personContourConcat = contours[0]
+        for contour in contours[1:]:
+            helper_funcs.find_if_close(personContourConcat, contour)
+            personContours.append(contour)
+            personContourConcat = np.concatenate([personContourConcat, contour])
+
+        for contour in personContours:
             cv2.drawContours(prevPersonFgMask, [contour], 0, (255, 255, 255), cv2.FILLED)
     else:
-        personContour = contours[0]
+        personContours = [contours[0]]
+        personContourConcat = contours[0]
         cv2.drawContours(prevPersonFgMask, contours, 0, (255, 255, 255), cv2.FILLED)
 
-    return personContour, prevPersonFgMask
+    return personContourConcat, personContours, prevPersonFgMask
 
 
 def highlightPerson(frame, personMask, cx, cy, cropLength):
@@ -231,7 +248,7 @@ def track_gymnast(db, routine):
     trampolineAreaPx = sq_area((routine.trampoline_top, capHeight), (maskLeftBorder, maskRightBorder))
 
     # Pick a default crop len if none saved
-    cropLength = routine.crop_length if routine.crop_length else 200
+    # cropLength = routine.crop_length if routine.crop_length else 200
 
     # Background extractor. Ignore shadow
     pKNN = cv2.createBackgroundSubtractorKNN()
@@ -282,23 +299,24 @@ def track_gymnast(db, routine):
                 else:
                     lastContours = contours
 
-                personContour, prevPersonFgMask = getPersonContour(fgMaskPrevPersonOverlap, contours)
-                hull = cv2.convexHull(personContour)
+                personContourConcat, personContours, prevPersonFgMask = getPersonContour(fgMaskPrevPersonOverlap, contours)
+                blobHull = cv2.convexHull(personContourConcat)
 
                 if visualise:
                     # Convert the foreground mask to color so the biggest can be coloured in
                     biggestContour = cv2.cvtColor(frameFgMaskMorphed, cv2.COLOR_GRAY2RGB)
                     # Draw the biggest one in red
-                    cv2.drawContours(biggestContour, contours, 0, (0, 0, 255), cv2.FILLED)
-                    # Draw the outline of the convex hull for the person
-                    cv2.drawContours(biggestContour, [hull], 0, (0, 255, 0), 2)
+                    for contour in personContours:
+                        cv2.drawContours(biggestContour, [contour], 0, (0, 0, 255), cv2.FILLED)
+                    # Draw the outline of the convex blobHull for the person
+                    cv2.drawContours(biggestContour, [blobHull], 0, (0, 255, 0), 2)
                     # Resize and show it
                     biggestContour = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
                     cv2.putText(biggestContour, 'Blob Detection', (10, 20), font, 0.4, (255, 255, 255))
                     processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 1:resizeWidth * 2] = biggestContour
                     # cv2.imshow('personMask', personMask)
 
-                cx, cy = helper_funcs.calcContourCenter(personContour)
+                cx, cy = helper_funcs.calcContourCenter(personContourConcat)
                 if cx and cy:
                     centerPoints[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = [cx, cy]
 
@@ -311,18 +329,18 @@ def track_gymnast(db, routine):
                     _img, finerContours, _h = cv2.findContours(np.copy(finerPersonMask), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
                     if len(finerContours) > 0:
                         finerContours = sorted(finerContours, key=cv2.contourArea, reverse=True)
-                        hull = cv2.convexHull(finerContours[0])
-                    # Otherwise old hull is m
-                    hullMaxLen = getMaxHullLength(hull)
+                        finerHull = cv2.convexHull(finerContours[0])
+                    # Use finer hull because blob morph opperations will change height
+                    hullMaxLen = getMaxHullLength(finerHull)
                     hullLengths[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = hullMaxLen
 
-                    touchingTrmpl = isTouchingTrmpl(routine.trampoline_top, hull)
+                    touchingTrmpl = isTouchingTrmpl(routine.trampoline_top, finerHull)
                     trampolineTouches[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = touchingTrmpl
 
                     if visualise:
                         # Show trampoline touch detection
                         finerPersonMask4Vis = cv2.cvtColor(finerPersonMask, cv2.COLOR_GRAY2RGB)
-                        cv2.drawContours(finerPersonMask4Vis, [hull], 0, (0, 255, 0), 2)
+                        cv2.drawContours(finerPersonMask4Vis, [finerHull], 0, (0, 255, 0), 2)
                         if touchingTrmpl:
                             cv2.line(finerPersonMask4Vis, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 5)
                         else:
@@ -332,7 +350,9 @@ def track_gymnast(db, routine):
 
                         # Show person drawing the center of mass
                         cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
-                        trackedPerson = highlightPerson(frame, finerPersonMask, cx, cy, cropLength)
+                        # cropLength = helper_funcs.getCropLength(hullLengths.values())
+                        trackedPerson = highlightPerson(frame, finerPersonMask, cx, cy, 250)
+                        trackedPerson = cv2.resize(trackedPerson, (256, 256))
                         cv2.imshow("Track", trackedPerson)
                 else:
                     print("Skipping center point. Couldn't find moment")

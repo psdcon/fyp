@@ -12,7 +12,7 @@
 'Half Twist to Feet from back y'
 'Half Twist to Feet (from seat y'
 'Half Twist to Seat Drop y'
-'In/Out Bounce y'
+'Straight Bounce y'
 'Lazy Back y'
 'Pike Jump y'
 'Seat Drop y'
@@ -44,7 +44,7 @@
 "Half Twist to Feet from Back" y
 "Half Twist to Feet from Seat" y
 "Half Twist to Seat Drop" y
-"In/Out Bounce" y
+"Straight Bounce" y
 "Landing"  y
 "Lazy Back" y
 "Pike Jump" y
@@ -107,7 +107,7 @@ deduction_categories_per_skill = {
         'opening_timing_back',
         'after_opening_back'
     ],
-    'in/out bounce': [
+    'straight Bounce': [
         'out_bounce',
     ],
     'landing': [

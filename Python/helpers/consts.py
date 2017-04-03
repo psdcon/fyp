@@ -1,27 +1,22 @@
 # Constants
 
 videosRootPath = 'C:\\Users\\psdco\\Videos\\'
+bouncesRootPath = 'C:\\Users\\psdco\\Videos\\bounces\\'
 # databasePath = 'C:/Users/psdco/Documents/ProjectCode/Web/includes/db.sqlite3'
 # databasePath = 'C:/Users/psdco/Documents/ProjectCode/Python/db.sqlite3'
 lastSelectionFilePath = 'pyqt_gui/lastSaved.txt'
 thumbDir = 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python\\web_gui\\static\\images\\thumbs'
+confImgPath = 'C:\\Users\\psdco\\Dropbox\\My College\\Y5 Project\\4. Conference Paper\\images\\'
 
 contourDistance = 25
 minContourArea = 800
+
+referenceCountPerSkill = 2
 
 comps = [
     'Trainings',
     'Inhouse'
 ]
-
-levelsDict = {
-    'Novice': 0,
-    'Intermediate': 1,
-    'Intervanced': 2,
-    'Advanced': 3,
-    'Elite': 4,
-    'Elite Pro': 5,
-}
 levels = [
     'Novice',
     'Intermediate',
@@ -75,14 +70,14 @@ def getAngleIndices(poseMethodKey):
     pjls = poseAliai[poseMethodKey]
     return {
         # Angles order as A, B, C, where C is the one you want to find.
-        "Right elbow": [pjls.index('rshoulder'), pjls.index('rhand'), pjls.index('relbow')],
-        "Left elbow": [pjls.index('lshoulder'), pjls.index('lhand'), pjls.index('lelbow')],
-        "Right shoulder": [pjls.index('relbow'), pjls.index('rhip'), pjls.index('rshoulder')],
-        "Left shoulder": [pjls.index('lelbow'), pjls.index('lhip'), pjls.index('lshoulder')],
-        "Right hip": [pjls.index('rshoulder'), pjls.index('rknee'), pjls.index('rhip')],
-        "Left hip": [pjls.index('lshoulder'), pjls.index('lknee'), pjls.index('lhip')],
-        "Right knee": [pjls.index('rhip'), pjls.index('rfoot'), pjls.index('rknee')],
-        "Left knee": [pjls.index('lhip'), pjls.index('lfoot'), pjls.index('lknee')],
+        "Right Elbow": [pjls.index('rshoulder'), pjls.index('rhand'), pjls.index('relbow')],
+        "Left Elbow": [pjls.index('lshoulder'), pjls.index('lhand'), pjls.index('lelbow')],
+        "Right Shoulder": [pjls.index('relbow'), pjls.index('rhip'), pjls.index('rshoulder')],
+        "Left Shoulder": [pjls.index('lelbow'), pjls.index('lhip'), pjls.index('lshoulder')],
+        "Right Hip": [pjls.index('rshoulder'), pjls.index('rknee'), pjls.index('rhip')],
+        "Left Hip": [pjls.index('lshoulder'), pjls.index('lknee'), pjls.index('lhip')],
+        "Right Knee": [pjls.index('rhip'), pjls.index('rfoot'), pjls.index('rknee')],
+        "Left Knee": [pjls.index('lhip'), pjls.index('lfoot'), pjls.index('lknee')],
         "Head": [pjls.index('chest'), pjls.index('head'), pjls.index('neck')],
     }
 
@@ -93,35 +88,36 @@ def getSpecialAngleIndices(poseMethodKey):
     return {
         # Angles order as A, B, C, where C is the one you want to find.
         # And A is the one to be tampered with
-        "Right leg with horz": [pjls.index('rhip'), pjls.index('rknee'), pjls.index('rhip')],
-        "Left leg with horz": [pjls.index('lhip'), pjls.index('lknee'), pjls.index('lhip')],
-        "Torso with horz": [pjls.index('centerhip'), pjls.index('chest'), pjls.index('centerhip')],
+        "Right Leg with Horizontal": [pjls.index('rhip'), pjls.index('rknee'), pjls.index('rhip')],
+        "Left Leg with Horizontal": [pjls.index('lhip'), pjls.index('lknee'), pjls.index('lhip')],
+        "Torso with Vertical": [pjls.index('centerhip'), pjls.index('chest'), pjls.index('centerhip')],
     }
 
 
 specialOffsets = {
     # x, y offsets
-    "Right leg with horz": [10, 0],
-    "Left leg with horz": [10, 0],
-    "Torso with horz": [0, 10],
+    "Right Leg with Horizontal": [10, 0],
+    "Left Leg with Horizontal": [10, 0],
+    "Torso with Vertical": [0, 10],
 }
 
 # Maintains order
 angleIndexKeys = [
-    "Right elbow",
-    "Left elbow",
-    "Right shoulder",
-    "Left shoulder",
-    "Right knee",
-    "Left knee",
-    "Right hip",
-    "Left hip",
+    "Right Elbow",
+    "Left Elbow",
+    "Right Shoulder",
+    "Left Shoulder",
+    "Right Knee",
+    "Left Knee",
+    "Right Hip",
+    "Left Hip",
     "Head"
 ]
 extendedAngleIndexKeys = angleIndexKeys + [
-    "Right leg with horz",
-    "Left leg with horz",
-    "Torso with horz",
+    "Right Leg with Horizontal",
+    "Left Leg with Horizontal",
+    "Torso with Vertical",
+    "Twist Angle"
 ]
 angleAverageKeys = [
     'Knee',
