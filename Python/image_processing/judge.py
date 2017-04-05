@@ -18,7 +18,7 @@ def judge_skill(db):
     plt.title(desiredSkill)
     skillRatios = []
     for i, skill in enumerate(skills[:]):
-        visualise.play_skill(db, skill.id)
+        visualise.play_bounce(db, skill.id)
 
         skillFrames = db.query(Frame).filter(Frame.routine_id == skill.routine_id, Frame.frame_num > skill.start_frame, Frame.frame_num < skill.end_frame)
         frame_nums = [f.frame_num for f in skillFrames]

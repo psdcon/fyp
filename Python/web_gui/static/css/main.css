@@ -120,10 +120,10 @@ a .fa, .btn-link .fa {
 .select2-container--default .select2-results>.select2-results__options {
   min-height: 400px;
 }
-.highlightSkill,
-.table-striped>tbody>tr:nth-of-type(odd).highlightSkill {
+
+.highlightSkill {
   /*color: #3c763d;*/
-  /*background-color: #dff0d8;*/
+    background-color: #dff0d8;
   border-color: #5cb85c;
   z-index: 2;
 }

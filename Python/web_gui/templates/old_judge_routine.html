@@ -1,0 +1,166 @@
+{% extends "layout.html" %}
+{% block body %}
+
+    <h4 class="clearfix">
+        {{ routine.name }}
+        <small>
+            {{ routine.level }}
+            <button class="btn btn-secondary btn-sm pull-right" data-toggle="collapse" data-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
+                <i class="fa fa-keyboard-o" aria-hidden="true"></i>
+            </button>
+        </small>
+    </h4>
+    <div class="collapse mb-3" id="collapseExample">
+        <div class="card card-block">
+            <div class="card-text">
+                Keyboard shortcuts
+                <div class="row">
+                    <div class="col"><kbd>k</kbd> Play/pause the video.</div>
+                    <div class="col"><kbd>l</kbd> Play next bounce.</div>
+                    <div class="col"><kbd>j</kbd> Play previous bounce.</div>
+                    <div class="col"><kbd>i</kbd> Toggle looping.</div>
+                </div>
+                <div class="row">
+                    <div class="col"><kbd>.</kbd> Speed up video.</div>
+                    <div class="col"><kbd>,</kbd> Slow down video.</div>
+                    <div class="col"><kbd>n</kbd> Go to Next.</div>
+                    <div class="col"><kbd>Ctrl+Enter</kbd> Save.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="fixedsticky">
+                <video preload="auto" src="{{ url_for('static', filename=vidPath) }}" controls style="max-width:100%"></video>
+
+                <div style="text-align:right;">
+                    <span class="js-current-playback-speed">
+                        Playback Speed: 1
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="">
+                        <button type="button" class="btn btn-secondary js-btn-speed-down">-</button>
+                        <button type="button" class="btn btn-secondary js-btn-speed-up">+</button>
+                    </div>
+                </div>
+
+                <div style="text-align:right;">
+                    <span class="js-current-loop-index">
+                        No bounce looping
+                    </span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="">
+                        <button type="button" class="btn btn-secondary js-btn-prev-skill">&laquo;</button>
+                        <button type="button" class="btn btn-secondary js-btn-loop-skill"><i class="fa fa-repeat" aria-hidden="true"></i></button>
+                        <button type="button" class="btn btn-secondary js-btn-next-skill">&raquo;</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="col-md-6">
+
+            {% if not routine.labelled %}
+                <p>The bounces in this routine have not been labelled yet. Please click the button, and then come back.</p>
+                <div style="text-align:center;">
+                    <a href="{{ url_for('label_routine',routine_id=routine.id) }}" class="btn btn-primary">Label This Routine</a>
+                </div>
+            {% else %}
+
+                <!-- Input for Contributors name -->
+                <form class="form-inline mb-3"> <!-- form is here for autocomplete to work -->
+                    <label for="name" class="mr-2">Your Name:</label>
+                    <input type="text" id="name" autocomplete="given-name" required class="form-control js-username" style="flex-grow:1" value="{{ userName }}" placeholder="Name">
+                </form>
+
+                <div class="">
+                    <!-- "Table" Heading -->
+                    <div class="">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6>Skill Name</h6>
+                            <h6>Deduction</h6>
+                        </div>
+                    </div>
+
+                    <!-- All the skils -->
+                    {% for sk in skills %}
+                        <div class="js-bounce">
+                            <div class="d-flex w-100 justify-content-between">
+                                <span>
+                                    {{ sk.idx|safe }}
+
+                                    <!-- Loop button -->
+                                    <button class="btn-link btn-sm js-loop-btn" title="Click to loop the video on one skill. Press i to stop looping.">
+                                        <i class="fa fa-repeat" aria-hidden="true"></i> <span class="hidden-xs-down">Loop</span>
+                                    </button>
+
+                                    {{ sk.skill_name }}
+                                </span>
+
+                                <span>
+                                    <!-- Don't allow judging if skill is broken -->
+                                    {% if sk.skill_name == 'Broken' %}
+                                        N/A
+                                    {% else %}
+                                        <label for="number-input-{{ sk.idx|safe }}">0.</label>
+                                        <input id="number-input-{{ sk.idx|safe }}" class="js-deduction" type="number" min="0" max="5" step="1" value="3" maxlength="1" size="1" style="max-width:2rem; border: 1px solid rgba(0,0,0,.15); border-radius: .25rem;">
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    <div class="">
+                        <div class="col" style="text-align:center">
+                            <strong>Score:</strong>
+                            <span class="js-score">10.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <br>
+
+                <div class="row">
+                    <div class="col">
+                        <button class="btn btn-primary js-save">Save</button>
+                        {% if nextRoutine %}
+                            <a href="{{ url_for('judge_routine',routine_id=nextRoutine.id) }}" class="float-right btn btn-secondary js-do-next"
+                               title="Judge the next routine you haven't yet: {{ nextRoutine.name }}">Judge Next</a>
+                        {% else %}
+                            <a href="{{ url_for('list_routines') }}" class="float-right btn btn-secondary js-do-next" title="None left to judge">Back to Routines</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+            {% endif %}
+        </div> <!-- col-md-6 -->
+    </div>
+
+{% endblock %}
+
+{% block js %}
+
+    <script>
+
+        $('video').fixedsticky();
+
+        $(function () {
+            $('[data-toggle="tooltip"]').tooltip({'trigger': 'hover', 'html': true})
+        });
+
+        VideoControls.init(
+            $('video')[0],
+            {{ startEndTimes|safe }},
+            $('.js-bounce')
+        );
+
+        OldJudge.init(
+            {{ routine.id }},
+            {{ skillIds }}
+            {#            {{ bounces|safe }}#}
+        );
+
+    </script>
+
+{% endblock %}

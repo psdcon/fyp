@@ -19,7 +19,7 @@ from  helpers import helper_funcs
 from helpers.db_declarative import *
 
 
-def play_skill(db, bounce_id, show_pose=True, show_full=False):
+def play_bounce(db, bounce_id, show_pose=True, show_full=False):
     bounce = db.query(Bounce).filter_by(id=bounce_id).one()
     routine = bounce.routine
 

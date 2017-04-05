@@ -11,23 +11,36 @@
     </div>
 
     <h3>Tallies</h3>
-    <h4>Routines</h4>
+    <h4>Pose</h4>
     Using {{ counts['routinesUse'] }} of {{ counts['routines'] }} routines. <br>
     <div style="padding-bottom: 1rem">
         Pose for {{ counts['routinesUsePose'] }} of {{ counts['routinesUse'] }} usable routines.
-        {{ progress_bar(percentCompletes['routinePose']) }}
+        {{ progress_bar('bg-success', percentCompletes['routinePose']) }}
     </div>
 
-    <h4>Bounces</h4>
-    Using {{ counts['bouncesJudgeableUse'] }} of {{ counts['bouncesJudgeable'] }} judgeable bounces ({{ counts['bounces'] }} incl StB & Broken). <br>
+    Using {{ counts['bouncesJudgeableUse'] }} of {{ counts['bouncesJudgeable'] }} judgeable bounces ({{ counts['bounces'] }} incl StB, Ldn & Broken). <br>
     <div style="padding-bottom: 1rem">
-        Pose for {{ counts['bouncesJudgeableUsePose'] }} of {{ counts['bouncesJudgeableUse'] }} used judgeable bounces.
-        {{ progress_bar(percentCompletes['bouncePose']) }}
+        Pose for {{ counts['bouncesJudgeableUsePose'] }} of {{ counts['bouncesJudgeableUse'] }} usable, judgeable bounces.
+        {{ progress_bar('bg-info', percentCompletes['bouncePose']) }}
     </div>
 
-    <h4>Bounces with Deductions</h4>
-    Bounces with new {{ counts['bouncesJudgedNew'] }}, old {{ counts['bouncesJudgedOld'] }} deductions. <br>
+    <h4>Deductions</h4>
+    All bounces with new {{ counts['bouncesJudgedNew'] }}, old {{ counts['bouncesJudgedOld'] }} deductions. <br>
 
-    Deductions for  of  posed judgeable bounces
+    Old deductions for {{ counts['bouncesUsePoseJudgedOld'] }} used, posed, judgeable bounces. <br>
+    {#    Old deductions for {{ counts['bouncesUseJudgedOld'] }} used, no pose, judgeable bounces (just import these ones?...). <br> <br>#}
+
+    <div style="padding-bottom: 1rem">
+        Judgements for {{ counts['routinesUsePoseJudgedOld'] }} of {{ counts['routinesUsePose'] }} posed, usable routines.
+        {{ progress_bar('bg-success', percentCompletes['routinesJudged']) }}
+    </div>
+
+    <div style="padding-bottom: 1rem">
+        Deductions for {{ counts['bouncesUsePoseJudgedOld'] }} of {{ counts['bouncesJudgeableUsePose'] }} posed, usable, judgeable bounces.
+        {{ progress_bar('bg-info', percentCompletes['bouncesJudged']) }}
+    </div>
+
+
+
 
 {% endblock %}

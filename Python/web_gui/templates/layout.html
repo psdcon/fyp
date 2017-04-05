@@ -25,6 +25,11 @@
 
     <!-- Icons - For the return to top arrow -->
     <link rel="stylesheet" href="{{ url_for('static', filename='node_modules/font-awesome/css/font-awesome.min.css') }}">
+
+    {#http://flask.pocoo.org/docs/0.12/patterns/jquery/#}
+    <script type=text/javascript>
+        SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+    </script>
 </head>
 
 <body>
@@ -79,7 +84,8 @@
 <script src="{{ url_for('static', filename='node_modules/chart.js/dist/Chart.js') }}"></script>
 <script src="{{ url_for('static', filename='node_modules/fixed-sticky/fixedsticky.js') }}"></script>
 
-{% block js %}{% endblock %}
+{% block js %}
+{% endblock %}
 
 </body>
 

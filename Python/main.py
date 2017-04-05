@@ -4,7 +4,7 @@ from __future__ import print_function
 import cv2
 
 from helpers import helper_funcs
-from helpers.db_declarative import Routine, getDb, TariffMatches, Bounce, Judgement, Deduction
+from helpers.db_declarative import Routine, getDb, TariffMatches, Judgement, Deduction
 from image_processing import trampoline, visualise, track, segment_bounces, import_output
 
 # https://github.com/opencv/opencv/issues/6055
@@ -13,27 +13,6 @@ cv2.ocl.setUseOpenCL(False)
 
 def main():
     db = getDb()
-
-    # Update the judgements with new bounce ids
-    for deduction in db.query(Deduction).filter(Deduction.bounce_id == '').all():
-        # Set bounce id to the new id of the bounce
-        # find new id by looking up old bounce routine and b_idx
-        old_bounce = db.execute("select * from bounces_old where id = {}".format(deduction.old_bounce_id)).fetchone()
-        newBounce = db.query(Bounce).filter(Bounce.routine_id == old_bounce[1], Bounce.bounce_index == old_bounce[2]).one()
-        deduction.bounce_id = newBounce.id
-    db.commit()
-    exit()
-
-    for oldBounce in db.query(OldBounce).all():
-        newBounce = db.query(Bounce).filter(Bounce.routine_id == oldBounce.routine_id, Bounce.bounce_index == oldBounce.bounce_index).first()
-        for deduction in oldBounce.deductions:
-            deduction.bounce_id = newBounce.id
-    # db.commit()
-    exit()
-
-    # Output images for all bounces that have angles
-    for bounce in db.query(Bounce).filter(Bounce.angles != None).all():
-        visualise.plot_bounce_angles(bounce)
 
     routines = db.query(Routine).filter(Routine.use == 1).all()
     for routine in routines:
@@ -92,7 +71,7 @@ def main():
         # print("Level:", consts.levels[routine.level])
         # trampolineObj = {'top': routine.trampoline_top, 'center': routine.trampoline_center, 'width': routine.trampoline_width, }
         # print("Trampoline:", trampolineObj)
-        print("Tracked:", routine.isTracked())
+        print("Tracked:", routine.isTracked(db))
         # print("Bounces:", prettyPrintRoutine(routine.bounces))
         # print("Bounces:", len(routine.bounces))
         # print("Frames Saved:", routine.hasFramesSaved())

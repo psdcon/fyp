@@ -55,8 +55,8 @@ select2SkillNameData = [
             "text":"Half Twist to Seat Drop"
          },
          {
-            "id":"Swivel Hips/Seat Half Twist to Seat Drop",
-            "text":"Swivel Hips/Seat Half Twist to Seat Drop"
+             "id": "Seat Half Twist To Seat",
+             "text": "Seat Half Twist To Seat"
          },
          {
             "id":"To Feet from Seat",

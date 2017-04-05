@@ -87,9 +87,6 @@ class Routine(Base):
     def personMasksPath(self):
         return os.path.dirname(self.getAsDirPath()) + '_person_masks.gzip'
 
-    def tariffPath(self):
-        return os.path.dirname(self.getAsDirPath()) + '_tariff.p'
-
     # Db related values
     def getTrampolineTouches(self):
         from helpers import helper_funcs
@@ -112,31 +109,43 @@ class Routine(Base):
         return '{0:.1f}'.format(sum(scores) / len(scores))
 
     # Db related attributes
-    def isTracked(self):
-        return len(self.frames) > 0
+    def isTracked(self, db):
+        # return len(self.frames) > 0
+        count = db.execute("select count(*) from frame_data where frame_data.routine_id == {}".format(self.id)).scalar()
+        return count > 0
 
     def isPoseImported(self, db):
         # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=''
-        count = db.query(Frame).filter(Frame.pose != '', Frame.routine_id == self.id).count()
+        # count = db.query(Frame.id).filter(Frame.pose != '', Frame.routine_id == self.id).count()
+        count = db.execute("select count(*) from frame_data where frame_data.pose notnull and frame_data.routine_id == {}".format(self.id)).scalar()
         return count > 0
 
-    def isLabelled(self):
-        if not self.bounces:
-            return False
-        # Otherwise, check that they're all labelled
-        for b in self.bounces:
-            if b.skill_name == '':
-                return False
-        return True
+    def isLabelled(self, db):
+        count = db.execute("select count(*) from bounces where skill_name NOTNULL and routine_id == {}".format(self.id)).scalar()
+        # count = db.execute("SELECT count(*) FROM bounces WHERE skill_name = 'Broken' AND routine_id = {}".format(self.id)).scalar()
+        return count > 0
+        # if not self.bounces:
+        #     return False
+        # # Otherwise, check that they're all labelled
+        # for b in self.bounces:
+        #     if b.skill_name == '':
+        #         return False
+        # return True
 
-    def isBroken(self):
-        if not self.bounces:
-            return False
-        # Otherwise, check that they're all labelled
-        for b in self.bounces:
-            if b.skill_name == 'Broken':
-                return True
-        return False
+    def isBroken(self, db):
+        count = db.execute("SELECT count(*) FROM bounces WHERE skill_name = 'Broken' AND routine_id = {}".format(self.id)).scalar()
+        return count > 0
+        # if not self.bounces:
+        #     return False
+        # # Otherwise, check that they're all labelled
+        # for b in self.bounces:
+        #     if b.skill_name == 'Broken':
+        #         return True
+        # return False
+
+    def isOldJudged(self, db):
+        count = db.execute("SELECT * FROM judgements WHERE judge_style = 'old' AND routine_id = {}".format(self.id)).scalar()
+        return count > 0
 
     def isJudged(self, contributor=False):
         if contributor:  # has a value, the database Contributor obj
@@ -178,13 +187,6 @@ class Frame(Base):
     def __repr__(self):
         return "Frame(id=%r, r_id=%r, b_id=%r, f_num=%r)" % (self.id, self.routine_id, self.bounce_id, self.frame_num)
 
-    def getBounce(self, db):
-        return db.query(Bounce).filter(
-            Bounce.routine_id == self.routine_id,
-            self.frame_num >= Bounce.start_frame,
-            self.frame_num <= Bounce.end_frame
-        ).first()
-
 
 class Bounce(Base):
     __tablename__ = 'bounces'
@@ -217,6 +219,7 @@ class Bounce(Base):
     deductions = relationship("Deduction", back_populates='bounce')
     frames = relationship("Frame", back_populates='bounce')
     tariff_match = relationship("TariffMatches", back_populates='bounce', foreign_keys='TariffMatches.bounce_id')
+
     # bounces_i_match = relationship("TariffMatches", back_populates='matched_bounce')
 
     def __init__(self, routine_id, bounce_index, skill_name, start_frame, max_height_frame, end_frame, start_time,
@@ -262,20 +265,6 @@ class Bounce(Base):
                 angles.append(array(json.loads(frame.angles)))
         return angles
 
-    def getAnglesAsCoords(self, db):
-        anglesAsCoords = []
-        bounceJointsAngles = array(self.getAngles()).T  # = 12 list of angles
-        if bounceJointsAngles.size == 0:
-            return None
-        # Make each angle a 2d point by adding on the x coordinate as an index.
-        # TODO check if 2d distance give better accuracy than 1d
-        return bounceJointsAngles
-        # numFrames = len(bounceJointsAngles[0])
-        # for i, bounceJointAngles in enumerate(bounceJointsAngles):
-        #     angleCoords = array([range(numFrames), bounceJointAngles]).T
-        #     anglesAsCoords.append(angleCoords)
-        # return anglesAsCoords
-
     def getTariff(self, db):
         # Get tariff for this bounce i.e. 0.x
         skill = db.query(Skill).filter(Skill.name == self.skill_name).one()
@@ -292,15 +281,17 @@ class Judgement(Base):
     id = Column(INTEGER, primary_key=True)
     routine_id = Column(INTEGER, ForeignKey('routines.id'))
     contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
-    # score = Column(REAL)
+    score = Column(REAL)
+    judge_style = Column(TEXT)
 
     routine = relationship("Routine", back_populates='judgements')
     contributor = relationship("Contributor", back_populates='judgements')
     deductions = relationship("Deduction", back_populates='judgement')
 
-    def __init__(self, routine_id, contributor_id):
+    def __init__(self, routine_id, contributor_id, judge_style):
         self.routine_id = routine_id
         self.contributor_id = contributor_id
+        self.judge_style = judge_style
 
     def __repr__(self):
         return "Judgement(routine=%r, deductions=%r, who=%r)" % (self.routine, self.deductions, self.contributor)
@@ -317,16 +308,12 @@ class Deduction(Base):
 
     id = Column(INTEGER, primary_key=True)
     judgement_id = Column(INTEGER, ForeignKey('judgements.id'))
-    # bounce_id = Column(INTEGER, ForeignKey('bounces_OLD.id'))
     bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
     contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
     deduction_value = Column(REAL)
     deduction_json = Column(TEXT)
 
-    old_bounce_id = Column(INTEGER)
-
     bounce = relationship("Bounce", back_populates='deductions')
-    # bounce = relationship("OldBounce", back_populates='deductions')
     judgement = relationship("Judgement", back_populates='deductions')
     contributor = relationship("Contributor", back_populates='deductions')
 
@@ -370,7 +357,6 @@ class Skill(Base):
     shape_bonus = Column(REAL)
     start_position = Column(TEXT)
     end_position = Column(TEXT)
-    # ref_count = Column(INTEGER)
 
 
 class TariffMatches(Base):
@@ -395,5 +381,5 @@ class TariffMatches(Base):
         self.time_taken = time_taken
 
     def __repr__(self):
-        return "TariffMatch(id={}, b_id={}, ids={!r}, dists={!r}, time={})"\
+        return "TariffMatch(id={}, b_id={}, ids={!r}, dists={!r}, time={})" \
             .format(self.id, self.bounce_id, self.matched_bounces_ids, self.matched_bounces_distances, self.time_taken)

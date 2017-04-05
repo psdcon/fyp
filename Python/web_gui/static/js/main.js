@@ -20,6 +20,24 @@ $('#return-to-top').on('click', function (e) {
     }, 700);
 });
 
+// Any buttons with a bounce-id data attr are presumed to be a play button
+// Clicking it will be the bounce with the sepcified id. *arm emoji*
+$('*[data-bounce-id]').on('click', function () {
+    var bounceId = $(this).data("bounce-id");
+    $.post({
+        url: SCRIPT_ROOT + "/play_bounce",
+        data: "bounce_id=" + bounceId,
+        dataType: "text",
+        success: function (data) {
+            if (data.length === 0) {
+            }
+            else {
+                console.log(data);
+            }
+        }
+    });
+});
+
 
 var GUIControls = {
     init: function () {
@@ -35,7 +53,7 @@ var GUIControls = {
 
         // Send to server
         $.post({
-            url: "/set_level",
+            url: SCRIPT_ROOT + "/set_level",
             data: "&routine_id=" + routineId
             + "&level=" + level,
             dataType: "text"
@@ -55,7 +73,7 @@ var GUIControls = {
 
         // Send to server
         $.post({
-            url: "/gui_action",
+            url: SCRIPT_ROOT + "/gui_action",
             data: "&routine_id=" + routineId
             + "&action=" + action,
             dataType: "text",
@@ -98,14 +116,14 @@ var Label = {
                 data: that.skillNames,
                 matcher: oldMatcher(that.fuzzyMatcher)
             })
-                // Any time the select2 dropdown is closed, give it focus. otherwise focus disappears, which sucks
+            // Any time the select2 dropdown is closed, give it focus. otherwise focus disappears, which sucks
                 .on("select2:close", function () {
                     $(this).focus();
                 })
-                .on("select2:select", function(){
+                .on("select2:select", function () {
                     window.onbeforeunload = confirmOnPageExit;
                 })
-                .each(function(i){
+                .each(function (i) {
                     if (that.bounceNames[i] !== '')
                         this.value = that.bounceNames[i]
                 })
@@ -159,7 +177,7 @@ var Label = {
 
         // Send to server
         $.post({
-            url: "/label",
+            url: SCRIPT_ROOT + "/label",
             data: "&id=" + that.routineId
             + "&bounceIds=" + JSON.stringify(that.bounceIds)
             + "&bounceNames=" + JSON.stringify(that.bounceNames),
@@ -242,7 +260,6 @@ var Judge = {
                     .replace(/0\.\d/g, val);// replace deduction value appropriately
                 $thisDedLabel.attr('data-original-title', tooltipHTML);
             })
-
         });
 
         $('.js-deduction_category :input').on('change', function () {
@@ -402,7 +419,8 @@ var Judge = {
     save: function () {
         var that = Judge;
         var $username = $('.js-username');
-        if ($username.val().trim() === "") {
+        var username = $username.val().trim();
+        if (username === "") {
             alert('Please enter your name before saving. Thank you.');
             $username.focus();
             return;
@@ -421,9 +439,10 @@ var Judge = {
 
         // Send to server
         $.post({
-            url: "/judge",
+            url: SCRIPT_ROOT + "/judge",
             data: "routine_id=" + that.routineId
-            + "&username=" + $username.val().trim()
+            + "&username=" + username
+            + "&judge_style=new"
             + "&skill_ids=" + JSON.stringify(that.skillIds)
             + "&routine_deduction_values=" + JSON.stringify(routineDeductionValues)
             + "&routine_deductions_json=" + JSON.stringify(routineDeductionsJSON),
@@ -436,15 +455,117 @@ var Judge = {
                 }
                 else {
                     that.$save.text('Not Saved');
-
                     console.log(data);
                 }
             }
         });
     },
 };
+
+
+var OldJudge = {
+    init: function (routineId, skillIds) {
+        this.routineId = routineId;
+        this.skillIds = skillIds;
+
+        this.bindUIActions();
+
+        // Autofocus the first input
+        $('.js-deduction')[0].focus();
+    },
+    bindUIActions: function () {
+        that = this;
+        // Number input validation
+        $('.js-deduction').on('input', function (e) {
+            window.onbeforeunload = confirmOnPageExit;
+
+            that.validateNumber($(this));
+
+            that.calculateScore();
+        });
+
+        $('.js-save').click(that.save);
+    },
+    validateNumber: function ($thatNumberInput) {
+        val = $thatNumberInput.val();
+
+        if (val.includes('.')) {
+            val = parseInt(val);
+            val = (isNaN(val)) ? "0" : val; // is NaN is val<1, i.e. '0.4'
+            $thatNumberInput.val(val);
+        }
+        else if (val < 0) {
+            $thatNumberInput.val("0");
+        }
+        else if (val > 5) {
+            $thatNumberInput.val("5");
+        }
+    },
+    calculateScore: function () {
+        var numBounces = $('.js-deduction').length;
+        numBounces = Math.min(numBounces, 10);
+        var totalDeductions = 0;
+        for (var i = 0; i < numBounces; i++) {
+            totalDeductions += parseInt($('.js-deduction')[i].value) / numBounces;
+        }
+
+        var score = numBounces - totalDeductions;
+        $('.js-score').text(score.toFixed(1));
+    },
+    save: function () {
+        var that = OldJudge;
+
+        var $username = $('.js-username');
+        var username = $username.val().trim();
+        if (username === "") {
+            alert('Please enter your name before saving. Thank you.');
+            $username.focus();
+            return;
+        }
+
+        $('.js-save').text('Saving...');
+
+        // Get the deductions for all skills
+        var deductionsIndex = 0; // separate index thanks to the ...
+        var routineDeductionValues = [];
+        var routineDeductionsJSON = [];
+        for (var i = 0; i < that.skillIds.length; i++) {
+            var score = ($(".js-deduction")[deductionsIndex].value / 10).toFixed(1);
+            deductionsIndex++;
+            routineDeductionValues.push(score);
+            routineDeductionsJSON.push(null);
+        }
+
+        // Send to server
+
+
+        $.post({
+            url: SCRIPT_ROOT + "/judge",
+            data: "routine_id=" + that.routineId
+            + "&username=" + username
+            + "&judge_style=old"
+            + "&skill_ids=" + JSON.stringify(that.skillIds)
+            + "&routine_deduction_values=" + JSON.stringify(routineDeductionValues)
+            + "&routine_deductions_json=" + JSON.stringify(routineDeductionsJSON),
+            dataType: "text",
+            success: function (data) {
+                if (data.length === 0) {
+                    $('.js-save').text('Saved!');
+                    // Allow navigation away without warning
+                    window.onbeforeunload = null;
+                }
+                else {
+                    $('.js-save').text('Not Saved');
+                    console.log(data);
+                }
+            }
+        });
+    }
+};
+
+
 // Navigate away with unsaved warning
-function confirmOnPageExit (e) {
+function confirmOnPageExit(e) {
     // If we haven't been passed the event get the window.event
     e = e || window.event;
 
@@ -458,6 +579,7 @@ function confirmOnPageExit (e) {
     // For Chrome, Safari, IE8+ and Opera 12+
     return message;
 }
+
 
 // Chart stuff
 var Tally = {

@@ -89,7 +89,7 @@ def calculate_bounces(routine):
         bounces.append(Bounce(
             routine.id,
             i,
-            "",
+            None,
             # Frame Numbers
             thisBedHit['x'],
             jumpMaxHeight['x'],

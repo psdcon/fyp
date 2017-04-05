@@ -1,3 +1,5 @@
+{% from "macros.html" import play_bounce_link with context %}
+
 {% extends "layout.html" %}
 {% block body %}
 
@@ -9,8 +11,7 @@
         {% for bounceWithDeduction in bouncesWithDeduction %}
             {% set bounce = bounceWithDeduction[0] %}
             {% set deduction = bounceWithDeduction[1] %}
-            {{ bounce.id }}
-            {{ deduction }}
+            {{ play_bounce_link( bounce.id ) }} {{ deduction }} {{ bounce.id }}
             <br>
         {% endfor %}
     {% endfor %}
