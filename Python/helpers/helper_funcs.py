@@ -5,11 +5,9 @@ import gzip
 import json
 import os
 import sys
-from math import acos, degrees
 
 import cv2
 import numpy as np
-from scipy.spatial import distance
 
 from helpers import consts
 
@@ -86,7 +84,7 @@ def crop_points_constrained(frame_height, frame_width, cx, cy, crop_length):
     return x1, x2, y1, y2
 
 
-def calcContourCenter(contour):
+def calc_contour_center(contour):
     M = cv2.moments(contour)
     if M['m00'] > 0:
         cx = int(M['m10'] / M['m00'])
@@ -112,7 +110,7 @@ def find_if_close(cnt1, cnt2):
                 return False
 
 
-def simple_downsample(a, num):
+def simple_down_sample(a, num):
     if len(a) < num:
         print("No can do. Cannot upsample list with {} elements into one with {}".format(len(a), num))
         return a
@@ -123,7 +121,7 @@ def simple_downsample(a, num):
     return b
 
 
-def prettyPrintRoutine(bounces):
+def pretty_print_routine(bounces):
     if not bounces:
         return "No bounces"
 
@@ -152,32 +150,24 @@ def load_zipped_pickle(filename):
         return loaded_object
 
 
-def save_pickle(obj, filename):
-    cPickle.dump(obj, open(filename, 'wb'))
-
-
-def load_pickle(filename):
-    return cPickle.load(open(filename, 'rb'))
-
-
-def roundListFloatsIntoStr(mList, precision):
+def round_list_floats_into_str(mList, precision):
     return json.dumps(json.loads(json.dumps(mList), parse_float=lambda x: round(float(x), precision)))
 
 
-def trimTouches(trampolineTouches):
-    touchTransitions = np.diff(trampolineTouches)
+def trim_touches(trampoline_touches):
+    touchTransitions = np.diff(trampoline_touches)
     for i in range(len(touchTransitions)):
         thisTransition = touchTransitions[i]
         if thisTransition > 0:  # spike up
-            trampolineTouches[i + 1] = 0
-            trampolineTouches[i + 2] = 0
+            trampoline_touches[i + 1] = 0
+            trampoline_touches[i + 2] = 0
         elif thisTransition < 0:  # spike down
-            trampolineTouches[i] = 0
-            trampolineTouches[i - 1] = 0
-    return trampolineTouches
+            trampoline_touches[i] = 0
+            trampoline_touches[i - 1] = 0
+    return trampoline_touches
 
 
-def printPoseStatus(paths):
+def print_pose_status(paths):
     from collections import OrderedDict
     import glob
 
@@ -217,7 +207,7 @@ def printPoseStatus(paths):
         print(os.path.basename(path))
 
 
-def getPoseStatuses(paths, routinePrettyName):
+def get_pose_statuses(paths, routine_pretty_name):
     import glob
     '''
     [
@@ -237,7 +227,7 @@ def getPoseStatuses(paths, routinePrettyName):
     for path in paths:
         # Print the number of savedFrame files found
         thisPathData = dict()
-        thisPathData['path'] = os.path.basename(path.replace(routinePrettyName, '_'))
+        thisPathData['path'] = os.path.basename(path.replace(routine_pretty_name, '_'))
         thisPathData['hourglass_pose'] = os.path.exists(path + os.sep + 'hg_heatmaps.h5')
         thisPathData['monocap_pose'] = os.path.exists(path + os.sep + 'monocap_preds_2d.h5')
         for key, globLookup in zip(['frames', 'hourglass_frames', 'monocap_frames'], ['frame_*.png', 'posed_*', 'smoothed_*', ]):
@@ -247,78 +237,10 @@ def getPoseStatuses(paths, routinePrettyName):
     return pathsData
 
 
-def selectListOption(lst):
+def select_list_option(lst):
     for i, li in enumerate(lst):
         print('{}) {}'.format(i + 1, li))
     return read_num(len(lst)) - 1
-
-
-def pose2OrderedAngles(pose):
-    angles = gen_pose_angles([pose])
-    orderedAngles = []
-    for key in consts.extendedAngleIndexKeys:
-        angle = angles[key][0]
-        orderedAngles.append(angle)
-    return orderedAngles
-
-
-def gen_pose_angles(poses, average=False):
-    def rel_pose_to_abs_pose(pose, cx, cy, padding=100):
-        # pose points are relative to the top left (cx cy = ix iy; 0 0 = ix-100 iy-100) of the 200x200 cropped frame
-        # pose given by (0 + posex, 0 + posey) => cx-100+posex, cy-100+posey
-        for p_idx in range(14):
-            pose[0, p_idx] = int((cx - padding) + pose[0, p_idx])
-            pose[1, p_idx] = int((cy - padding) + pose[1, p_idx])
-        return pose
-
-    def pose2pt(pose, p_idx):
-        pt = np.array([pose[0, p_idx], pose[1, p_idx]])
-        return pt
-
-    def calc_angle(A, B, C):
-        a = distance.euclidean(C, B)
-        b = distance.euclidean(A, C)
-        c = distance.euclidean(A, B)
-        num = a ** 2 + b ** 2 - c ** 2
-        demon = (2.0 * a * b)
-        ang = acos(num / demon)
-        return degrees(ang)
-
-    # Make a list for each of the joints to be plotted
-    jointNames = consts.getAngleIndices('hourglass')
-    jointSpecial = consts.getSpecialAngleIndices('hourglass')
-    jointAngles = {key: [] for key in jointNames.keys() + jointSpecial.keys()}
-
-    for pose in poses:
-        # Calculate an angle for each joint
-        # Add to the dict for that joint
-        for key in jointNames.keys():
-            # Get the 3 pose points that make up this joint
-            jointIndexs = jointNames[key]
-            # Calculate the angle between them
-            angle = calc_angle(pose2pt(pose, jointIndexs[0]), pose2pt(pose, jointIndexs[1]), pose2pt(pose, jointIndexs[2]))
-            # Append it to the appropriate dict
-            jointAngles[key].append(angle)
-
-        # Special angles
-        for key in jointSpecial.keys():
-            jointIndexs = jointSpecial[key]
-            specialsOffset = np.array(consts.specialOffsets[key])
-            # Calculate the angle between them
-            angle = calc_angle(pose2pt(pose, jointIndexs[0]) + specialsOffset, pose2pt(pose, jointIndexs[1]), pose2pt(pose, jointIndexs[2]))
-            # Append it to the appropriate dict
-            jointAngles[key].append(angle)
-
-    if not average:
-        return jointAngles
-    else:
-        averagedJointAngles = {}
-        for i in range(0, len(consts.angleIndexKeys), 2):  # step from 0 to 8 in increments of 2
-            rightKey = consts.angleIndexKeys[i]
-            leftKey = consts.angleIndexKeys[i + 1]
-            jointName = rightKey.split(' ')[1].title()  # take the last word and set it to title case
-            averagedJointAngles[jointName] = np.average([jointAngles[rightKey], jointAngles[leftKey]], axis=0)
-        return averagedJointAngles
 
 
 def clip_wrap(num, lower, upper):
@@ -330,36 +252,19 @@ def clip_wrap(num, lower, upper):
         return num
 
 
-def getCropLength(hullLengths):
+def get_crop_length(hull_lengths):
     scaler = 1.2
-    cropLength = int(np.percentile(hullLengths, 95) * scaler)
+    cropLength = int(np.percentile(hull_lengths, 95) * scaler)
     return cropLength
 
-#
-# # Quick database fixes
-# def assign_shape(db):
-#     # Back S/S to Seat, Cody, Barani Ball Out , Rudolph / Rudi.
-#     # TODO this hasnt been tested in awhile
-#     # TODO it should check skills.shape_bonus
-#     bouncesNeedingShape = db.query(Bounce).filter(Bounce.shape == None, Bounce.angles != None).all()
-#     for i, somi in enumerate(bouncesNeedingShape, start=1):
-#         # skills
-#         visualise.play_skill(db, somi.id, True)
-#         print("{} of {}".format(i, len(bouncesNeedingShape)))
-#
-#     exit()
-#
-#
-# def shoulders_to_twist_angle(db):
-#     routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
-#     for routine in routines:
-#         if not routine.isPoseImported(db):
-#             continue
-#         import_output.shoulder_width_to_angle(db, routine)
-#
-#
-# def assign_code_name_to_bounce(db):
-#     for bounce in db.query(Bounce).filter(Bounce.skill_name != None, Bounce.angles != None):
-#         bounceCode = db.query(Skill).filter(Skill.name == bounce.skill_name).one().code
-#         bounce.code_name = bounceCode.upper()
-#     db.commit()
+
+# Random once off
+
+def print_grb_from_hex(hex):
+    def hex_to_rgb(value):
+        """Return (red, green, blue) for the color given as #rrggbb."""
+        value = value.lstrip('#')
+        lv = len(value)
+        return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+
+    print(tuple(reversed(hex_to_rgb(hex))))

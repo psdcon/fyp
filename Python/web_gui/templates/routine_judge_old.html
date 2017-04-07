@@ -64,7 +64,7 @@
             {% if not routine.labelled %}
                 <p>The bounces in this routine have not been labelled yet. Please click the button, and then come back.</p>
                 <div style="text-align:center;">
-                    <a href="{{ url_for('label_routine',routine_id=routine.id) }}" class="btn btn-primary">Label This Routine</a>
+                    <a href="{{ url_for('routine_label',routine_id=routine.id) }}" class="btn btn-primary">Label This Routine</a>
                 </div>
             {% else %}
 
@@ -125,10 +125,10 @@
                     <div class="col">
                         <button class="btn btn-primary js-save">Save</button>
                         {% if nextRoutine %}
-                            <a href="{{ url_for('judge_routine',routine_id=nextRoutine.id) }}" class="float-right btn btn-secondary js-do-next"
+                            <a href="{{ url_for('routine_judge',routine_id=nextRoutine.id) }}" class="float-right btn btn-secondary js-do-next"
                                title="Judge the next routine you haven't yet: {{ nextRoutine.name }}">Judge Next</a>
                         {% else %}
-                            <a href="{{ url_for('list_routines') }}" class="float-right btn btn-secondary js-do-next" title="None left to judge">Back to Routines</a>
+                            <a href="{{ url_for('routines_list') }}" class="float-right btn btn-secondary js-do-next" title="None left to judge">Back to Routines</a>
                         {% endif %}
                     </div>
                 </div>

@@ -1,0 +1,48 @@
+{% from "macros.html" import play_bounce_link with context %}
+{% from "macros.html" import play_2_bounces_link with context %}
+
+{% extends "layout.html" %}
+{% block body %}
+
+    {% for bounceClassAndBounces in bounceClassesAndBounces %}
+        {% set className = bounceClassAndBounces[0] %}
+        {% set numBounces = bounceClassAndBounces[1] %}
+        {% set bouncesWithDeduction = bounceClassAndBounces[2] %}
+
+        <h1>{{ className }} ({{ numBounces }})</h1>
+
+        <div class="row">
+            {% for bounceWithDeduction in bouncesWithDeduction %}
+                {% set bounce = bounceWithDeduction[0] %}
+                {% set deduction = bounceWithDeduction[1] %}
+                {% set imgPath = bounceWithDeduction[2] %}
+
+                <div class="col-3 js-bounce">
+                    <div class="card mb-3">
+                        <img src="{{ url_for( 'static', filename=imgPath) }}" data-contiue-playing="false" style="max-width: 100%;">
+                        <div class="card-block" style="padding: .25rem;">
+                            {{ play_bounce_link( bounce.id ) }}
+                            {{ play_2_bounces_link( bounce.id ) }}
+                            {{ deduction }}
+                            {{ bounce.id }}
+                        </div>
+                    </div>
+                </div>
+
+            {% endfor %}
+        </div>
+
+    {% endfor %}
+
+{% endblock %}
+
+
+{% block js %}
+    <div style="position:fixed;bottom:0;">
+        <img class="js-angles" src="" style="width:100%">
+    </div>
+
+    <script>
+        BouncesGUIControls.init()
+    </script>
+{% endblock %}

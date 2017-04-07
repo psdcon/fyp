@@ -20,26 +20,63 @@ $('#return-to-top').on('click', function (e) {
     }, 700);
 });
 
-// Any buttons with a bounce-id data attr are presumed to be a play button
-// Clicking it will be the bounce with the sepcified id. *arm emoji*
-$('*[data-bounce-id]').on('click', function () {
-    var bounceId = $(this).data("bounce-id");
-    $.post({
-        url: SCRIPT_ROOT + "/play_bounce",
-        data: "bounce_id=" + bounceId,
-        dataType: "text",
-        success: function (data) {
-            if (data.length === 0) {
+var BouncesGUIControls = {
+    init: function () {
+        this.bindUIActions();
+    },
+    bindUIActions: function () {
+        // Any buttons with a bounce-id data attr are presumed to be a play button
+        // Clicking it will be the bounce with the specified id. *arm emoji*
+        $('*[data-bounce-id]').on('click', function () {
+            var bounce_id = $(this).data("bounce-id");
+            var compare_to_ideal = $(this).data("compare-to-ideal");
+            $.post({
+                url: SCRIPT_ROOT + "/play_bounce",
+                data: "bounce_id=" + bounce_id
+                + "&compare_to_ideal=" + compare_to_ideal,
+                dataType: "text",
+                success: function (data) {
+                    if (data.length === 0) {
+                    }
+                    else {
+                        console.log(data);
+                    }
+                }
+            });
+        });
+
+
+        // Hover Actions
+        $('.js-bounce img').on('click', function () {
+            if ($(this).data('continue-playing')) {
+                $(this).data('continue-playing', false)
             }
             else {
-                console.log(data);
+                $(this).data('continue-playing', true)
             }
-        }
-    });
-});
+        });
+
+        $('.js-bounce img').hover(
+            function () {
+                var src = $(this).attr("src");
+                $('.js-angles').attr("src", src.replace(/\.jpg|\.gif$/i, "_angles.jpg"));
+
+                if (!$(this).data('continue-playing')) {
+                    $(this).attr("src", src.replace(/\.jpg$/i, ".gif"));
+                }
+            },
+            function () {
+                if (!$(this).data('continue-playing')) {
+                    var src = $(this).attr("src");
+                    $(this).attr("src", src.replace(/\.gif$/i, ".jpg"));
+                }
+            }
+        )
+    }
+};
 
 
-var GUIControls = {
+var RoutinesGUIControls = {
     init: function () {
         this.bindUIActions();
     },

@@ -27,10 +27,10 @@ def do_tariff(db):
     accuracy_per_skill(db)
 
 
-def chose_reference_skills(db, referenceCountPerSkill):
+def chose_reference_skills(db, reference_count_per_skill):
     shapedSkillCounter = {}
     # print('Changing reference set to have {} bounces as a reference for each skill'.format(referenceCountPerSkill))
-    print('Num Refs = {}'.format(referenceCountPerSkill))
+    print('Num Refs = {}'.format(reference_count_per_skill))
     bounces = db.query(Bounce).filter(Bounce.angles != None).order_by(Bounce.match_count.desc()).all()
 
     # The bounces to exclude from the reference set should be bounce
@@ -51,7 +51,7 @@ def chose_reference_skills(db, referenceCountPerSkill):
         # Get a name which includes the bounces shape
         shapedName = bounce.skill_name + " {}".format(bounce.shape)
         # If the reference set is full, it goes in the test set
-        if shapedSkillCounter.get(shapedName, 0) >= referenceCountPerSkill:
+        if shapedSkillCounter.get(shapedName, 0) >= reference_count_per_skill:
             bounce.ref_or_test = 'test'
         else:
             shapedSkillCounter[shapedName] = shapedSkillCounter.get(shapedName, 0) + 1
@@ -109,7 +109,7 @@ def tariff_bounces_test_set(db):
     print("")
 
 
-def tariff(db, thisBounces, refBounces, verbose=False):
+def tariff(db, this_bounces, ref_bounces, verbose=False):
     """
     This is designed to be used by tariff_many
     For this to work, all the posedBounces must be fetched and kept in memory before hand.
@@ -123,7 +123,7 @@ def tariff(db, thisBounces, refBounces, verbose=False):
     # print('Tariffing {}'.format(thisRoutine))
 
     tariffedBounces = []  # List of matches for each bounce in thisRoutine
-    for thisBounce in thisBounces:
+    for thisBounce in this_bounces:
         # Check that this bounce has angles. May have been skipped by pose estimator
         # if thisBounce.skill_name == 'Straight Bounce' or thisBounce.skill_name == 'Landing' or thisBounce.angles is None:
         if thisBounce.angles is None \
@@ -134,7 +134,7 @@ def tariff(db, thisBounces, refBounces, verbose=False):
             continue
 
         if verbose:
-            print('\nLooking for {}. There are {} of these in the posedBounces.'.format(thisBounce, getNumAvailable(refBounces, thisBounce) - 1))
+            print('\nLooking for {}. There are {} of these in the posedBounces.'.format(thisBounce, get_num_available(ref_bounces, thisBounce) - 1))
 
         # Start looking
         skillStartTime = time.time()
@@ -144,8 +144,8 @@ def tariff(db, thisBounces, refBounces, verbose=False):
         # Creates a dict {'bounce':Bounce(), 'MSE':0.0}. This makes sorting them convenient.
         # bounceMatches = [compareAngles(thisBounceJointAngles, refBounce.jointAngles, CUTOFF, refBounce)
         #                  for refBounce in refBounces if refBounce.routine_id != thisBounce.routine_id]
-        bounceMatches = [compareAngles(thisBounceJointAngles, refBounce.jointAngles, CUTOFF, refBounce)
-                         for refBounce in refBounces if refBounce.id != thisBounce.id]
+        bounceMatches = [compare_angles(thisBounceJointAngles, refBounce.jointAngles, CUTOFF, refBounce)
+                         for refBounce in ref_bounces if refBounce.id != thisBounce.id]
         bounceMatches[:] = [bm for bm in bounceMatches if bm is not None]  # remove None results
         bounceMatches = sorted(bounceMatches, key=itemgetter('MSE'))
 
@@ -203,20 +203,23 @@ def get_reference_set(db):
     return refBounces
 
 
-def getNumAvailable(posedBounces, thisBounce):
-    numAvailableToFind = 0
-    for posedBounce in posedBounces:
-        if posedBounce.skill_name == thisBounce.skill_name:
-            numAvailableToFind += 1
-    return numAvailableToFind
+def get_num_available(posed_bounces, this_bounce):
+    num_available_to_find = 0
+    for posed_bounce in posed_bounces:
+        if posed_bounce.skill_name == this_bounce.skill_name:
+            num_available_to_find += 1
+    return num_available_to_find
 
 
-def compareAngles(thisAnglesAsCoords, posedAnglesAsCoords, cutoff, posedBounce):
-    thisBounceFrameCount = len(thisAnglesAsCoords[0])
-    tariffedBounce = {}
-    absDiff = 0
-    sqErr = 0
-    saveBounceMatch = True
+def compare_angles(this_bounce_joint_angles, ref_joint_angles, cutoff, ref_bounce):
+    thisBounceFrameCount = len(this_bounce_joint_angles[0])
+    tariffed_bounce = {}
+
+    # Two different error metrics
+    absolute_diff = 0
+    squared_error = 0
+
+    save_bounce_match = True
     weights = [0.3, 0.3, 0.5, 0.5, 1, 1, 1, 1, 0.3, 1, 1, 1, 1]
     """[
         "Right elbow",
@@ -233,31 +236,32 @@ def compareAngles(thisAnglesAsCoords, posedAnglesAsCoords, cutoff, posedBounce):
         "Torso with horz",
         "Twist Angle"
     ]"""
-    numAngles = 13
-    for i in range(numAngles):  # the number of different angles = 13
+    from image_processing.calc_angles import num_angles
+    for i in range(num_angles):  # the number of different angles = 13
         weight = weights[i]
-        thisJoint = thisAnglesAsCoords[i]
-        posedJoint = posedAnglesAsCoords[i]
+        thisJoint = this_bounce_joint_angles[i]
+        posedJoint = ref_joint_angles[i]
 
         alignedPosedJoint = signal.resample(posedJoint, thisBounceFrameCount)
         distance = np.sum(np.absolute(np.subtract(thisJoint, alignedPosedJoint)))
 
         # distance, _path = fastdtw(thisJoint, posedJoint, dist=euclidean)
         distance *= weight
-        absDiff += distance
-        sqErr += distance ** 2
+        # Keeping two error metrics
+        absolute_diff += distance
+        squared_error += distance ** 2
 
         # Early exit clause
-        if absDiff > cutoff:
-            saveBounceMatch = False
+        if absolute_diff > cutoff:
+            save_bounce_match = False
             break
 
     # Only store as a match if we didn't exit early
-    if saveBounceMatch:
-        tariffedBounce['SAD'] = int(round(absDiff, 0))
-        tariffedBounce['MSE'] = int(round(sqErr, 0)) / numAngles
-        tariffedBounce['bounce'] = posedBounce
-        return tariffedBounce
+    if save_bounce_match:
+        tariffed_bounce['SAD'] = int(round(absolute_diff, 0))
+        tariffed_bounce['MSE'] = int(round(squared_error, 0)) / num_angles
+        tariffed_bounce['bounce'] = ref_bounce
+        return tariffed_bounce
     else:
         return None
 
@@ -369,3 +373,65 @@ def accuracy_per_skill(db):
     print('wait')
 
 #     (u'Back Half', 0.0), (u'Rudolph / Rudi', 0.0), (u'Landing', 0.0), (u'Full Front', 0.0), (u'Front Drop', 0.0), (u'Cody', 0.0), (u'To Feet from Front', 20.0), (u'Half Twist Jump', 22.22222222222222), (u'Half Twist to Seat Drop', 30.0), (u'Lazy Back', 33.33333333333333), (u'Full Twist Jump', 36.84210526315789), (u'To Feet from Back', 42.857142857142854), (u'Full Back', 50.0), (u'Half Twist to Feet from Back', 53.84615384615385), (u'Front S/S', 63.63636363636363), (u'Barani', 71.15384615384616), (u'Straddle Jump', 71.42857142857143), (u'Barani Ball Out', 71.42857142857143), (u'To Feet from Seat', 72.72727272727273), (u'Seat Drop', 76.92307692307693), (u'Crash Dive', 77.77777777777779), (u'Back Drop', 80.0), (u'Pike Jump', 82.5), (u'Back S/S', 85.52631578947368), (u'Half Twist to Feet from Seat', 87.5), (u'Tuck Jump', 93.10344827586206), (u'Straight Bounce', 96.85314685314685), (u'Back S/S to Seat', 100.0), (u'Swivel Hips/Seat Half Twist to Seat Drop', 100.0)]
+
+#
+# Visualise the errors.
+#
+def plot_tariff_confusion_matrix(tariff_matches):
+    def plot_confusion_matrix(df_confusion, title='Confusion matrix'):
+        # from matplotlib import rcParams
+        # rcParams.update({'figure.autolayout': True})
+        # http://stackoverflow.com/questions/24521296/matplotlib-function-conventions-subplots-vs-one-figure
+
+        fig, ax = plt.subplots()
+        fig.set_size_inches(6.4, 6)
+        # ax.set_title(title)
+
+        cmap = matplotlib.cm.get_cmap('Greys')
+        im = ax.matshow(df_confusion, cmap=cmap)  # imshow
+        # fig.colorbar(im, orientation='horizontal')
+
+        tick_marks = np.arange(len(df_confusion.columns))
+        # plt.xticks(tick_marks, df_confusion.columns, rotation='vertical', verticalalignment='top')
+        plt.xticks(tick_marks, df_confusion.columns, rotation='vertical')
+        plt.yticks(tick_marks, df_confusion.index)
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_ylabel(df_confusion.index.name)
+        ax.set_xlabel(df_confusion.columns.name)
+
+        fig.tight_layout(pad=0)
+
+        imgName = consts.confImgPath + "confusion_matrix.pdf"
+        print("Writing image to {}".format(imgName))
+        plt.savefig(imgName)
+
+        plt.show()
+        return
+
+    actual = []
+    predicted = []
+    excludedMatched = [u'Back Half', u'Cody', u'Front Drop', u'Full Back', u'Full Front', u'Lazy Back', u'Rudolph / Rudi', u'To Feet from Front']
+    for thisMatch in tariff_matches:
+        thisBounce = thisMatch.bounce
+        matchedBounce = thisMatch.matched_bounce
+
+        if thisBounce.skill_name in excludedMatched or matchedBounce.skill_name in excludedMatched:
+            continue
+
+        actual.append(thisBounce.code_name)
+        predicted.append(matchedBounce.code_name)
+
+        # visualise.play_frames_of_2(db, thisBounce.routine, matchedBounce.routine, thisBounce.start_frame, thisBounce.end_frame, matchedBounce.start_frame, matchedBounce.end_frame)
+    y_actu = pd.Series(actual, name='Actual Skill Class')
+    y_pred = pd.Series(predicted, name='Predicted Skill Class')
+    df_confusion = pd.crosstab(y_actu, y_pred)
+    # df_confusion = pd.crosstab(y_actu, y_pred, rownames=['Actual'], colnames=['Predicted'], margins=True)  # add's sum col and row
+
+    df_conf_norm = df_confusion / df_confusion.sum(axis=1)
+    df_conf_norm.columns.name = "Predicted Skill Class"
+
+    # plot_confusion_matrix(df_confusion, 'Confusion Matrix')
+    plot_confusion_matrix(df_conf_norm, 'Normalised Confusion Matrix')
+    # plt.show()
+
+    return

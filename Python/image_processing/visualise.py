@@ -4,19 +4,24 @@ import re
 from itertools import chain
 
 import cv2
-import h5py
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import scipy
-import scipy.io
-from scipy import interpolate
 from scipy import signal
 from sqlalchemy.orm.exc import NoResultFound
 
-from  helpers import helper_funcs
+from helpers import helper_funcs
 from helpers.db_declarative import *
+#
+# Functions for playing videos
+#
+from image_processing import calc_angles
+
+
+def _draw_pose_on_frame(pose, frame):
+    for p_idx in range(16):
+        color = consts.poseColors[calc_angles.pose_aliai['hourglass'][p_idx]][1]
+        cv2.circle(frame, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color, thickness=cv2.FILLED)
+    return frame
 
 
 def play_bounce(db, bounce_id, show_pose=True, show_full=False):
@@ -73,7 +78,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
                     for p_idx in range(14):
                         pose_x = int((cx - routine.padding) + pose[0, p_idx])
                         pose_y = int((cy - routine.padding) + pose[1, p_idx])
-                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
+                        color = consts.poseColors[calc_angles.pose_aliai['hourglass'][p_idx]][1]
                         cv2.circle(frame, (pose_x, pose_y), 5, color, thickness=cv2.FILLED)
                     cv2.imshow('HG Smooth', frame)
 
@@ -83,9 +88,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
                     frameCropped = cv2.resize(frameCropped, (256, 256))
                     cv2.putText(frameCropped, '{}'.format(prevBounceName), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
-                    for p_idx in range(16):
-                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                        cv2.circle(frameCropped, (int(pose[0, p_idx]), int(pose[1, p_idx])), 5, color, thickness=cv2.FILLED)
+                    frameCropped = _draw_pose_on_frame(pose, frameCropped)
                     cv2.imshow(routine.prettyName(), frameCropped)
 
             else:
@@ -161,11 +164,11 @@ def play_frames_of_2_bounces(db, bounce1, bounce2):
     # Get distances for label
     distances = [np.sum(np.absolute(np.subtract(ang1, ang2))) for ang1, ang2 in zip(b1Angles, b2ResampAngles)]
 
-    b1Handle = plot_angles_from_frames(axes, b1Angles)
-    b2Handle = plot_angles_from_frames(axes, b2ResampAngles)
+    b1Handle = _plot_angles_6x2(axes, b1Angles)
+    b2Handle = _plot_angles_6x2(axes, b2ResampAngles)
 
     # Add labels
-    labels = list(consts.extendedAngleIndexKeys)  # make a copy
+    labels = list(calc_angles.extended_angle_keys)  # make a copy
     labels.remove('Head')
     for ax, label, dist in zip(axes.flat, labels, distances):
         ax.set_ylim([0, 180])
@@ -252,15 +255,11 @@ def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, star
                     frameCropped2 = frame2[y1:y2, x1:x2]
                     frameCropped2 = cv2.resize(frameCropped2, (256, 256))
 
-                    for p_idx in range(16):
-                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                        cv2.circle(frameCropped1, (int(pose1[0, p_idx]), int(pose1[1, p_idx])), 5, color, thickness=cv2.FILLED)
+                    frameCropped1 = _draw_pose_on_frame(pose1, frameCropped1)
                     bothFrames[0:256, 0:256] = frameCropped1
                     cv2.putText(bothFrames, '{}'.format(frame_nums1[frame_data1_ptr]), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
 
-                    for p_idx in range(16):
-                        color = consts.poseColors[consts.poseAliai['hourglass'][p_idx]][1]
-                        cv2.circle(frameCropped2, (int(pose2[0, p_idx]), int(pose2[1, p_idx])), 5, color, thickness=cv2.FILLED)
+                    frameCropped2 = _draw_pose_on_frame(pose2, frameCropped2)
                     bothFrames[0:256, 256:512] = frameCropped2
                     cv2.putText(bothFrames, '{}'.format(frame_nums2[frame_data2_ptr]), (266, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
 
@@ -330,272 +329,7 @@ def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, star
                     cap2.set(cv2.CAP_PROP_POS_FRAMES, desiredFNum)
 
 
-def plot_data(routine):
-    print("\nStarting plotting...")
-    f, axarr = plt.subplots(4, sharex=True)
-
-    # Plot bounce heights
-    x_frames = [frame.frame_num / routine.video_fps for frame in routine.frames]
-    y_travel = [frame.center_pt_x for frame in routine.frames]
-    y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
-
-    # List inside list gets flattened
-    peaks_x = list(chain.from_iterable((bounce.start_time, bounce.max_height_frame / routine.video_fps) for bounce in routine.bounces))
-    peaks_x.append(routine.bounces[-1].end_time)
-    peaks_y = list(chain.from_iterable((bounce.start_height, bounce.max_height) for bounce in routine.bounces))
-    peaks_y.append(routine.bounces[-1].end_height)
-    # peaks_y = [routine.video_height - p for p in peaks_y]
-
-    axarr[0].set_title("Height")
-    axarr[0].plot(x_frames, y_height, color="g")
-    axarr[0].plot(peaks_x, peaks_y, 'r+')
-    axarr[0].set_ylabel('Height (Pixels)')
-
-    # Plot bounce travel
-    axarr[1].set_title("Travel")
-    axarr[1].set_ylabel('Rightwardness (Pixels)')
-    axarr[1].plot(x_frames, y_travel, color="g")
-    axarr[1].axhline(y=routine.trampoline_center, xmin=0, xmax=1000, c="blue")
-    axarr[1].axhline(y=routine.trampoline_center + 80, xmin=0, xmax=1000, c="red")
-    axarr[1].axhline(y=routine.trampoline_center - 80, xmin=0, xmax=1000, c="red")
-
-    # Ellipse angles
-    x_frames = np.array([frame.frame_num / routine.video_fps for frame in routine.frames])
-    y_angle = np.array([frame.ellipse_angle for frame in routine.frames])
-    # Changes angles
-    y_angle = np.unwrap(y_angle, discont=90, axis=0)
-
-    axarr[2].plot(x_frames, y_angle, color="g")
-    axarr[2].set_title("Angle")
-    axarr[2].set_ylabel('Angle (deg)')
-
-    # Ellipse lengths
-    y_major = np.array([frame.ellipse_len_major for frame in routine.frames])
-    y_minor = np.array([frame.ellipse_len_minor for frame in routine.frames])
-
-    # axarr[3].scatter(x_frames, y_major, color="g")
-    # axarr[3].scatter(x_frames, y_minor, color='b')
-    # axarr[3].set_ylim([0, 300])
-    # axarr[3].set_title("Ellipse Axes Length")
-    # axarr[3].set_ylabel('Length')
-    # axarr[3].set_xlabel('Time (s)')
-
-    axarr[3].plot(x_frames, y_major / y_minor, color="g")
-    axarr[3].set_title("Ellipse Axes Ratio")
-    axarr[3].set_ylabel('Length Ratio')
-    axarr[3].set_xlabel('Time (s)')
-
-    plt.show()
-
-
-def plot_angles_from_frames(axes, framesInEachAngle):
-    # angles = []
-    # xTicks = []
-    # for frame in frames:
-    #     if frame.angles:
-    #         xTicks.append(frame.frame_num)
-    #         angles.append(np.array(json.loads(frame.angles)))
-    #         # else:
-    #         #     angles.append(None)
-    # anglesInEachFrame = np.array(angles)
-    # framesInEachAngle = anglesInEachFrame.T
-
-    """[
-        "Right elbow",
-        "Left elbow",
-        "Right shoulder",
-        "Left shoulder",
-        "Right knee",
-        "Left knee",
-        "Right hip",
-        "Left hip",
-        "Head"
-        "Right leg with horz",
-        "Left leg with horz",
-        "Torso with horz",
-        "Twist Angle"
-    ]"""
-
-    numFrames = len(framesInEachAngle[0])
-    handle = None
-
-    # Plot angles
-    for jointAngles, ax in zip(framesInEachAngle, axes.flat):
-        handle, = ax.plot(range(numFrames), jointAngles)
-
-    return handle
-
-
-def compare_many_angles_plot(manyRoutineAngles, labels, block=True):
-    # Plot angles
-    f, axarr = plt.subplots(len(manyRoutineAngles[0]), sharex=True)
-
-    # Get number of data points in each one for resampling.
-    # dataPointLens = [len(routineAngles.values()[0]) for routineAngles in manyRoutineAngles]
-    # sampleCount = min(dataPointLens)
-
-    # Loop through
-    error = [[label, 0] for label in labels]
-    for i, label, routineAngles in zip(range(len(manyRoutineAngles)), labels, manyRoutineAngles):
-        # use angleIndexKeys rather than jointNames.keys() because order matters here
-        # AngleIndexKeys are grouped in left right pairs. Want to add to average the two and add it to the plot
-        for plti, key in enumerate(routineAngles):
-            axarr[plti].set_title(key)
-
-            angles = routineAngles[key]
-            # angles = signal.resample(angles, sampleCount)
-            goodIndices = find_outlier_indices(angles, 50)
-            f = interpolate.interp1d(goodIndices, angles[goodIndices], kind='cubic')
-            newAngles = f(range(len(angles)))
-            # error[i][1] += sum(np.absolute(angles))
-
-            # all_idx = 1:length(x)
-            # outlier_idx = abs(x - median(x)) > 3 * std(x) | abs(y - median(y)) > 3 * std(y) # Find outlier idx
-            # x(outlier_idx) = interp1(all_idx(~outlier_idx), x(~outlier_idx), all_idx(outlier_idx))
-
-            axarr[plti].plot(range(len(angles)), newAngles, label=label)
-            axarr[plti].plot(range(len(angles)), angles, label=label, marker='o', linestyle="-")
-
-    print(error)
-    plt.legend(loc='best')
-    # plt.savefig('C:/Users/psdco/Pictures/Tucks/' + path.basename(routine.path)[:-4] + "_{}".format(frames[0].frame_num))
-    plt.show(block=block)
-
-
-def find_outlier_indices(arr, cutoff=40):
-    diff = np.diff(arr)
-    outliers = np.nonzero(diff < -cutoff)[0]
-    if len(outliers) == 0:
-        return range(len(arr))
-
-    if outliers[0] == 0:
-        outliers = outliers[1:]
-
-    tweenOutliers = []
-    for oli in outliers:
-        if oli in tweenOutliers:
-            continue
-        normalRef = arr[oli]
-        i = oli + 1
-        while 1:
-            thisDif = normalRef - arr[i]
-            if abs(thisDif) > cutoff:
-                tweenOutliers.append(i)
-            else:  # found a point close to normal ref, go to next outlier
-                break
-            i += 1
-            # Dont go off the end
-            if i == len(arr):
-                tweenOutliers = tweenOutliers[:-1]
-                break
-
-    goodIndices = [i for i in range(len(arr)) if i not in tweenOutliers]
-    return goodIndices
-
-    # for i in range(len(diff)):
-    #     pt1 = diff[i]
-    #     pt2 = diff[i+1]
-    #     if
-    #
-    # badPts = []
-    # outliers = False
-    # lastGoodVal = 0
-    # for i in range(1, len(arr)):
-    #     pt1 = arr[i-1]
-    #     pt2 = arr[i]
-    #     diff = pt2-pt2
-    #     if abs(diff) > cutoff:
-    #         outliers = True
-    #         lastGoodVal = pt1
-    #         badPts.append(i)
-
-
-    # from scipy import interpolate
-    # x = [a for a in range(len(angles)) if a not in np.nonzero(diff > 40)[0][1:]]
-    # # x = [x for x in x if x not in np.nonzero(np.diff(angles[x])>40)[0][1:]]
-    # y = angles[x]
-    # # x = range(len(angles))
-    # xnew = range(len(angles))
-    #
-    # f = interpolate.interp1d(x, y, kind='cubic')
-    #
-    # spl = interpolate.UnivariateSpline(x, y)
-    # # spl.set_smoothing_factor(200)
-    #
-    # b, a = signal.butter(3, 0.1)
-    # # b, a = signal.ellip(4, 0.01, 120, 0.091)
-    # yfilt = signal.filtfilt(b, a, angles, padlen=50)
-    #
-    # plt.figure()
-    # plt.plot(x, y, 'o', xnew, f(xnew), '-')
-    # plt.plot(xnew, spl(xnew), 'r')
-    # plt.plot(xnew, yfilt)
-    # plt.show()
-
-
-def is_outlier(points, thresh=3.5):
-    """
-    Returns a boolean array with True if points are outliers and False otherwise.
-
-    Parameters:
-    -----------
-        points : An numobservations by numdimensions array of observations
-        thresh : The modified z-score to use as a threshold. Observations with
-            a modified z-score (based on the median absolute deviation) greater
-            than this value will be classified as outliers.
-
-    Returns:
-    --------
-        mask : A numobservations-length boolean array.
-    """
-    if len(points.shape) == 1:
-        points = points[:, None]
-    median = np.median(points, axis=0)
-    diff = np.sum((points - median) ** 2, axis=-1)
-    diff = np.sqrt(diff)
-    med_abs_deviation = np.median(diff)
-
-    modified_z_score = 0.6745 * diff / med_abs_deviation
-
-    return modified_z_score > thresh
-
-
-def pose_error(routine):
-    # Original hg output
-    hg_preds_file = h5py.File('preds.h5', 'r')
-    hg_preds = hg_preds_file.get('preds')
-
-    # Smoothed monocap output
-    mat_preds_file = scipy.io.loadmat('preds.mat')
-    mat_preds = mat_preds_file['preds_2d']
-
-    x_mat = [[] for _ in range(16)]
-    x_hg = [[] for _ in range(16)]
-    y_mat = [[] for _ in range(16)]
-    y_hg = [[] for _ in range(16)]
-
-    for i, frame_data in enumerate(routine.frames):
-        pose_mat = mat_preds[:, :, i]
-        pose_hg = np.array(json.loads(frame_data.pose_hg))
-        # pose_hg = np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
-        for p_idx in range(16):
-            x_mat[p_idx].append(int(pose_mat[0, p_idx]))
-            x_hg[p_idx].append(int(pose_hg[0, p_idx]))
-            y_mat[p_idx].append(int(pose_mat[1, p_idx]))
-            y_hg[p_idx].append(int(pose_hg[1, p_idx]))
-
-    plt.figure(1)
-    for i in range(16):
-        diff = np.diff([x_mat[i], x_hg[i]], axis=0)
-        plt.plot(diff[0])
-
-    plt.figure(2)
-    for i in range(16):
-        diff = np.diff([y_mat[i], y_hg[i]], axis=0)
-        plt.plot(diff[0])
-    plt.show()
-
-
+# Play matlab images like a video
 def compare_pose_tracking_techniques(routine):
     # Get all folders that have __ suffixes.
     # Load all the smoothed_frame_xxx.png matlab pose files in these folders
@@ -711,73 +445,111 @@ def compare_pose_tracking_techniques(routine):
     return
 
 
-# Error plots
-def plot_tariff_confusion_matrix(tariffMatches):
-    def plot_confusion_matrix(df_confusion, title='Confusion matrix'):
-        # from matplotlib import rcParams
-        # rcParams.update({'figure.autolayout': True})
-        # http://stackoverflow.com/questions/24521296/matplotlib-function-conventions-subplots-vs-one-figure
+#
+# Matplotlib Plots for various datas.
+#
+def plot_height(routine):
+    print("\nStarting plotting...")
+    f, axarr = plt.subplots(4, sharex=True)
 
-        fig, ax = plt.subplots()
-        fig.set_size_inches(6.4, 6)
-        # ax.set_title(title)
+    # Plot bounce heights
+    x_frames = [frame.frame_num / routine.video_fps for frame in routine.frames]
+    y_travel = [frame.center_pt_x for frame in routine.frames]
+    y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
 
-        cmap = matplotlib.cm.get_cmap('Greys')
-        im = ax.matshow(df_confusion, cmap=cmap)  # imshow
-        # fig.colorbar(im, orientation='horizontal')
+    # List inside list gets flattened
+    peaks_x = list(chain.from_iterable((bounce.start_time, bounce.max_height_frame / routine.video_fps) for bounce in routine.bounces))
+    peaks_x.append(routine.bounces[-1].end_time)
+    peaks_y = list(chain.from_iterable((bounce.start_height, bounce.max_height) for bounce in routine.bounces))
+    peaks_y.append(routine.bounces[-1].end_height)
+    # peaks_y = [routine.video_height - p for p in peaks_y]
 
-        tick_marks = np.arange(len(df_confusion.columns))
-        # plt.xticks(tick_marks, df_confusion.columns, rotation='vertical', verticalalignment='top')
-        plt.xticks(tick_marks, df_confusion.columns, rotation='vertical')
-        plt.yticks(tick_marks, df_confusion.index)
-        ax.xaxis.set_ticks_position('bottom')
-        ax.set_ylabel(df_confusion.index.name)
-        ax.set_xlabel(df_confusion.columns.name)
+    axarr[0].set_title("Height")
+    axarr[0].plot(x_frames, y_height, color="g")
+    axarr[0].plot(peaks_x, peaks_y, 'r+')
+    axarr[0].set_ylabel('Height (Pixels)')
 
-        fig.tight_layout(pad=0)
+    # Plot bounce travel
+    axarr[1].set_title("Travel")
+    axarr[1].set_ylabel('Rightwardness (Pixels)')
+    axarr[1].plot(x_frames, y_travel, color="g")
+    axarr[1].axhline(y=routine.trampoline_center, xmin=0, xmax=1000, c="blue")
+    axarr[1].axhline(y=routine.trampoline_center + 80, xmin=0, xmax=1000, c="red")
+    axarr[1].axhline(y=routine.trampoline_center - 80, xmin=0, xmax=1000, c="red")
 
-        imgName = consts.confImgPath + "confusion_matrix.pdf"
-        print("Writing image to {}".format(imgName))
-        plt.savefig(imgName)
+    # Ellipse angles
+    x_frames = np.array([frame.frame_num / routine.video_fps for frame in routine.frames])
+    y_angle = np.array([frame.ellipse_angle for frame in routine.frames])
+    # Changes angles
+    y_angle = np.unwrap(y_angle, discont=90, axis=0)
 
-        plt.show()
-        return
+    axarr[2].plot(x_frames, y_angle, color="g")
+    axarr[2].set_title("Angle")
+    axarr[2].set_ylabel('Angle (deg)')
 
-    actual = []
-    predicted = []
-    excludedMatched = [u'Back Half', u'Cody', u'Front Drop', u'Full Back', u'Full Front', u'Lazy Back', u'Rudolph / Rudi', u'To Feet from Front']
-    for thisMatch in tariffMatches:
-        thisBounce = thisMatch.bounce
-        matchedBounce = thisMatch.matched_bounce
+    # Ellipse lengths
+    y_major = np.array([frame.ellipse_len_major for frame in routine.frames])
+    y_minor = np.array([frame.ellipse_len_minor for frame in routine.frames])
 
-        if thisBounce.skill_name in excludedMatched or matchedBounce.skill_name in excludedMatched:
-            continue
+    # axarr[3].scatter(x_frames, y_major, color="g")
+    # axarr[3].scatter(x_frames, y_minor, color='b')
+    # axarr[3].set_ylim([0, 300])
+    # axarr[3].set_title("Ellipse Axes Length")
+    # axarr[3].set_ylabel('Length')
+    # axarr[3].set_xlabel('Time (s)')
 
-        actual.append(thisBounce.code_name)
-        predicted.append(matchedBounce.code_name)
+    axarr[3].plot(x_frames, y_major / y_minor, color="g")
+    axarr[3].set_title("Ellipse Axes Ratio")
+    axarr[3].set_ylabel('Length Ratio')
+    axarr[3].set_xlabel('Time (s)')
 
-        # visualise.play_frames_of_2(db, thisBounce.routine, matchedBounce.routine, thisBounce.start_frame, thisBounce.end_frame, matchedBounce.start_frame, matchedBounce.end_frame)
-    y_actu = pd.Series(actual, name='Actual Skill Class')
-    y_pred = pd.Series(predicted, name='Predicted Skill Class')
-    df_confusion = pd.crosstab(y_actu, y_pred)
-    # df_confusion = pd.crosstab(y_actu, y_pred, rownames=['Actual'], colnames=['Predicted'], margins=True)  # add's sum col and row
-
-    df_conf_norm = df_confusion / df_confusion.sum(axis=1)
-    df_conf_norm.columns.name = "Predicted Skill Class"
-
-    # plot_confusion_matrix(df_confusion, 'Confusion Matrix')
-    plot_confusion_matrix(df_conf_norm, 'Normalised Confusion Matrix')
-    # plt.show()
-
-    return
+    plt.show()
 
 
-# Plot angles
-def plot_bounce_angles(bounce):
+# Called by play_frames_of_2_bounces
+def _plot_angles_6x2(axes, framesInEachAngle):
+    # angles = []
+    # xTicks = []
+    # for frame in frames:
+    #     if frame.angles:
+    #         xTicks.append(frame.frame_num)
+    #         angles.append(np.array(json.loads(frame.angles)))
+    #         # else:
+    #         #     angles.append(None)
+    # anglesInEachFrame = np.array(angles)
+    # framesInEachAngle = anglesInEachFrame.T
+
+    """[
+        "Right elbow",
+        "Left elbow",
+        "Right shoulder",
+        "Left shoulder",
+        "Right knee",
+        "Left knee",
+        "Right hip",
+        "Left hip",
+        "Head"
+        "Right leg with horz",
+        "Left leg with horz",
+        "Torso with horz",
+        "Twist Angle"
+    ]"""
+
+    numFrames = len(framesInEachAngle[0])
+    handle = None
+
+    # Plot angles
+    for jointAngles, ax in zip(framesInEachAngle, axes.flat):
+        handle, = ax.plot(range(numFrames), jointAngles)
+
+    return handle
+
+
+def plot_angles_1x6_save_image(bounce):
     imgName = "{path}{filename}_angles.jpg".format(path=consts.bouncesRootPath, filename=bounce.id)
-    if os.path.exists(imgName):
-        print('File exists: {}'.format(imgName))
-        return
+    # if os.path.exists(imgName):
+    #     print('File exists: {}'.format(imgName))
+    #     return
 
     print("\nCreating angle comparison plot")
     # Create plot
@@ -787,13 +559,15 @@ def plot_bounce_angles(bounce):
     framesInEachAngle = framesInEachAngle[:, :30]
     framesInEachAngle = np.delete(framesInEachAngle, 8, 0)  # delete "head" angle
     numFrames = len(framesInEachAngle[0])
-    xTicks = np.arange(numFrames) / 30.
+    xTicks = np.arange(numFrames)
 
     # indexOrders = [0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]
     # indexOrders = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11]
     indexOrders = [0, 2, 4, 6, 8, 10]
 
     # Plot angles
+    rHandle = None
+    lHandle = None
     for i, ax in zip(indexOrders, axes.flat[:5]):
         jointAngles = framesInEachAngle[i]
         rHandle, = ax.plot(xTicks, jointAngles, label="Right")
@@ -801,30 +575,21 @@ def plot_bounce_angles(bounce):
         lHandle, = ax.plot(xTicks, jointAngles, label="Left")
     # add other 2
     torsoHandle, = axes[5].plot(xTicks, framesInEachAngle[10], c='purple', label="Torso with Vertical")
-    twistHandle, = axes[5].plot(xTicks, framesInEachAngle[11], c='orange', label="Twist Angle")
+    twistHandle, = axes[5].plot(xTicks, framesInEachAngle[11], c='green', label="Twist Angle")
 
     # Place a legend to the right of this smaller subplot.
     plt.legend(handles=[rHandle, lHandle, torsoHandle, twistHandle], bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-    labels = [
-        'Elbow',
-        'Shoulder',
-        'Hip',
-        'Knee',
-        'Leg with Horizontal',
-        'Torso & Twist'
-    ]
-
     # Add labels
     # labels = list(consts.extendedAngleIndexKeys)  # make a copy
     # labels.remove('Head')
-    for label, ax in zip(labels, axes.flat):
+    for label, ax in zip(calc_angles.labels, axes.flat):
         ax.set_title(label)
 
     axes[0].set_ylim([0, 180])
     # axes[0].set_xlim([0, 1])
     axes[0].yaxis.set_ticks([0, 45, 90, 135, 180])
-    axes[0].xaxis.set_ticks([.5, 1])
+    # axes[0].xaxis.set_ticks([.5, 1])
     # ax.xaxis.set_ticks([0, 60, 120, 180])
     # ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
 
@@ -834,10 +599,178 @@ def plot_bounce_angles(bounce):
     # fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances)), fontsize=16)
     # fig.legend((b1Handle, b2Handle), (bounce1.skill_name, bounce2.skill_name))
     fig.tight_layout(pad=0)
-    fig.subplots_adjust(bottom=.2, right=0.82)
+    # fig.subplots_adjust(bottom=.2, right=0.82)  # make room for xlabel and legend
+    fig.subplots_adjust(right=0.85)  # make room for legend
 
     print("Writing image to {}".format(imgName))
     plt.savefig(imgName)
     # plt.show()
     plt.close(fig)
     return
+
+# def compare_many_angles_plot(manyRoutineAngles, labels, block=True):
+#     # Plot angles
+#     f, axarr = plt.subplots(len(manyRoutineAngles[0]), sharex=True)
+#
+#     # Get number of data points in each one for resampling.
+#     # dataPointLens = [len(routineAngles.values()[0]) for routineAngles in manyRoutineAngles]
+#     # sampleCount = min(dataPointLens)
+#
+#     # Loop through
+#     error = [[label, 0] for label in labels]
+#     for i, label, routineAngles in zip(range(len(manyRoutineAngles)), labels, manyRoutineAngles):
+#         # use angleIndexKeys rather than jointNames.keys() because order matters here
+#         # AngleIndexKeys are grouped in left right pairs. Want to add to average the two and add it to the plot
+#         for plti, key in enumerate(routineAngles):
+#             axarr[plti].set_title(key)
+#
+#             angles = routineAngles[key]
+#             # angles = signal.resample(angles, sampleCount)
+#             goodIndices = find_outlier_indices(angles, 50)
+#             f = interpolate.interp1d(goodIndices, angles[goodIndices], kind='cubic')
+#             newAngles = f(range(len(angles)))
+#             # error[i][1] += sum(np.absolute(angles))
+#
+#             # all_idx = 1:length(x)
+#             # outlier_idx = abs(x - median(x)) > 3 * std(x) | abs(y - median(y)) > 3 * std(y) # Find outlier idx
+#             # x(outlier_idx) = interp1(all_idx(~outlier_idx), x(~outlier_idx), all_idx(outlier_idx))
+#
+#             axarr[plti].plot(range(len(angles)), newAngles, label=label)
+#             axarr[plti].plot(range(len(angles)), angles, label=label, marker='o', linestyle="-")
+#
+#     print(error)
+#     plt.legend(loc='best')
+#     # plt.savefig('C:/Users/psdco/Pictures/Tucks/' + path.basename(routine.path)[:-4] + "_{}".format(frames[0].frame_num))
+#     plt.show(block=block)
+# def find_outlier_indices(arr, cutoff=40):
+#     diff = np.diff(arr)
+#     outliers = np.nonzero(diff < -cutoff)[0]
+#     if len(outliers) == 0:
+#         return range(len(arr))
+#
+#     if outliers[0] == 0:
+#         outliers = outliers[1:]
+#
+#     tweenOutliers = []
+#     for oli in outliers:
+#         if oli in tweenOutliers:
+#             continue
+#         normalRef = arr[oli]
+#         i = oli + 1
+#         while 1:
+#             thisDif = normalRef - arr[i]
+#             if abs(thisDif) > cutoff:
+#                 tweenOutliers.append(i)
+#             else:  # found a point close to normal ref, go to next outlier
+#                 break
+#             i += 1
+#             # Dont go off the end
+#             if i == len(arr):
+#                 tweenOutliers = tweenOutliers[:-1]
+#                 break
+#
+#     goodIndices = [i for i in range(len(arr)) if i not in tweenOutliers]
+#     return goodIndices
+#
+#     # for i in range(len(diff)):
+#     #     pt1 = diff[i]
+#     #     pt2 = diff[i+1]
+#     #     if
+#     #
+#     # badPts = []
+#     # outliers = False
+#     # lastGoodVal = 0
+#     # for i in range(1, len(arr)):
+#     #     pt1 = arr[i-1]
+#     #     pt2 = arr[i]
+#     #     diff = pt2-pt2
+#     #     if abs(diff) > cutoff:
+#     #         outliers = True
+#     #         lastGoodVal = pt1
+#     #         badPts.append(i)
+#
+#
+#     # from scipy import interpolate
+#     # x = [a for a in range(len(angles)) if a not in np.nonzero(diff > 40)[0][1:]]
+#     # # x = [x for x in x if x not in np.nonzero(np.diff(angles[x])>40)[0][1:]]
+#     # y = angles[x]
+#     # # x = range(len(angles))
+#     # xnew = range(len(angles))
+#     #
+#     # f = interpolate.interp1d(x, y, kind='cubic')
+#     #
+#     # spl = interpolate.UnivariateSpline(x, y)
+#     # # spl.set_smoothing_factor(200)
+#     #
+#     # b, a = signal.butter(3, 0.1)
+#     # # b, a = signal.ellip(4, 0.01, 120, 0.091)
+#     # yfilt = signal.filtfilt(b, a, angles, padlen=50)
+#     #
+#     # plt.figure()
+#     # plt.plot(x, y, 'o', xnew, f(xnew), '-')
+#     # plt.plot(xnew, spl(xnew), 'r')
+#     # plt.plot(xnew, yfilt)
+#     # plt.show()
+#
+#
+# def is_outlier(points, thresh=3.5):
+#     """
+#     Returns a boolean array with True if points are outliers and False otherwise.
+#
+#     Parameters:
+#     -----------
+#         points : An numobservations by numdimensions array of observations
+#         thresh : The modified z-score to use as a threshold. Observations with
+#             a modified z-score (based on the median absolute deviation) greater
+#             than this value will be classified as outliers.
+#
+#     Returns:
+#     --------
+#         mask : A numobservations-length boolean array.
+#     """
+#     if len(points.shape) == 1:
+#         points = points[:, None]
+#     median = np.median(points, axis=0)
+#     diff = np.sum((points - median) ** 2, axis=-1)
+#     diff = np.sqrt(diff)
+#     med_abs_deviation = np.median(diff)
+#
+#     modified_z_score = 0.6745 * diff / med_abs_deviation
+#
+#     return modified_z_score > thresh
+#
+#
+# def pose_error(routine):
+#     # Original hg output
+#     hg_preds_file = h5py.File('preds.h5', 'r')
+#     hg_preds = hg_preds_file.get('preds')
+#
+#     # Smoothed monocap output
+#     mat_preds_file = scipy.io.loadmat('preds.mat')
+#     mat_preds = mat_preds_file['preds_2d']
+#
+#     x_mat = [[] for _ in range(16)]
+#     x_hg = [[] for _ in range(16)]
+#     y_mat = [[] for _ in range(16)]
+#     y_hg = [[] for _ in range(16)]
+#
+#     for i, frame_data in enumerate(routine.frames):
+#         pose_mat = mat_preds[:, :, i]
+#         pose_hg = np.array(json.loads(frame_data.pose_hg))
+#         # pose_hg = np.array(hg_preds['{0:04}'.format(frame_data.frame_num)].value).T
+#         for p_idx in range(16):
+#             x_mat[p_idx].append(int(pose_mat[0, p_idx]))
+#             x_hg[p_idx].append(int(pose_hg[0, p_idx]))
+#             y_mat[p_idx].append(int(pose_mat[1, p_idx]))
+#             y_hg[p_idx].append(int(pose_hg[1, p_idx]))
+#
+#     plt.figure(1)
+#     for i in range(16):
+#         diff = np.diff([x_mat[i], x_hg[i]], axis=0)
+#         plt.plot(diff[0])
+#
+#     plt.figure(2)
+#     for i in range(16):
+#         diff = np.diff([y_mat[i], y_hg[i]], axis=0)
+#         plt.plot(diff[0])
+#     plt.show()

@@ -316,7 +316,7 @@ def track_gymnast(db, routine):
                     processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 1:resizeWidth * 2] = biggestContour
                     # cv2.imshow('personMask', personMask)
 
-                cx, cy = helper_funcs.calcContourCenter(personContourConcat)
+                cx, cy = helper_funcs.calc_contour_center(personContourConcat)
                 if cx and cy:
                     centerPoints[int(cap.get(cv2.CAP_PROP_POS_FRAMES))] = [cx, cy]
 

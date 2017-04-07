@@ -16,7 +16,7 @@ import judging_rows_html
 from helpers import consts
 from helpers import helper_funcs
 from helpers import sql_queries
-from helpers.db_declarative import Routine, Contributor, Judgement, Bounce, Deduction
+from helpers.db_declarative import Routine, Contributor, Judgement, Bounce, Deduction, Reference
 
 app = Flask(__name__)
 
@@ -91,8 +91,8 @@ def index():
     return render_template('home.html', title='FYP', counts=counts, percentCompletes=percentCompletes)
 
 
-@app.route('/gui')
-def gui():
+@app.route('/gui_routines')
+def gui_routines():
     # routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).order_by(Routine.level).all()
     routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
     for i, routine in enumerate(routines):
@@ -104,14 +104,14 @@ def gui():
         # routine.labelled = routine.isLabelled()
         # routine.judged = routine.isJudged(contrib)
         routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
-        routine.poseStatuses = helper_funcs.getPoseStatuses(routine.getPoseDirPaths(), routine.name)
+        routine.poseStatuses = helper_funcs.get_pose_statuses(routine.getPoseDirPaths(), routine.name)
         routine.numBounces = len(routine.bounces)
 
-    return render_template('gui.html', title='List of Routines', routines=routines)
+    return render_template('gui_routines.html', title='List of Routines', routines=routines)
 
 
-@app.route('/bounces_gui')
-def bounces_gui():
+@app.route('/gui_bounces')
+def gui_bounces():
     # Get all skill names
     # skills = db.execute(text("SELECT count(*), skill_name FROM bounces GROUP BY skill_name ")).fetchall()
     skills = db.execute(text("SELECT skill_name, (SELECT id FROM skills WHERE skills.name=bounces.skill_name) AS sort_order, count(*) AS c FROM bounces  WHERE sort_order NOTNULL GROUP BY skill_name ORDER BY sort_order")).fetchall()
@@ -122,15 +122,14 @@ def bounces_gui():
         skillBounces = db.query(Bounce).filter(Bounce.skill_name == skillName, Bounce.angles != None).all()
         bouncesWithDeductions = []
         for bounce in skillBounces:
-            deductions = bounce.deductions
-            if not deductions:
-                averageDeduction = 99.
-            else:
-                averageDeduction = deductions[0].deduction_value
-            bouncesWithDeductions.append([bounce, averageDeduction])
+            averageDeduction = bounce.getDeduction()
+            if averageDeduction is not None:  # do nothing if no deductions
+                bouncesWithDeductions.append([bounce, averageDeduction, 'images/bounces/{}.jpg'.format(bounce.id)])
         # Sort bounces by best to worst
         sortedBounces = sorted(bouncesWithDeductions, key=itemgetter(1))
-        sortedBounceClasses.append([skillName, sortedBounces])
+        sortedBounceClasses.append([skillName, len(sortedBounces), sortedBounces])
+
+        break
 
     # routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).order_by(Routine.level).all()
     # routines = db.query(Routine).filter(Routine.use == 1, Routine.id == 127).order_by(Routine.level).all()
@@ -146,11 +145,11 @@ def bounces_gui():
     #     routine.poseStatuses = helper_funcs.getPoseStatuses(routine.getPoseDirPaths(), routine.name)
     #     routine.numBounces = len(routine.bounces)
 
-    return render_template('bounces_gui.html', title='Bounces', bounceClassesAndBounces=sortedBounceClasses)
+    return render_template('gui_bounces.html', title='Bounces', bounceClassesAndBounces=sortedBounceClasses)
 
 
-@app.route('/list')
-def list_routines():
+@app.route('/routines_list')
+def routines_list():
     # contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
     routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
     for i, routine in enumerate(routines):
@@ -169,14 +168,14 @@ def list_routines():
         routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
         routine.broken = routine.isBroken(db)
 
-    return render_template('list_routines.html', title='List of Routines', routines=routines)
+    return render_template('routines_list.html', title='List of Routines', routines=routines)
 
 
 #
 # Sub-pages
 #
 @app.route('/label/<int:routine_id>', methods=['GET'])
-def label_routine(routine_id):
+def routine_label(routine_id):
     routine = db.query(Routine).filter(Routine.id == routine_id).one()
     routine.name = routine.prettyName()
 
@@ -189,14 +188,14 @@ def label_routine(routine_id):
     bounceNames = [bounce.skill_name for bounce in routine.bounces]
     startEndTimes = json.dumps([{"start": bounce.start_time, 'end': bounce.end_time} for bounce in routine.bounces])
 
-    return render_template('label_routine.html',
+    return render_template('routine_label.html',
                            title='Label Routine', vidPath=vidPath, routineId=routine.id, bounceIds=bounceIds,
                            bounceIndexes=bounceIndexes, bounceNames=json.dumps(bounceNames), startEndTimes=startEndTimes,
                            nextRoutine=nextRoutine)
 
 
 @app.route('/judge/<int:routine_id>', methods=['GET'])
-def judge_routine(routine_id):
+def routine_judge(routine_id):
     contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
     routine = db.query(Routine).filter(Routine.id == routine_id).one()
     routine.name = routine.prettyName()
@@ -247,14 +246,14 @@ def judge_routine(routine_id):
     skillIds = [skill.id for skill in skills]
     startEndTimes = json.dumps([{"start": skill.start_time, 'end': skill.end_time} for skill in skills])
 
-    return render_template('judge_routine.html',
+    return render_template('routine_judge.html',
                            title='Judge Routine', vidPath=vidPath, routine=routine,
                            startEndTimes=startEndTimes, skills=skills, skillIds=skillIds,
                            userName=userName, nextRoutine=nextRoutine)
 
 
-@app.route('/old_judge/<int:routine_id>', methods=['GET'])
-def old_judge_routine(routine_id):
+@app.route('/judge_old/<int:routine_id>', methods=['GET'])
+def routine_judge_old(routine_id):
     contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
     routine = db.query(Routine).filter(Routine.id == routine_id).one()
     routine.name = routine.prettyName()
@@ -291,7 +290,7 @@ def old_judge_routine(routine_id):
     skillIds = [skill.id for skill in skills]
     startEndTimes = json.dumps([{"start": skill.start_time, 'end': skill.end_time} for skill in skills])
 
-    return render_template('old_judge_routine.html',
+    return render_template('routine_judge_old.html',
                            title='Judge Routine', vidPath=vidPath, routine=routine,
                            startEndTimes=startEndTimes, skills=skills, skillIds=skillIds,
                            userName=userName, nextRoutine=nextRoutine)
@@ -301,7 +300,7 @@ def old_judge_routine(routine_id):
 # Ajax Endpoints
 #
 @app.route('/label', methods=['POST'])
-def label_routine_db():
+def ajax_db_routine_label():
     # http://stackoverflow.com/questions/10434599/how-to-get-data-recieved-in-flask-request
     # print(request.values)
     bounceNames = json.loads(request.values.get('bounceNames'))
@@ -316,7 +315,7 @@ def label_routine_db():
 
 
 @app.route('/judge', methods=['POST'])
-def judge_routine_db():
+def ajax_db_routine_judge():
     # http://stackoverflow.com/questions/10434599/how-to-get-data-recieved-in-flask-request
     routineId = int(request.values['routine_id'])
     username = request.values['username']
@@ -350,7 +349,7 @@ def judge_routine_db():
 
 
 @app.route('/set_level', methods=['POST'])
-def setLevel():
+def ajax_db_set_level():
     print(request.values)
 
     routine_id = int(request.values.get('routine_id'))
@@ -367,16 +366,36 @@ def setLevel():
 
 
 @app.route('/play_bounce', methods=['POST'])
-def playBounce():
+def ajax_exec_play_bounce():
     from image_processing import visualise
+
     print(request.values)
     bounce_id = int(request.values.get('bounce_id'))
-    visualise.play_bounce(db, bounce_id, show_pose=True)
+    compare_to_ideal = json.loads(request.values.get('compare_to_ideal'))
+
+    if compare_to_ideal:
+
+        bounce = db.query(Bounce).filter_by(id=bounce_id).one()
+        reference = db.query(Reference).filter_by(name=bounce.skill_name).one()
+        refBounce = reference.bounce
+
+        # Show both angle plots side by side
+        # refFilepath = bouncesRootPath + '{}_angles.jpg'.format(refBounce.id)
+        # thisFilepath = bouncesRootPath + '{}_angles.jpg'.format(bounce.id)
+        # cv2.imshow('ref angles', cv2.imread(refFilepath))
+        # cv2.imshow('this angles', cv2.imread(thisFilepath))
+
+        visualise.play_frames_of_2_bounces(db, refBounce, bounce)
+
+    else:
+        visualise.play_bounce(db, bounce_id, show_pose=True)
+
+    return ''
 
 
 @app.route('/gui_action', methods=['POST'])
-def handleAction():
-    from image_processing import import_output
+def ajax_exec_routine_action():
+    from image_processing import import_pose
     from image_processing import segment_bounces
     from image_processing import track
     from image_processing import trampoline
@@ -401,7 +420,7 @@ def handleAction():
         # visualise.plot_data(routine)
 
     elif action == 'save_frames':
-        import_output.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
+        import_pose.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
 
     elif action == 'play_monocap':
         # threading.Thread(target=visualise.compare_pose_tracking_techniques, args=(routine,)).start()
@@ -411,7 +430,7 @@ def handleAction():
         visualise.play_frames(db, routine, show_pose=True)
 
     elif action == 'import_pose':
-        import_output.import_monocap_preds_2d(db, routine)
+        import_pose.import_monocap_preds_2d(db, routine)
 
     elif action == 'delete_pose':
         for frame in routine.frames:
@@ -421,6 +440,9 @@ def handleAction():
         for bounce in routine.bounces:
             bounce.angles = None
             bounce.angles_count = None
+
+        routine.has_pose = 0
+
         db.commit()
         print('Delete saved')
     else:

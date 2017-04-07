@@ -27,14 +27,19 @@
     {% endif %}
 {% endmacro %}
 
+
 {% macro play_bounce_link(bounceId) %}
-    {#    <a href="{{ url_for(request.endpoint.endswith('playBounce')) }}">{{ text }}</a>#}
-    <button type="button" class="btn btn-sm btn-link" data-bounce-id="{{ bounceId }}">
+    <button type="button" class="btn btn-sm btn-link" data-bounce-id="{{ bounceId }}" data-compare-to-ideal="false">
         <i class="fa fa-play" aria-hidden="true"></i>
     </button>
-    {#    <a href="play_bounce?bounce_id={{ bounceId }}">{{ text }}</a>#}
 {% endmacro %}
 
+{% macro play_2_bounces_link(bounceId) %}
+    <button type="button" class="btn btn-sm btn-link" data-bounce-id="{{ bounceId }}" data-compare-to-ideal="true">
+        <i class="fa fa-play" aria-hidden="true"></i>
+        <i class="fa fa-play" aria-hidden="true"></i>
+    </button>
+{% endmacro %}
 
 
 {# Imported into fyp.py /judge/<> #}

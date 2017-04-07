@@ -8,7 +8,7 @@ from helpers import helper_funcs, consts
 from helpers.db_declarative import Bounce
 
 
-def plot_skil_bar_charts(db):
+def plot_skill_bar_charts(db):
     from collections import Counter
     import matplotlib.pyplot as plt
     # Counter({u'Straight Bounce': 286, u'Back S/S': 76, u'Tuck Jump': 58, u'Barani': 52, u'Straddle Jump': 42, u'Pike Jump': 40, u'Seat Half Twist To Seat': 24, u'Half Twist to Feet from Seat': 24, u'Landing': 22, u'Full Twist Jump': 19, u'Half Twist Jump': 18, u'Crash Dive': 18, u'Seat Drop': 13, u'Half Twist to Feet from Back': 12, u'To Feet from Seat': 11, u'Front S/S': 11, u'Back S/S to Seat': 10, u'Half Twist to Seat Drop': 10, u'Back Drop': 10, u'To Feet from Back': 8, u'Barani Ball Out': 7, u'To Feet from Front': 5, u'Front Drop': 4, u'Rudolph / Rudi': 3, u'Lazy Back': 3, u'Cody': 3, u'Full Back': 2, u'Back Half': 1, u'Full Front': 1})

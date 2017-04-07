@@ -41,6 +41,7 @@ class Routine(Base):
     trampoline_center = Column(INTEGER)
     trampoline_width = Column(INTEGER)
     original_path = Column(TEXT, unique=True)
+    has_pose = Column(INTEGER)
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
@@ -91,7 +92,7 @@ class Routine(Base):
     def getTrampolineTouches(self):
         from helpers import helper_funcs
         trampolineTouches = array([frame.trampoline_touch for frame in self.frames])
-        trampolineTouches = helper_funcs.trimTouches(trampolineTouches)
+        trampolineTouches = helper_funcs.trim_touches(trampolineTouches)
         return trampolineTouches
 
     def getScore(self, contributor):
@@ -114,11 +115,11 @@ class Routine(Base):
         count = db.execute("select count(*) from frame_data where frame_data.routine_id == {}".format(self.id)).scalar()
         return count > 0
 
-    def isPoseImported(self, db):
-        # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=''
-        # count = db.query(Frame.id).filter(Frame.pose != '', Frame.routine_id == self.id).count()
-        count = db.execute("select count(*) from frame_data where frame_data.pose notnull and frame_data.routine_id == {}".format(self.id)).scalar()
-        return count > 0
+    # def isPoseImported(self, db):
+    #     # SELECT count(1) FROM frame_data WHERE routine_id=1 AND pose!=''
+    #     # count = db.query(Frame.id).filter(Frame.pose != '', Frame.routine_id == self.id).count()
+    #     count = db.execute("select count(*) from frame_data where frame_data.pose notnull and frame_data.routine_id == {}".format(self.id)).scalar()
+    #     return count > 0
 
     def isLabelled(self, db):
         count = db.execute("select count(*) from bounces where skill_name NOTNULL and routine_id == {}".format(self.id)).scalar()
@@ -274,6 +275,13 @@ class Bounce(Base):
 
         return tariff
 
+    def getDeduction(self):
+        deductions = self.deductions
+        if not deductions:
+            return None
+        else:
+            averageDeduction = deductions[0].deduction_value
+            return averageDeduction
 
 class Judgement(Base):
     __tablename__ = 'judgements'
@@ -383,3 +391,14 @@ class TariffMatches(Base):
     def __repr__(self):
         return "TariffMatch(id={}, b_id={}, ids={!r}, dists={!r}, time={})" \
             .format(self.id, self.bounce_id, self.matched_bounces_ids, self.matched_bounces_distances, self.time_taken)
+
+
+class Reference(Base):
+    __tablename__ = 'references'
+
+    id = Column(INTEGER, primary_key=True)
+    bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
+    # skill_id = Column(INTEGER, ForeignKey('skill.id'))
+    name = Column(TEXT)
+
+    bounce = relationship("Bounce")

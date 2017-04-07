@@ -1,42 +1,57 @@
 from __future__ import print_function
 
-import matplotlib.pyplot as plt
+from operator import itemgetter
+
 import numpy as np
 from scipy import signal
-from scipy.spatial.distance import euclidean
 
 import helpers.helper_funcs
 from helpers.db_declarative import *
 from image_processing import visualise
-from libs.fastdtw import fastdtw
 
 
 def judge_skill(db):
     # Get all straddle jumps, plot their sequences
     desiredSkill = 'Tuck Jump'
-    skills = db.query(Bounce).filter_by(skill_name=desiredSkill)
-    plt.title(desiredSkill)
-    skillRatios = []
-    for i, skill in enumerate(skills[:]):
-        visualise.play_bounce(db, skill.id)
+    reference = db.query(Reference).filter_by(name=desiredSkill).one()
+    refBounce = reference.bounce
+    refBounceAngles = np.array(json.loads(refBounce.angles))
+    bounces = db.query(Bounce).filter(Bounce.skill_name == desiredSkill, Bounce.angles != None).all()
 
-        skillFrames = db.query(Frame).filter(Frame.routine_id == skill.routine_id, Frame.frame_num > skill.start_frame, Frame.frame_num < skill.end_frame)
-        frame_nums = [f.frame_num for f in skillFrames]
-        print("start", skill.start_frame, "end", skill.end_frame, "num frame", skill.end_frame - skill.start_frame,
-              len(frame_nums), frame_nums)
-        print(skill.deductions)
+    labelsAndDistances = []
+    weights = [0.3, 0.3, 0.5, 0.5, 1, 1, 1, 1, 0.3, 1, 1, 1, 1]
+    numAngles = 13
+    for bounce in bounces:
+        # if bounce.id = referenceBounce.id:
+        #     continue
+        # Don't included bounces that ain't been judged
+        deductionLabel = bounce.getDeduction()
+        if not deductionLabel:
+            continue
 
-        ellipseLenRatios = [f.ellipse_len_major / f.ellipse_len_minor for f in skillFrames]
-        skillRatios.append(ellipseLenRatios)
+        thisBounceJointAngles = np.array(json.loads(bounce.angles))
+        thisBounceFrameCount = len(thisBounceJointAngles[0])
+        absDiff = 0
+        sqErr = 0
+        for i in range(numAngles):  # the number of different angles = 13
+            weight = weights[i]
+            thisJoint = thisBounceJointAngles[i]
+            posedJoint = refBounceAngles[i]
 
-    distance, path = fastdtw(skillRatios[0], skillRatios[1], dist=euclidean)
-    print(distance, path)
-    for sk in skillRatios:
-        plt.plot(signal.resample(sk, 43))
-    plt.plot()
+            alignedPosedJoint = signal.resample(posedJoint, thisBounceFrameCount)
+            distance = np.sum(np.absolute(np.subtract(thisJoint, alignedPosedJoint)))
 
-    plt.ylabel('Height (Pixels)')
-    plt.show(block=False)
+            # distance, _path = fastdtw(thisJoint, posedJoint, dist=euclidean)
+            distance *= weight
+            absDiff += distance
+            sqErr += distance ** 2
+
+        mse = int(round(sqErr, 0)) / numAngles
+        labelAndDistance = [deductionLabel, mse]
+        labelsAndDistances.append(labelAndDistance)
+
+    sortedLabelsAndDistances = sorted(labelsAndDistances, key=itemgetter(1))
+    labelsAndDistances
 
 
 def judge(db):
