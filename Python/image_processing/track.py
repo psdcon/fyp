@@ -401,6 +401,8 @@ def track_gymnast(db, routine):
         elif k == ord('q') or k == 27:  # q/ESC
             print("Exiting...")
             exit()
+        elif k == ord('p'):  # p (print). Saves image for the report
+            cv2.imwrite(consts.thesisImgPath + "trampoline_detect_2.png", frame)
 
         # Finish playing the video when we get to the end.
         if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):

@@ -145,7 +145,11 @@ class Routine(Base):
         # return False
 
     def isOldJudged(self, db):
-        count = db.execute("SELECT * FROM judgements WHERE judge_style = 'old' AND routine_id = {}".format(self.id)).scalar()
+        count = db.execute("SELECT * FROM judgements WHERE has_categories = 'old' AND routine_id = {}".format(self.id)).scalar()
+        return count > 0
+
+    def isNewJudged(self, db):
+        count = db.execute("SELECT * FROM judgements WHERE has_categories = 'new' AND routine_id = {}".format(self.id)).scalar()
         return count > 0
 
     def isJudged(self, contributor=False):
@@ -200,15 +204,15 @@ class Bounce(Base):
     shape = Column(TEXT)
 
     start_frame = Column(INTEGER)
-    max_height_frame = Column(INTEGER)
+    apex_frame = Column(INTEGER)
     end_frame = Column(INTEGER)
 
     start_time = Column(REAL)
-    max_height_time = Column(REAL)
+    apex_time = Column(REAL)
     end_time = Column(REAL)
 
     start_height = Column(INTEGER)
-    max_height = Column(INTEGER)
+    apex_height = Column(INTEGER)
     end_height = Column(INTEGER)
 
     angles = Column(TEXT)
@@ -223,22 +227,22 @@ class Bounce(Base):
 
     # bounces_i_match = relationship("TariffMatches", back_populates='matched_bounce')
 
-    def __init__(self, routine_id, bounce_index, skill_name, start_frame, max_height_frame, end_frame, start_time,
-                 max_height_time, end_time, start_height, max_height, end_height):
+    def __init__(self, routine_id, bounce_index, skill_name, start_frame, apex_frame, end_frame, start_time,
+                 apex_time, end_time, start_height, apex_height, end_height):
         self.routine_id = routine_id
         self.bounce_index = bounce_index
         self.skill_name = skill_name
 
         self.start_frame = start_frame
-        self.max_height_frame = max_height_frame
+        self.apex_frame = apex_frame
         self.end_frame = end_frame
 
         self.start_time = start_time
-        self.max_height_time = max_height_time
+        self.apex_time = apex_time
         self.end_time = end_time
 
         self.start_height = start_height
-        self.max_height = max_height
+        self.apex_height = apex_height
         self.end_height = end_height
 
     def __repr__(self):
@@ -275,13 +279,23 @@ class Bounce(Base):
 
         return tariff
 
-    def getDeduction(self):
+    def getAnyDeduction(self):
         deductions = self.deductions
         if not deductions:
             return None
         else:
             averageDeduction = deductions[0].deduction_value
             return averageDeduction
+
+    def getNewDeduction(self):
+        deductions = self.deductions
+        if not deductions:
+            return None, None
+        for deduction in reversed(deductions):
+            if deduction.deduction_cats is not None:
+                return deduction.deduction_value, json.loads(deduction.deduction_cats)
+        return None, None
+
 
 class Judgement(Base):
     __tablename__ = 'judgements'
@@ -290,16 +304,16 @@ class Judgement(Base):
     routine_id = Column(INTEGER, ForeignKey('routines.id'))
     contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
     score = Column(REAL)
-    judge_style = Column(TEXT)
+    has_categories = Column(TEXT)
 
     routine = relationship("Routine", back_populates='judgements')
     contributor = relationship("Contributor", back_populates='judgements')
     deductions = relationship("Deduction", back_populates='judgement')
 
-    def __init__(self, routine_id, contributor_id, judge_style):
+    def __init__(self, routine_id, contributor_id, has_categories):
         self.routine_id = routine_id
         self.contributor_id = contributor_id
-        self.judge_style = judge_style
+        self.has_categories = has_categories
 
     def __repr__(self):
         return "Judgement(routine=%r, deductions=%r, who=%r)" % (self.routine, self.deductions, self.contributor)
@@ -319,18 +333,18 @@ class Deduction(Base):
     bounce_id = Column(INTEGER, ForeignKey('bounces.id'))
     contributor_id = Column(INTEGER, ForeignKey('contributors.id'))
     deduction_value = Column(REAL)
-    deduction_json = Column(TEXT)
+    deduction_cats = Column(TEXT)
 
     bounce = relationship("Bounce", back_populates='deductions')
     judgement = relationship("Judgement", back_populates='deductions')
     contributor = relationship("Contributor", back_populates='deductions')
 
-    def __init__(self, judgement_id, contributor_id, bounce_id, deduction_value, deduction_json):
+    def __init__(self, judgement_id, contributor_id, bounce_id, deduction_value, deduction_cats):
         self.judgement_id = judgement_id
         self.contributor_id = contributor_id
         self.bounce_id = bounce_id
         self.deduction_value = deduction_value
-        self.deduction_json = deduction_json
+        self.deduction_cats = deduction_cats
 
     def __repr__(self):
         return "Deduction(deduction=%r, who=%r)" % (self.deduction_value, self.contributor)

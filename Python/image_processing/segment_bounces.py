@@ -84,8 +84,8 @@ def calculate_bounces(routine):
         nextBedHit = minima[i + 1]
         jumpMaxHeight = maxima[i]
 
-        # routine_id, bounce_index, skill_name, start_frame, max_height_frame, end_frame, start_time,
-        # max_height_time, end_time, start_height, max_height, end_height)
+        # routine_id, bounce_index, skill_name, start_frame, apex_frame, end_frame, start_time,
+        # apex_time, end_time, start_height, apex_height, end_height)
         bounces.append(Bounce(
             routine.id,
             i,

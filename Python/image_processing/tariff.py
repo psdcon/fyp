@@ -90,7 +90,7 @@ def tariff_bounces_test_set(db):
     # Setup
     # print("Setting up to tariff bounces...")
     refBounces = get_reference_set(db)
-    timeTaken = time.time() - startTime
+    # timeTaken = time.time() - startTime
     # print("Took {:.2f}s = {:.2f}m to collect reference bounces.".format(timeTaken, timeTaken / 60))
     print("Reference set contains {} bounces".format(len(refBounces)))
 
@@ -110,12 +110,6 @@ def tariff_bounces_test_set(db):
 
 
 def tariff(db, this_bounces, ref_bounces, verbose=False):
-    """
-    This is designed to be used by tariff_many
-    For this to work, all the posedBounces must be fetched and kept in memory before hand.
-    This introduces the problem of comparing a bounce to itself the bounces in this routine
-        havent been excluded because the routine wasnt known at the time of fetch.
-    """
     startTime = time.time()
 
     # Start processing this routine
@@ -151,7 +145,7 @@ def tariff(db, this_bounces, ref_bounces, verbose=False):
 
         # Store first 5 results into a TariffMatches object
         timeTaken = time.time() - skillStartTime
-        matchedBouncesIds = [bounceMatch['bounce'].id for bounceMatch in bounceMatches[:5]]
+        matchedBouncesIds = [bounceMatch['matched_bounce'].id for bounceMatch in bounceMatches[:5]]
         matchedBouncesDistances = [bounceMatch['MSE'] for bounceMatch in bounceMatches[:5]]
         tariffMatch = TariffMatches(thisBounce.id, matchedBouncesIds[0], json.dumps(matchedBouncesIds), json.dumps(matchedBouncesDistances), timeTaken)
 
@@ -260,7 +254,7 @@ def compare_angles(this_bounce_joint_angles, ref_joint_angles, cutoff, ref_bounc
     if save_bounce_match:
         tariffed_bounce['SAD'] = int(round(absolute_diff, 0))
         tariffed_bounce['MSE'] = int(round(squared_error, 0)) / num_angles
-        tariffed_bounce['bounce'] = ref_bounce
+        tariffed_bounce['matched_bounce'] = ref_bounce
         return tariffed_bounce
     else:
         return None

@@ -76,8 +76,8 @@ def index():
 
     #
     # Deductions
-    counts['bouncesJudgedNew'] = db.query(func.count(distinct(Deduction.bounce_id))).filter(Deduction.deduction_json != None).scalar()
-    counts['bouncesJudgedOld'] = db.query(func.count(distinct(Deduction.bounce_id))).filter(Deduction.deduction_json == None).scalar()
+    counts['bouncesJudgedNew'] = db.query(func.count(distinct(Deduction.bounce_id))).filter(Deduction.deduction_cats != None).scalar()
+    counts['bouncesJudgedOld'] = db.query(func.count(distinct(Deduction.bounce_id))).filter(Deduction.deduction_cats == None).scalar()
     # Bounces to be used, done so far
     counts['bouncesUsePoseJudgedOld'] = db.execute(sql_queries.num_judged_use_pose_deductions_old).scalar()
     counts['bouncesUseJudgedOld'] = db.execute(sql_queries.num_judged_use_deductions_old).scalar()
@@ -100,7 +100,6 @@ def gui_routines():
         routine.name = routine.prettyName()
         routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
         routine.tracked = routine.isTracked(db)
-        routine.posed = routine.isPoseImported(db)
         # routine.labelled = routine.isLabelled()
         # routine.judged = routine.isJudged(contrib)
         routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
@@ -114,36 +113,35 @@ def gui_routines():
 def gui_bounces():
     # Get all skill names
     # skills = db.execute(text("SELECT count(*), skill_name FROM bounces GROUP BY skill_name ")).fetchall()
-    skills = db.execute(text("SELECT skill_name, (SELECT id FROM skills WHERE skills.name=bounces.skill_name) AS sort_order, count(*) AS c FROM bounces  WHERE sort_order NOTNULL GROUP BY skill_name ORDER BY sort_order")).fetchall()
-    # Get all bounce with that name sorted from best to worst (deduction = 0.0 to 0.5)
+    # skills = db.execute(text("SELECT skill_name, (SELECT id FROM skills WHERE skills.name=bounces.skill_name) AS sort_order, count(*) AS c FROM bounces  WHERE sort_order NOTNULL GROUP BY skill_name ORDER BY sort_order")).fetchall()
+    # skillNames = [sk[0] for sk in skills]
+
+    # Get all bounce with that name sorted from best to worst (deduction = None, 0.0 to 0.5)
     sortedBounceClasses = []
-    for skill in skills:  # ignore Blank and Broken
-        skillName = skill[0]
-        skillBounces = db.query(Bounce).filter(Bounce.skill_name == skillName, Bounce.angles != None).all()
-        bouncesWithDeductions = []
-        for bounce in skillBounces:
-            averageDeduction = bounce.getDeduction()
-            if averageDeduction is not None:  # do nothing if no deductions
-                bouncesWithDeductions.append([bounce, averageDeduction, 'images/bounces/{}.jpg'.format(bounce.id)])
+    for skillName in ['Pike Jump', 'Straddle Jump']:  # ignore Blank and Broken
+        bounces = db.query(Bounce).join(Routine).filter(Bounce.skill_name == skillName, Bounce.angles != None, Routine.level < 4).all()
+
+        bouncesRenderingInfo = []
+        for i, bounce in enumerate(bounces):
+            deduction_value, deduction_categories = bounce.getNewDeduction()
+            # if deduction_value is None:  # do nothing if no deductions
+            #     continue
+            deduction_cats_html = render_deduction_cats_html(i, bounce.skill_name)  # need i for radio buttons to work.
+            # deduction_cats_html = json.dumps(deduction_categories, indent=4, sort_keys=True)
+            bouncesRenderingInfo.append({
+                'bounce': bounce,
+                'deduction_value': deduction_value,
+                'img_path': 'images/bounces/{}.jpg'.format(bounce.id),
+                'deduction_cats_html': deduction_cats_html,
+            })
+
         # Sort bounces by best to worst
-        sortedBounces = sorted(bouncesWithDeductions, key=itemgetter(1))
-        sortedBounceClasses.append([skillName, len(sortedBounces), sortedBounces])
-
-        break
-
-    # routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).order_by(Routine.level).all()
-    # routines = db.query(Routine).filter(Routine.use == 1, Routine.id == 127).order_by(Routine.level).all()
-    # for i, routine in enumerate(routines):
-    #     routine.index = i + 1
-    #     routine.name = routine.prettyName()
-    #     routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
-    #     routine.tracked = routine.isTracked()
-    #     routine.posed = routine.isPoseImported(db)
-    #     # routine.labelled = routine.isLabelled()
-    #     # routine.judged = routine.isJudged(contrib)
-    #     routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
-    #     routine.poseStatuses = helper_funcs.getPoseStatuses(routine.getPoseDirPaths(), routine.name)
-    #     routine.numBounces = len(routine.bounces)
+        sortedBouncesInfo = sorted(bouncesRenderingInfo, key=itemgetter('deduction_value'))
+        sortedBounceClasses.append([
+            skillName,
+            len(sortedBouncesInfo),
+            sortedBouncesInfo
+        ])
 
     return render_template('gui_bounces.html', title='Bounces', bounceClassesAndBounces=sortedBounceClasses)
 
@@ -158,9 +156,8 @@ def routines_list():
         routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
         routine.tracked = routine.isTracked(db)
         # routine.framesSaved = routine.hasFramesSaved()
-        routine.posed = routine.isPoseImported(db)
         routine.labelled = routine.isLabelled(db)
-        routine.judged = routine.isOldJudged(db)
+        routine.judged = routine.isNewJudged(db)
         # routine.judged = routine.isJudged(contributor=False)
         # routine.judged = routine.isJudged(contrib)
         # routine.your_score = routine.getScore(contrib)
@@ -229,7 +226,7 @@ def routine_judge(routine_id):
             landingIndexes.append(skillIndexCounter - 1)
 
         # Give all the skills an attribute containing their judging categories' html
-        skill.deduction_cats_html = render_deduction_cats_html(skillIndexCounter, skill.skill_name)
+        skill.deduction_cats_html = render_deduction_cats_html(skillIndexCounter, skill.skill_name)  # need skillIndexCounter for radio buttons to work
 
         skills.append(skill)
         skillIndexCounter += 1
@@ -301,6 +298,8 @@ def routine_judge_old(routine_id):
 #
 @app.route('/label', methods=['POST'])
 def ajax_db_routine_label():
+    print(request.values)
+
     # http://stackoverflow.com/questions/10434599/how-to-get-data-recieved-in-flask-request
     # print(request.values)
     bounceNames = json.loads(request.values.get('bounceNames'))
@@ -316,16 +315,18 @@ def ajax_db_routine_label():
 
 @app.route('/judge', methods=['POST'])
 def ajax_db_routine_judge():
+    print(request.values)
+
     # http://stackoverflow.com/questions/10434599/how-to-get-data-recieved-in-flask-request
     routineId = int(request.values['routine_id'])
     username = request.values['username']
-    judgeStyle = request.values['judge_style']
+    judgeStyle = request.values['has_categories']
     skillIds = json.loads(request.values['skill_ids'])
     routineDeductionValues = json.loads(request.values['routine_deduction_values'])
     routineDeductionsJSON = json.loads(request.values['routine_deductions_json'])
 
     # Create contributor if there's none in the db already
-    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
+    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()  # first because might not exists yet, in which case, add
     if not contrib:
         contrib = Contributor(g.userId, username)
         db.add(contrib)
@@ -348,6 +349,29 @@ def ajax_db_routine_judge():
     return '', 201  # CREATED
 
 
+@app.route('/judge_bounce', methods=['POST'])
+def ajax_db_bounce_judge():
+    print(request.values)
+
+    # http://stackoverflow.com/questions/10434599/how-to-get-data-recieved-in-flask-request
+    bounce_id = int(request.values['bounce_id'])
+    bounceDeductionsValue = float(request.values['bounce_deductions_value'])
+    bounceDeductionsJSON = request.values['bounce_deductions_json']
+
+    # Create contributor if there's none in the db already
+    contrib = db.query(Contributor).filter(Contributor.uid == g.userId).one()
+
+    # No judgement association
+    # Create bounce deduction
+    bounce_deduction = Deduction(None, contrib.id, bounce_id, bounceDeductionsValue, bounceDeductionsJSON)
+
+    db.add(bounce_deduction)
+    db.commit()
+
+    return ''
+    # return '', 201  # CREATED
+
+
 @app.route('/set_level', methods=['POST'])
 def ajax_db_set_level():
     print(request.values)
@@ -367,13 +391,12 @@ def ajax_db_set_level():
 
 @app.route('/play_bounce', methods=['POST'])
 def ajax_exec_play_bounce():
-    from image_processing import visualise
-
     print(request.values)
     bounce_id = int(request.values.get('bounce_id'))
     compare_to_ideal = json.loads(request.values.get('compare_to_ideal'))
 
     if compare_to_ideal:
+        from image_processing.visualise import play_frames_of_2_bounces
 
         bounce = db.query(Bounce).filter_by(id=bounce_id).one()
         reference = db.query(Reference).filter_by(name=bounce.skill_name).one()
@@ -385,22 +408,18 @@ def ajax_exec_play_bounce():
         # cv2.imshow('ref angles', cv2.imread(refFilepath))
         # cv2.imshow('this angles', cv2.imread(thisFilepath))
 
-        visualise.play_frames_of_2_bounces(db, refBounce, bounce)
+        play_frames_of_2_bounces(db, refBounce, bounce)
 
     else:
-        visualise.play_bounce(db, bounce_id, show_pose=True)
+        from image_processing.visualise import play_bounce
+
+        play_bounce(db, bounce_id, show_pose=True)
 
     return ''
 
 
 @app.route('/gui_action', methods=['POST'])
 def ajax_exec_routine_action():
-    from image_processing import import_pose
-    from image_processing import segment_bounces
-    from image_processing import track
-    from image_processing import trampoline
-    from image_processing import visualise
-
     print(request.values)
     action = request.values.get('action')
     routine_id = int(request.values.get('routine_id'))
@@ -409,28 +428,35 @@ def ajax_exec_routine_action():
     # If this routine is selected, automatically prompt to locate trampoline.
     if not routine.trampoline_top or not routine.trampoline_center or not routine.trampoline_width:
         # Detect Trampoline
-        trampoline.detect_trampoline(db, routine)
+        from image_processing.trampoline import detect_trampoline
+        detect_trampoline(db, routine)
 
     # Do the action
     if action == 'track':
-        track.track_and_save(db, routine)
+        from image_processing.track import track_and_save
+        track_and_save(db, routine)
 
     elif action == 'segment_bounces':
-        segment_bounces.segment_bounces_and_save(db, routine)
+        from image_processing.segment_bounces import segment_bounces_and_save
+        segment_bounces_and_save(db, routine)
         # visualise.plot_data(routine)
 
     elif action == 'save_frames':
-        import_pose.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
+        from image_processing.import_pose import save_cropped_frames
+        save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
 
     elif action == 'play_monocap':
+        from image_processing.visualise import compare_pose_tracking_techniques
+        compare_pose_tracking_techniques(routine)
         # threading.Thread(target=visualise.compare_pose_tracking_techniques, args=(routine,)).start()
-        visualise.compare_pose_tracking_techniques(routine)
 
     elif action == 'play_pose':
-        visualise.play_frames(db, routine, show_pose=True)
+        from image_processing.visualise import play_frames
+        play_frames(db, routine, show_pose=True)
 
     elif action == 'import_pose':
-        import_pose.import_monocap_preds_2d(db, routine)
+        from image_processing.import_pose import import_monocap_preds_2d
+        import_monocap_preds_2d(db, routine)
 
     elif action == 'delete_pose':
         for frame in routine.frames:

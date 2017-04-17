@@ -29,13 +29,13 @@
 
 
 {% macro play_bounce_link(bounceId) %}
-    <button type="button" class="btn btn-sm btn-link" data-bounce-id="{{ bounceId }}" data-compare-to-ideal="false">
+    <button type="button" class="btn btn-sm btn-link js-play-bounce" data-bounce-id="{{ bounceId }}" data-compare-to-ideal="false">
         <i class="fa fa-play" aria-hidden="true"></i>
     </button>
 {% endmacro %}
 
 {% macro play_2_bounces_link(bounceId) %}
-    <button type="button" class="btn btn-sm btn-link" data-bounce-id="{{ bounceId }}" data-compare-to-ideal="true">
+    <button type="button" class="btn btn-sm btn-link js-play_bounce" data-bounce-id="{{ bounceId }}" data-compare-to-ideal="true">
         <i class="fa fa-play" aria-hidden="true"></i>
         <i class="fa fa-play" aria-hidden="true"></i>
     </button>
@@ -48,7 +48,8 @@
 
         {% if 'arms' in category %}
             Arms
-            <span class="pull-right" title="It doesn't matter which in competition but for my project, it's helpful">
+            {#            <span class="pull-right" title="It doesn't matter which in competition but for my project, it's helpful">#}
+            <span class="pull-right">
                 <label>
                     <input type="checkbox" name="arms-elbows" value="0.1"> 0.1 elbows
                 </label>

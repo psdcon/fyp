@@ -458,9 +458,9 @@ def plot_height(routine):
     y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
 
     # List inside list gets flattened
-    peaks_x = list(chain.from_iterable((bounce.start_time, bounce.max_height_frame / routine.video_fps) for bounce in routine.bounces))
+    peaks_x = list(chain.from_iterable((bounce.start_time, bounce.apex_frame / routine.video_fps) for bounce in routine.bounces))
     peaks_x.append(routine.bounces[-1].end_time)
-    peaks_y = list(chain.from_iterable((bounce.start_height, bounce.max_height) for bounce in routine.bounces))
+    peaks_y = list(chain.from_iterable((bounce.start_height, bounce.apex_height) for bounce in routine.bounces))
     peaks_y.append(routine.bounces[-1].end_height)
     # peaks_y = [routine.video_height - p for p in peaks_y]
 
@@ -573,9 +573,11 @@ def plot_angles_1x6_save_image(bounce):
         rHandle, = ax.plot(xTicks, jointAngles, label="Right")
         jointAngles = framesInEachAngle[i + 1]
         lHandle, = ax.plot(xTicks, jointAngles, label="Left")
+        ax.yaxis.grid(True)
     # add other 2
     torsoHandle, = axes[5].plot(xTicks, framesInEachAngle[10], c='purple', label="Torso with Vertical")
     twistHandle, = axes[5].plot(xTicks, framesInEachAngle[11], c='green', label="Twist Angle")
+    axes[5].yaxis.grid(True)
 
     # Place a legend to the right of this smaller subplot.
     plt.legend(handles=[rHandle, lHandle, torsoHandle, twistHandle], bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -600,7 +602,7 @@ def plot_angles_1x6_save_image(bounce):
     # fig.legend((b1Handle, b2Handle), (bounce1.skill_name, bounce2.skill_name))
     fig.tight_layout(pad=0)
     # fig.subplots_adjust(bottom=.2, right=0.82)  # make room for xlabel and legend
-    fig.subplots_adjust(right=0.85)  # make room for legend
+    fig.subplots_adjust(right=0.877)  # make room for legend
 
     print("Writing image to {}".format(imgName))
     plt.savefig(imgName)

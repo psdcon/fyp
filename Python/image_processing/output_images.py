@@ -104,7 +104,7 @@ def bounce_to_gif(db, bounce):
 
     cap = helper_funcs.open_video(routine.path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, bounce.start_frame)
-    peak = bounce.max_height_frame
+    peak = bounce.apex_frame
     peaksIndex = 0
 
     images = []

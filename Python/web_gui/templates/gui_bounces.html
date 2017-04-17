@@ -12,19 +12,23 @@
         <h1>{{ className }} ({{ numBounces }})</h1>
 
         <div class="row">
-            {% for bounceWithDeduction in bouncesWithDeduction %}
-                {% set bounce = bounceWithDeduction[0] %}
-                {% set deduction = bounceWithDeduction[1] %}
-                {% set imgPath = bounceWithDeduction[2] %}
+            {% for bounceInfo in bouncesWithDeduction %}
 
-                <div class="col-3 js-bounce">
+                <div class="col-4 js-bounce">
                     <div class="card mb-3">
-                        <img src="{{ url_for( 'static', filename=imgPath) }}" data-contiue-playing="false" style="max-width: 100%;">
+                        <img src="{{ url_for( 'static', filename=bounceInfo['img_path']) }}" data-contiue-playing="false" style="max-width: 100%;">
                         <div class="card-block" style="padding: .25rem;">
-                            {{ play_bounce_link( bounce.id ) }}
-                            {{ play_2_bounces_link( bounce.id ) }}
-                            {{ deduction }}
-                            {{ bounce.id }}
+                            {{ play_bounce_link( bounceInfo['bounce'].id ) }}
+                            {{ play_2_bounces_link( bounceInfo['bounce'].id ) }}
+                            {{ bounceInfo['deduction_value'] }}
+                            {{ bounceInfo['bounce'].id }}
+
+                            <!-- Judging -->
+                            <span class="pull-right js-new_deduction_value">0.0</span>
+                            <div class="js-deduction_categories" data-bounce-id="{{ bounceInfo['bounce'].id }}">
+                                {{ bounceInfo['deduction_cats_html'] }}
+                            </div>
+                            <button type="button" class="pull-right btn btn-sm btn-primary js-add_deductions">Add Deductions</button>
                         </div>
                     </div>
                 </div>

@@ -26,7 +26,7 @@
         {% if routine.broken %}<i class="fa fa-frown-o" aria-hidden="true" title="Indicates one of the skills are broken"></i>{% endif %}
         <br>
 
-        {{ check_or_cross(routine.posed) }} Pose
+        {{ check_or_cross(routine.has_pose) }} Pose
     </div>
     <div class="col-md-2 col-4">
         {{ routine.level_name }}

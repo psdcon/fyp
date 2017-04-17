@@ -6,6 +6,7 @@ bouncesRootPath = 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python\\web_gui\\st
 lastSelectionFilePath = 'pyqt_gui/lastSaved.txt'
 thumbDir = 'C:\\Users\\psdco\\Documents\\ProjectCode\\Python\\web_gui\\static\\images\\thumbs'
 confImgPath = 'C:\\Users\\psdco\\Dropbox\\My College\\Y5 Project\\4. Conference Paper\\images\\'
+thesisImgPath = 'C:\\Users\\psdco\\Dropbox\\My College\\Y5 Project\\5. Thesis\\images\\'
 
 contourDistance = 25
 minContourArea = 800

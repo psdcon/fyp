@@ -91,20 +91,21 @@ def get_angle_indices(pose_method_key):
 def get_special_angle_indices(pose_method_key):
     # poseJointLabels
     pjls = pose_aliai[pose_method_key]
-    return {
+    return [
         # Angles order as A, B, C, where C is the one you want to find.
         # And A is the one to be tampered with
         [pjls.index('rhip'), pjls.index('rknee'), pjls.index('rhip')],  # angle_r_leg_with_vertical = "Right Leg with Vertical"
         [pjls.index('lhip'), pjls.index('lknee'), pjls.index('lhip')],  # angle_l_leg_with_vertical = "Left Leg with Vertical"
         [pjls.index('centerhip'), pjls.index('chest'), pjls.index('centerhip')],  # angle_torso_with_vertical = "Torso with Vertical"
-    }
+    ]
 
 
 special_offsets = [
     # x, y offsets
-    (0, -10),
-    (0, -10),
-    (0, -10),
+    # Y direction is reversed !!
+    (0, 10),
+    (0, 10),
+    (0, 10),
 ]
 
 # Maintains order
@@ -266,9 +267,9 @@ def shoulder_width_to_angle(db, routine):
     # y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
     #
     # # List inside list gets flattened
-    # peaks_x = list(chain.from_iterable((bounce.start_time, bounce.max_height_frame / routine.video_fps) for bounce in routine.bounces))
+    # peaks_x = list(chain.from_iterable((bounce.start_time, bounce.apex_frame / routine.video_fps) for bounce in routine.bounces))
     # peaks_x.append(routine.bounces[-1].end_time)
-    # peaks_y = list(chain.from_iterable((bounce.start_height, bounce.max_height) for bounce in routine.bounces))
+    # peaks_y = list(chain.from_iterable((bounce.start_height, bounce.apex_height) for bounce in routine.bounces))
     # peaks_y.append(routine.bounces[-1].end_height)
     #
     # axarr.set_title("Height")

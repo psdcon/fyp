@@ -25,9 +25,10 @@ var BouncesGUIControls = {
         this.bindUIActions();
     },
     bindUIActions: function () {
+        var that = this;
         // Any buttons with a bounce-id data attr are presumed to be a play button
         // Clicking it will be the bounce with the specified id. *arm emoji*
-        $('*[data-bounce-id]').on('click', function () {
+        $('.js-play_bounce').on('click', function () {
             var bounce_id = $(this).data("bounce-id");
             var compare_to_ideal = $(this).data("compare-to-ideal");
             $.post({
@@ -44,7 +45,6 @@ var BouncesGUIControls = {
                 }
             });
         });
-
 
         // Hover Actions
         $('.js-bounce img').on('click', function () {
@@ -71,7 +71,117 @@ var BouncesGUIControls = {
                     $(this).attr("src", src.replace(/\.gif$/i, ".jpg"));
                 }
             }
-        )
+        );
+
+        // Deduction Inter-Actions
+        $('.js-add_deductions').on('click', function () {
+            var $thisBtn = $(this);
+            $thisBtn.text('Saving...');
+            // Get the current deduction categories container el
+            // On the same level as the button
+            var $thisDeductionCategories = $(this).siblings('.js-deduction_categories');
+            var bounce_id = $thisDeductionCategories.data('bounce-id');
+
+            // Loop through the categories, i.e. arms legs body
+            var bounceDeductionsJSON = that.getDeductionsJSON($thisDeductionCategories);
+            var deductionsValue = that.deductionsToScore(bounceDeductionsJSON);
+
+            // Send deductions to the sever
+            $.post({
+                url: SCRIPT_ROOT + "/judge_bounce",
+                data: "bounce_id=" + bounce_id
+                + "&bounce_deductions_value=" + deductionsValue
+                + "&bounce_deductions_json=" + JSON.stringify(bounceDeductionsJSON),
+                dataType: "text",
+                success: function (data) {
+                    if (data.length === 0) {
+                        $thisBtn.text('Saved!');
+                    }
+                    else {
+                        $thisBtn.text('Not Saved');
+                        console.log(data);
+                    }
+                }
+            });
+        });
+
+        $('.js-deduction_category :input').on('change', function () {
+            // Get the current deduction categories container el, and its score value element
+            var $thisDeductionCategories = $(this).parents('.js-deduction_categories');
+            var $deductionValue = $thisDeductionCategories.siblings('.js-new_deduction_value');
+
+            // Loop through the categories, i.e. arms legs body
+            var skillDeductions = that.getDeductionsJSON($thisDeductionCategories);
+            var deductionValue = that.deductionsToScore(skillDeductions);
+
+            // Update the displayed deduction
+            $deductionValue.text(deductionValue.toFixed(1));
+        });
+    },
+    getDeductionsJSON: function ($deductionCategories) {
+        var skillDeductions = {};
+        $deductionCategories.each(function () {
+            // Get the checked item(s) in this category
+            var $incurredDeductions = $(this).find(':checked');
+            // Add each one of them that's checked (Legs can have multiple independent deductions)
+            $incurredDeductions.each(function () {
+                var deduction_cat_name = $(this).attr('name').replace(/-\d+/, '');
+                skillDeductions[deduction_cat_name] = $(this).val();
+            });
+        });
+        return skillDeductions
+    },
+    deductionsToScore: function (skillDeductions) {
+        var maxDeductions = {
+            'arms': 0.1,
+            'legs': 0.2,
+            'body': 0.2,
+            'openingKeepingStraight': 0.3
+        };
+        var theseDeductions = {
+            'arms': 0.0,
+            'legs': 0.0,
+            'body': 0.0,
+            'openingKeepingStraight': 0.0
+        };
+
+        var deductionKeys = Object.keys(skillDeductions);
+        for (var i = 0; i < deductionKeys.length; i++) {
+            var deductionKey = deductionKeys[i];
+            if (deductionKey.includes('shape'))
+                continue;
+
+            if (deductionKey.includes('arms')) {
+                theseDeductions['arms'] += parseFloat(skillDeductions[deductionKey])
+            }
+            else if (deductionKey.includes('legs')) {
+                theseDeductions['legs'] += parseFloat(skillDeductions[deductionKey])
+            }
+            else if (deductionKey.includes('body')) {
+                theseDeductions['body'] += parseFloat(skillDeductions[deductionKey])
+            }
+            else if (deductionKey.includes('opening') || deductionKey.includes('timing')) {
+                theseDeductions['openingKeepingStraight'] += parseFloat(skillDeductions[deductionKey])
+            }
+            else {
+                // Line out/Horz angle of legs
+                theseDeductions[deductionKey] = parseFloat(skillDeductions[deductionKey])
+            }
+        }
+
+        var deductionTally = 0;
+        var theseKeys = Object.keys(theseDeductions);
+        for (var i = 0; i < theseKeys.length; i++) {
+            var deductionKey = theseKeys[i];
+            if (maxDeductions.hasOwnProperty(deductionKey)) {
+                deductionTally += Math.min(theseDeductions[deductionKey], maxDeductions[deductionKey])
+            }
+            else {
+                deductionTally += theseDeductions[deductionKey]
+            }
+        }
+
+        return Math.min(deductionTally, 0.5);
     }
 };
 
@@ -249,10 +359,10 @@ var Judge = {
 
         // Array of arrays where each top-lvl array represents a skill row and 2nd-lvl represents all deduction elements for that skill
         var that = this;
-        this.skillDeductionCategories = [];
+        this.skillsDeductionCategories = [];
         var skillRows = $('.js-deduction_categories');
         skillRows.each(function () {
-            that.skillDeductionCategories.push(
+            that.skillsDeductionCategories.push(
                 $(this).find('.js-deduction_category')
             );
         });
@@ -307,7 +417,8 @@ var Judge = {
             var skillIndex = $('.js-bounce').index($thisBounceRow);
             var deduction = 0;
 
-            // Check for input on landing row by comparing skillIndex to the number of skills
+            // Check for input on "Landing"s which are handled differently to other skills by comparing skillIndex to the number of skills
+            // Landing will always be last
             if (skillIndex == that.numSkills - 1) {
                 deduction = that.tallyLandingDeductions(skillIndex);
             }
@@ -431,8 +542,8 @@ var Judge = {
         var skillDeductions = {}; // Object to hold all deductions of this row.
 
         // Loop through the categories, i.e. arms legs body
-        var $thisSkillDeductionCat = $(this.skillDeductionCategories[skillIndex]);
-        $thisSkillDeductionCat.each(function () {
+        var $thisSkillDeductionCats = $(this.skillsDeductionCategories[skillIndex]);
+        $thisSkillDeductionCats.each(function () {
             // Get the checked item(s) in this category
             var $incurredDeductions = $(this).find(':checked');
             // Add each one of them that's checked (Legs can have multiple independent deductions)
@@ -479,7 +590,7 @@ var Judge = {
             url: SCRIPT_ROOT + "/judge",
             data: "routine_id=" + that.routineId
             + "&username=" + username
-            + "&judge_style=new"
+            + "&has_categories=new"
             + "&skill_ids=" + JSON.stringify(that.skillIds)
             + "&routine_deduction_values=" + JSON.stringify(routineDeductionValues)
             + "&routine_deductions_json=" + JSON.stringify(routineDeductionsJSON),
@@ -580,7 +691,7 @@ var OldJudge = {
             url: SCRIPT_ROOT + "/judge",
             data: "routine_id=" + that.routineId
             + "&username=" + username
-            + "&judge_style=old"
+            + "&has_categories=old"
             + "&skill_ids=" + JSON.stringify(that.skillIds)
             + "&routine_deduction_values=" + JSON.stringify(routineDeductionValues)
             + "&routine_deductions_json=" + JSON.stringify(routineDeductionsJSON),

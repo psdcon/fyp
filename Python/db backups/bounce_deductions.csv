@@ -1,4 +1,4 @@
-id,judgement_id,contributor_id,bounce_id,deduction_value,deduction_json
+id,judgement_id,contributor_id,bounce_id,deduction_value,deduction_cats
 1,1,1,5,0.1,
 2,1,1,6,0.1,
 3,1,1,7,0.3,

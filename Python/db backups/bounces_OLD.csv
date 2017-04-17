@@ -1,4 +1,4 @@
-id,routine_id,bounce_index,skill_name,start_frame,end_frame,start_time,end_time,max_height_time,max_height_frame,start_height,end_height,max_height
+id,routine_id,bounce_index,skill_name,start_frame,end_frame,start_time,end_time,apex_time,apex_frame,start_height,end_height,apex_height
 1,1,0,In/Out Bounce,82,122,2.73,4.06,3.4,102,204,200,304
 2,1,1,In/Out Bounce,122,163,4.06,5.43,4.73,142,200,202,357
 3,1,2,In/Out Bounce,163,208,5.43,6.93,6.2,186,202,201,373

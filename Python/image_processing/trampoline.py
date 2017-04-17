@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from helpers import helper_funcs
+from helpers import helper_funcs, consts
 
 
 def detect_trampoline(db, routine):
@@ -80,10 +80,13 @@ def find_trampoline(routine):
             trampoline['width'] -= 2
             trampoline['ends'] = calcTrampolineEnds(trampoline['width'])
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
+            cv2.imwrite(consts.thesisImgPath + "trampoline_detect_2.png", frame)
             break
         elif k == ord('q') or k == 27:  # q/ESC
             print("Exiting...")
             exit()
+        elif k == ord('p'):  # p (print). Saves image for the report
+            cv2.imwrite(consts.thesisImgPath + "trampoline_detect_2.png", frame)
 
         # Loop until return or exit pressed
         if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):

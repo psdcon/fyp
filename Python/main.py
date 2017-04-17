@@ -3,18 +3,34 @@ from __future__ import print_function
 import cv2
 
 from helpers.db_declarative import Routine, getDb
-from helpers.db_fixes import make_images
 from image_processing import import_pose
-
 # https://github.com/opencv/opencv/issues/6055
+from image_processing.track import track_gymnast
+
 cv2.ocl.setUseOpenCL(False)
 
 
 def main():
     db = getDb()
-    make_images(db)
+    # for routine in db.query(Routine).filter(Routine.has_pose == 1).all():
+    #     fix_angles(db, routine)
 
-    # judge.judge_skill(db)
+    # bounce = db.query(Bounce).filter(Bounce.id == 65).one()
+    # bounce.getNewDeduction()
+    # bounce.deductions
+
+    # make_images(db)
+
+    # judge_skill(db)
+
+    # Tariff
+    # routines = db.query(Routine).filter(Routine.use == 1)
+    # tariff_many_routines(db, routines)
+    # tariff_bounces_test_set(db)
+    routine = db.query(Routine).filter(Routine.id == 82).one()
+    # detect_trampoline(db, routine)
+    track_gymnast(db, routine)
+
     exit()
 
     # Execute

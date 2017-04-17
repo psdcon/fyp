@@ -55,8 +55,9 @@ def fix_angles(db, routine):
 
 def make_images(db):
     # Remake all the saved plots and gifs
-    for bounce in db.query(Bounce).filter(Bounce.angles != None).all():
-        if bounce.getDeduction() is not None:
+    # for bounce in db.query(Bounce).filter(Bounce.angles != None).all():
+    for bounce in db.query(Bounce).filter(Bounce.angles != None, Bounce.skill_name == 'Tuck Jump').all():
+        if bounce.getAnyDeduction() is None:
             output_images.bounce_to_gif(db, bounce)
             visualise.plot_angles_1x6_save_image(bounce)
 

@@ -69,7 +69,7 @@ SELECT count(*) FROM (
         ON (bounces.id = bounce_deductions.bounce_id)
     LEFT JOIN routines
         ON (routines.id = bounces.routine_id)
-    WHERE deduction_json ISNULL AND routines.use==1
+    WHERE deduction_cats ISNULL AND routines.use==1
     GROUP BY bounce_deductions.bounce_id
 )
 """
@@ -81,7 +81,7 @@ SELECT count(*) FROM (
         ON (bounces.id = bounce_deductions.bounce_id)
     LEFT JOIN routines
         ON (routines.id = bounces.routine_id)
-    WHERE deduction_json ISNULL AND routines.use==1 AND bounces.angles NOTNULL
+    WHERE deduction_cats ISNULL AND routines.use==1 AND bounces.angles NOTNULL
     GROUP BY bounce_deductions.bounce_id
 )
 """
@@ -93,7 +93,7 @@ SELECT count(*) FROM (
         ON (bounces.id = bounce_deductions.bounce_id)
     LEFT JOIN routines
         ON (routines.id = bounces.routine_id)
-    WHERE bounce_deductions.deduction_json ISNULL AND routines.use==1 AND bounces.angles NOTNULL
+    WHERE bounce_deductions.deduction_cats ISNULL AND routines.use==1 AND bounces.angles NOTNULL
     GROUP BY bounces.routine_id
 )
 """
@@ -102,7 +102,7 @@ SELECT count(*) FROM (
 #
 # MISC
 """
-update judgements set judge_style = CASE 
-WHEN (select bounce_deductions.deduction_json from bounce_deductions where bounce_deductions.judgement_id = judgements.id) NOTNULL 
+update judgements set has_categories = CASE 
+WHEN (select bounce_deductions.deduction_cats from bounce_deductions where bounce_deductions.judgement_id = judgements.id) NOTNULL 
 THEN 'new' ELSE 'old' END
 """
