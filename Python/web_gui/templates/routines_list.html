@@ -11,8 +11,8 @@
 <div class="row vid-row" style="font-weight:bold;font-size:1.1rem">
   <div class="col-md-7 col-8">Name</div>
   <div class="col-md-2 col-4">Level</div>
-  <div class="col-md-2 col-8">Actions</div>
-  <div class="col-md-1 col-4" style="text-align:center">Score</div>
+    <div class="col-md-3 col-8" style="text-align: center">Actions</div>
+    {#  <div class="col-md-1 col-4" style="text-align:center">Score</div>#}
 </div>
 
 
@@ -31,7 +31,7 @@
     <div class="col-md-2 col-4">
         {{ routine.level_name }}
     </div>
-    <div class="col-md-2 col-8">
+      <div class="col-md-3 col-8" style="text-align: center">
       {% if routine.labelled %}
         <span style="padding-right:1em; color:#aaa;" title="Already labelled">Labelled</span>
         <a href="judge/{{ routine.id }}" style="white-space: nowrap">
@@ -52,10 +52,10 @@
           <span style="padding-right:1em; color:#aaa;">Not Tracked</span>
       {% endif %}
     </div>
-    <div class="col-md-1 col-4" title="No score yet" style="text-align:center">
-      {{ routine.your_score }}
+      {#    <div class="col-md-1 col-4" title="No score yet" style="text-align:center">#}
+      {#      {{ routine.your_score }}#}
 {#      <small title="Average Score">{{ routine.avg_score }}</small>#}
-    </div>
+      {#    </div>#}
   </div>
 {% endfor %}
 

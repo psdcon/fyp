@@ -42,6 +42,8 @@ class Routine(Base):
     trampoline_width = Column(INTEGER)
     original_path = Column(TEXT, unique=True)
     has_pose = Column(INTEGER)
+    sex = Column(TEXT)
+    persons_name = Column(TEXT)
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
@@ -122,9 +124,9 @@ class Routine(Base):
     #     return count > 0
 
     def isLabelled(self, db):
-        count = db.execute("select count(*) from bounces where skill_name NOTNULL and routine_id == {}".format(self.id)).scalar()
+        count = db.execute("select count(*) from bounces where skill_name IS NULL and routine_id == {}".format(self.id)).scalar()
         # count = db.execute("SELECT count(*) FROM bounces WHERE skill_name = 'Broken' AND routine_id = {}".format(self.id)).scalar()
-        return count > 0
+        return count == 0
         # if not self.bounces:
         #     return False
         # # Otherwise, check that they're all labelled

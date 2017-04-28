@@ -8,9 +8,12 @@ from helpers import helper_funcs
 from helpers.db_declarative import Frame
 from image_processing import trampoline
 
-
 # Global Vars that get updated in the track loop with frame numbers
 # Used when saving data back to db
+
+saveReportImages = False
+joinNearbyContours = False
+
 
 def track_and_save(db, routine):
     centerPoints, hullLengths, trampolineTouches, personMasks = track_gymnast(db, routine)
@@ -107,7 +110,7 @@ def getPersonContour(fgMaskPrevPersonOverlap, contours):
         # personContourConcat = np.concatenate(foundContours)
         # for contour in foundContours:
         #     cv2.drawContours(prevPersonFgMask, [contour], 0, (255, 255, 255), cv2.FILLED)
-    elif False:
+    elif joinNearbyContours:
         # Concat contours if they're "near"
         personContours = [contours[0]]
         personContourConcat = contours[0]
@@ -138,7 +141,7 @@ def highlightPerson(frame, personMask, cx, cy, cropLength):
 
     # Darken the background and blur it
     percDarker = 0.6  # 60% darker
-    darkBg = cv2.addWeighted(frame, 1-percDarker, np.zeros_like(frame), percDarker, 0)
+    darkBg = cv2.addWeighted(frame, 1 - percDarker, np.zeros_like(frame), percDarker, 0)
     darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
     darkBg = cv2.GaussianBlur(darkBg, (15, 15), 0)
     # Make a person shaped hole in the bg
@@ -183,11 +186,13 @@ def alphaMask(src, mask):
 
 def erode_dilate(image):
     kernel = np.ones((2, 2), np.uint8)
-    # erosion = cv2.erode(input, kernel, iterations=1)
-    # dilation = cv2.dilate(erosion, kernel, iterations=1)
-    opening = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
-    opening = cv2.dilate(opening, kernel, iterations=10)
-    return opening
+    morphed_image = cv2.erode(image, kernel, iterations=1)
+    if saveReportImages:  # p (print). Saves image for the report
+        cv2.imwrite(consts.thesisImgPath + "morphed_image_1.png", morphed_image)
+    morphed_image = cv2.dilate(morphed_image, kernel, iterations=10)
+    if saveReportImages:  # p (print). Saves image for the report
+        cv2.imwrite(consts.thesisImgPath + "morphed_image_2.png", morphed_image)
+    return morphed_image
 
 
 def isTouchingTrmpl(trmpl_top, hull):
@@ -208,6 +213,10 @@ def isTouchingTrmpl(trmpl_top, hull):
 
 
 def track_gymnast(db, routine):
+    # temp for report
+    global saveReportImages
+    global joinNearbyContours
+
     centerPoints = {}
     hullLengths = {}
     trampolineTouches = {}
@@ -218,6 +227,7 @@ def track_gymnast(db, routine):
 
     font = cv2.FONT_HERSHEY_SIMPLEX
     framesToAverage = 300
+
 
     # Keyboard stuff
     visualise = True  # show windows rendering video
@@ -232,6 +242,11 @@ def track_gymnast(db, routine):
     resizeWidth = int(capWidth * scalingFactor)
     resizeHeight = int(capHeight * scalingFactor)
 
+    # Create videos
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'DIB ')
+    fgmaskout = cv2.VideoWriter(consts.videosRootPath + 'fgmask.avi', fourcc, 30.0, (capWidth, capHeight))
+
     # For masking to the right and left of the trampoline
     maskLeftBorder = int(routine.trampoline_center - (trampoline.calcTrampolineEnds(routine.trampoline_width) / 2))
     maskRightBorder = int(routine.trampoline_center + (trampoline.calcTrampolineEnds(routine.trampoline_width) / 2))
@@ -245,7 +260,7 @@ def track_gymnast(db, routine):
     maskAboveTrmpl[0:routine.trampoline_top, maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
     maskBelowTrmpl = np.zeros(shape=(capHeight, capWidth), dtype=np.uint8)
     maskBelowTrmpl[routine.trampoline_top:capHeight, maskLeftBorder:maskRightBorder] = 255  # [y1:y2, x1:x2]
-    trampolineAreaPx = sq_area((routine.trampoline_top, capHeight), (maskLeftBorder, maskRightBorder))
+    # trampolineAreaPx = sq_area((routine.trampoline_top, capHeight), (maskLeftBorder, maskRightBorder))
 
     # Pick a default crop len if none saved
     # cropLength = routine.crop_length if routine.crop_length else 200
@@ -266,11 +281,19 @@ def track_gymnast(db, routine):
             _ret, frame = cap.read()
 
             # TODO if mask is really noisy (area is large/ high num contours), could increase the learning rate?
+            # frame = cv2.bitwise_and(frame, frame, mask=maskAboveTrmpl)
             frameFgMask = pKNN.apply(frame)
-            frameFgMaskMorphed = erode_dilate(frameFgMask)
+            fgmaskout.write(frameFgMask)
 
             # Crop fg mask detail to be ROI (region of interest) above the trampoline
+            frameFgMaskMorphed = erode_dilate(frameFgMask)
+            frameFgMaskMorphedOut.write(frameFgMaskMorphed)
             frameFgMaskMorphed = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=maskAboveTrmpl)
+
+            if saveReportImages:  # p (print). Saves image for the report
+                reportFgCropped = cv2.addWeighted(frameFgMaskMorphed, 1, 255 - maskAboveTrmpl, .4, 1)
+                cv2.imwrite(consts.thesisImgPath + "morphed_image_3.png", reportFgCropped)
+                print("wait")
 
             # Create mask of the common regions in this and in the prevPersonFgMask
             fgMaskPrevPersonOverlap = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=prevPersonFgMask)
@@ -281,12 +304,17 @@ def track_gymnast(db, routine):
                 cv2.putText(processVisImgs, 'Background Model', (10, 20), font, 0.4, (255, 255, 255))
                 # Show fg mask
                 frameFgMask4Vis = cv2.cvtColor(cv2.resize(frameFgMask, (resizeWidth, resizeHeight)), cv2.COLOR_GRAY2RGB)
-                cv2.line(frameFgMask4Vis, (0, int(routine.trampoline_top*scalingFactor)), (resizeWidth, int(routine.trampoline_top*scalingFactor)), (0, 255, 0), 1)
+                cv2.line(frameFgMask4Vis, (0, int(routine.trampoline_top * scalingFactor)), (resizeWidth, int(routine.trampoline_top * scalingFactor)), (0, 255, 0), 1)
                 cv2.putText(frameFgMask4Vis, 'Foreground Mask', (10, 20), font, 0.4, (255, 255, 255))
                 processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 0:resizeWidth * 1] = frameFgMask4Vis
-                # Trampoline area
-                # cv2.putText(fgMaskBelowTrmpl, '{}%'.format(trampolineArea), (10, 20), font, 1, (255, 255, 255))
-                # cv2.imshow("fgMaskBelowTrmpl", cv2.resize(fgMaskBelowTrmpl, (resizeWidth, resizeHeight)))
+
+                if saveReportImages:  # p (print). Saves image for the report
+                    cv2.imwrite(consts.thesisImgPath + "bgsub_2.png", pKNN.getBackgroundImage())
+                    cv2.imwrite(consts.thesisImgPath + "bgsub_3.png", frameFgMask)
+
+                    # Trampoline area
+                    # cv2.putText(fgMaskBelowTrmpl, '{}%'.format(trampolineArea), (10, 20), font, 1, (255, 255, 255))
+                    # cv2.imshow("fgMaskBelowTrmpl", cv2.resize(fgMaskBelowTrmpl, (resizeWidth, resizeHeight)))
 
             # Find contours in masked image
             _img, contours, _hierarchy = cv2.findContours(np.copy(frameFgMaskMorphed), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -310,6 +338,10 @@ def track_gymnast(db, routine):
                         cv2.drawContours(biggestContour, [contour], 0, (0, 0, 255), cv2.FILLED)
                     # Draw the outline of the convex blobHull for the person
                     cv2.drawContours(biggestContour, [blobHull], 0, (0, 255, 0), 2)
+                    reportFrame = np.copy(frame)
+                    cv2.drawContours(reportFrame, [blobHull], 0, (0, 255, 0), 2)
+                    if saveReportImages:
+                        cv2.imwrite(consts.thesisImgPath + "blob_1.png", biggestContour)
                     # Resize and show it
                     biggestContour = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
                     cv2.putText(biggestContour, 'Blob Detection', (10, 20), font, 0.4, (255, 255, 255))
@@ -349,7 +381,11 @@ def track_gymnast(db, routine):
                         cv2.imshow('finerPersonMask4Vis', finerPersonMask4Vis)
 
                         # Show person drawing the center of mass
-                        cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
+                        # cv2.circle(frame, (cx, cy), 3, (0, 0, 255), -1)
+                        cv2.circle(reportFrame, (cx, cy), 5, (0, 0, 255), -1)
+                        if saveReportImages:
+                            cv2.imwrite(consts.thesisImgPath + "blob_2.png", reportFrame)
+
                         # cropLength = helper_funcs.getCropLength(hullLengths.values())
                         trackedPerson = highlightPerson(frame, finerPersonMask, cx, cy, 250)
                         trackedPerson = cv2.resize(trackedPerson, (256, 256))
@@ -361,11 +397,14 @@ def track_gymnast(db, routine):
 
             # End stuff
             if visualise:
-                cv2.line(frame, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 1)
+                # Add the trampoline_top line
+                cv2.line(frame, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 2)
                 frameSm = cv2.resize(frame, (resizeWidth, resizeHeight))
                 cv2.putText(frameSm, 'Frame {}'.format(int(cap.get(cv2.CAP_PROP_POS_FRAMES))), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                 processVisImgs[resizeHeight * 0:resizeHeight * 1, resizeWidth * 1:resizeWidth * 2] = frameSm
                 cv2.imshow('Visualise Processing', processVisImgs)
+                if saveReportImages:  # p (print). Saves image for the report
+                    cv2.imwrite(consts.thesisImgPath + "bgsub_1.png", frame)
 
             # If we went one frame, stop from going another
             if goOneFrame:
@@ -401,14 +440,23 @@ def track_gymnast(db, routine):
         elif k == ord('q') or k == 27:  # q/ESC
             print("Exiting...")
             exit()
-        elif k == ord('p'):  # p (print). Saves image for the report
-            cv2.imwrite(consts.thesisImgPath + "trampoline_detect_2.png", frame)
+        elif k == ord('n'):
+            joinNearbyContours = not joinNearbyContours
 
-        # Finish playing the video when we get to the end.
+        if saveReportImages:
+            saveReportImages = False
+
+        if k == ord('p'):
+            saveReportImages = True
+            if paused:
+                goOneFrame = True
+
+                # Finish playing the video when we get to the end.
         if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
             break
 
     cap.release()
+    fgmaskout.release()
     cv2.destroyAllWindows()
 
     return centerPoints, hullLengths, trampolineTouches, personMasks

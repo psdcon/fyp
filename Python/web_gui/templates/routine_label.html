@@ -1,21 +1,33 @@
 {% extends "layout.html" %}
 {% block body %}
 
-    <!--
-    <h4>
-      <?=$routine['name']?>
-      <small><?=$routine['level']?></small>
+
+    <h4 class="clearfix">
+        {{ routine.name }} - {{ routine.level_name }}
+
+        <button class="btn btn-secondary btn-sm pull-right" data-toggle="collapse" data-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample">
+            <i class="fa fa-keyboard-o" aria-hidden="true"></i>
+        </button>
     </h4>
-    <p>
-      <strong>Ctrl+Enter</strong> Save.
-      <strong>n</strong> Label Next.
-      <strong>k</strong> Play/pause the video.
-      <strong>l</strong> Play next bounce.
-      <strong>j</strong> Play previous bounce.
-      <strong>i</strong> Toggle looping.
-      <strong>.</strong> Speed up video.
-      <strong>,</strong> Slow down video.
-    </p> -->
+    <div class="collapse mb-3" id="collapseExample">
+        <div class="card card-block">
+            <div class="card-text">
+                Keyboard Shortcuts
+                <div class="row">
+                    <div class="col"><kbd>k</kbd> Play/pause the video.</div>
+                    <div class="col"><kbd>l</kbd> Play next bounce.</div>
+                    <div class="col"><kbd>j</kbd> Play previous bounce.</div>
+                    <div class="col"><kbd>i</kbd> Toggle looping.</div>
+                </div>
+                <div class="row">
+                    <div class="col"><kbd>.</kbd> Speed up video.</div>
+                    <div class="col"><kbd>,</kbd> Slow down video.</div>
+                    <div class="col"><kbd>n</kbd> Go to Next.</div>
+                    <div class="col"><kbd>Ctrl+Enter</kbd> Save.</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="row">
         <div class="col-md-6">
@@ -91,7 +103,7 @@
         );
 
         Label.init(
-            {{ routineId }},
+            {{ routine.id }},
             {{ bounceIds }},
             {{ bounceNames|safe }}
         );

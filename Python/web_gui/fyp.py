@@ -94,7 +94,9 @@ def index():
 @app.route('/gui_routines')
 def gui_routines():
     # routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).order_by(Routine.level).all()
-    routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+    # routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+    routines = db.query(Routine).filter(Routine.use == 1, Routine.level != None).order_by(Routine.level).all()
+
     for i, routine in enumerate(routines):
         routine.index = i + 1
         routine.name = routine.prettyName()
@@ -118,7 +120,10 @@ def gui_bounces():
 
     # Get all bounce with that name sorted from best to worst (deduction = None, 0.0 to 0.5)
     sortedBounceClasses = []
-    for skillName in ['Pike Jump', 'Straddle Jump']:  # ignore Blank and Broken
+    # for skillName in ['Pike Jump', 'Straddle Jump']:
+    # for skillName in ['Front S/S']:
+    for skillName in ['Tuck Jump']:
+        # ignore Blank and Broken
         bounces = db.query(Bounce).join(Routine).filter(Bounce.skill_name == skillName, Bounce.angles != None, Routine.level < 4).all()
 
         bouncesRenderingInfo = []
@@ -149,7 +154,8 @@ def gui_bounces():
 @app.route('/routines_list')
 def routines_list():
     # contrib = db.query(Contributor).filter(Contributor.uid == g.userId).first()
-    routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+    # routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
+    routines = db.query(Routine).filter(Routine.use == 1, Routine.level != None).order_by(Routine.level).all()
     for i, routine in enumerate(routines):
         routine.index = i + 1
         routine.name = routine.prettyName()
@@ -175,6 +181,7 @@ def routines_list():
 def routine_label(routine_id):
     routine = db.query(Routine).filter(Routine.id == routine_id).one()
     routine.name = routine.prettyName()
+    routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
 
     vidPath = os.path.join('videos/', routine.path).replace('\\', '/')
     nextRoutine = getNextUnlabelledRoutine(routine.id)
@@ -186,7 +193,7 @@ def routine_label(routine_id):
     startEndTimes = json.dumps([{"start": bounce.start_time, 'end': bounce.end_time} for bounce in routine.bounces])
 
     return render_template('routine_label.html',
-                           title='Label Routine', vidPath=vidPath, routineId=routine.id, bounceIds=bounceIds,
+                           title='Label Routine', vidPath=vidPath, routine=routine, bounceIds=bounceIds,
                            bounceIndexes=bounceIndexes, bounceNames=json.dumps(bounceNames), startEndTimes=startEndTimes,
                            nextRoutine=nextRoutine)
 
@@ -197,6 +204,7 @@ def routine_judge(routine_id):
     routine = db.query(Routine).filter(Routine.id == routine_id).one()
     routine.name = routine.prettyName()
     routine.labelled = routine.isLabelled(db)
+    routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
 
     vidPath = os.path.join('videos/', routine.path).replace('\\', '/')
     # contrib_id
@@ -255,6 +263,7 @@ def routine_judge_old(routine_id):
     routine = db.query(Routine).filter(Routine.id == routine_id).one()
     routine.name = routine.prettyName()
     routine.labelled = routine.isLabelled(db)
+    routine.level_name = consts.levels[routine.level] if routine.level is not None else 'None'
 
     vidPath = os.path.join('videos/', routine.path).replace('\\', '/')
     # contrib_id

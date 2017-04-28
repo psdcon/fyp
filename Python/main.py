@@ -12,24 +12,34 @@ cv2.ocl.setUseOpenCL(False)
 
 def main():
     db = getDb()
-    # for routine in db.query(Routine).filter(Routine.has_pose == 1).all():
-    #     fix_angles(db, routine)
-
-    # bounce = db.query(Bounce).filter(Bounce.id == 65).one()
-    # bounce.getNewDeduction()
-    # bounce.deductions
-
-    # make_images(db)
+    # plot_tariff_confusion_matrix(db)
+    # plot_skill_bar_charts(db)
+    #
+    # bounce = db.query(Bounce).filter(Bounce.id == 1520).one()
+    # bounce = db.query(Bounce).filter(Bounce.id == 1551).one()
+    # plot_angles_1x6_save_image(bounce)
+    # skill_into_filmstrip(bounce)
 
     # judge_skill(db)
 
     # Tariff
-    # routines = db.query(Routine).filter(Routine.use == 1)
+    # for i in range(6, 7):
+    #     db.execute("DELETE FROM tariff_matches")
+    #     db.commit()
+    #     chose_reference_skills(db, i)
+    #     tariff_bounces_test_set(db)
+    # routines = db.query(Routine).filter(Routine.use == 1, Routine.has_pose == 1).all()
     # tariff_many_routines(db, routines)
     # tariff_bounces_test_set(db)
-    routine = db.query(Routine).filter(Routine.id == 82).one()
+
+    # Thesis
+    routine = db.query(Routine).filter(Routine.id == 1).one()
+    # routine = db.query(Routine).filter(Routine.id == 82).one()  # colm
+    # routine = db.query(Routine).filter(Routine.id == 89).one()  # cian
     # detect_trampoline(db, routine)
     track_gymnast(db, routine)
+    # calculate_bounces(routine)
+    # play_frames(db, routine)
 
     exit()
 

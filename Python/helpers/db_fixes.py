@@ -75,6 +75,32 @@ def assign_shape(db):
     exit()
 
 
+def assign_sex_designations(db):
+    import cv2
+    for routine in db.query(Routine).filter(Routine.sex == None):
+        cap = helper_funcs.open_video(routine.path)
+        while 1:
+            _ret, frame = cap.read()
+            cv2.imshow('Visualise', frame)
+            k = cv2.waitKey(10) & 0xff
+            if k == ord('m'):
+                routine.sex = 'male'
+                db.commit()
+                break
+            elif k == ord('f'):
+                routine.sex = 'female'
+                db.commit()
+                break
+            elif k == ord('\n') or k == ord('\r'):  # return/enter key
+                break
+            elif k == ord('q') or k == 27:  # q/ESC
+                print("Exiting...")
+                exit()
+
+            if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+
 def shoulders_to_twist_angle(db):
     routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
     for routine in routines:

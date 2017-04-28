@@ -2,6 +2,7 @@ import json
 import time
 from operator import itemgetter
 
+import matplotlib
 import numpy as np
 from scipy import signal
 from sqlalchemy import text
@@ -12,16 +13,12 @@ CUTOFF = 20000
 
 
 def do_tariff(db):
-    routines = db.query(Routine).filter(Routine.use == 1, Routine.id < 89, Routine.level < 5).order_by(Routine.level).all()
-    routinesToTariff = []
-    for routine in routines:
-        if routine.isPoseImported(db):  # and not os.path.exists(routine.tariffPath()):
-            routinesToTariff.append(routine)
+    routines = db.query(Routine).filter(Routine.use == 1, Routine.has_pose == 1, Routine.id < 89, Routine.id > 1, Routine.level < 5).order_by(Routine.level).all()
 
     # Tariff
-    tariff_many_routines(db, routinesToTariff)
+    tariff_many_routines(db, routines)
     # Print accuracy
-    accuracy_of_many_routines(db, routinesToTariff)
+    accuracy_of_many_routines(db, routines)
 
     # Accuracy on a skill basis
     accuracy_per_skill(db)
@@ -29,9 +26,19 @@ def do_tariff(db):
 
 def chose_reference_skills(db, reference_count_per_skill):
     shapedSkillCounter = {}
-    # print('Changing reference set to have {} bounces as a reference for each skill'.format(referenceCountPerSkill))
+    print('Changing reference set to have {} bounces as a reference for each skill'.format(reference_count_per_skill))
     print('Num Refs = {}'.format(reference_count_per_skill))
-    bounces = db.query(Bounce).filter(Bounce.angles != None).order_by(Bounce.match_count.desc()).all()
+
+    bounces = db.query(Bounce).filter(Bounce.angles != None, Bounce.code_name != None, Bounce.skill_name != 'Landing'
+                                      , Bounce.code_name != 'RUI'
+                                      , Bounce.code_name != 'FUB'
+                                      , Bounce.code_name != 'FFR'
+                                      , Bounce.code_name != 'BHA'
+                                      , Bounce.code_name != 'CDY'
+                                      , Bounce.code_name != 'LBK'
+                                      , Bounce.code_name != 'F0R'
+                                      , Bounce.code_name != 'R0F'
+                                      ).order_by(Bounce.match_count.desc()).all()
 
     # The bounces to exclude from the reference set should be bounce
     # What if I have more references of a bounce than examples of it.
@@ -95,7 +102,16 @@ def tariff_bounces_test_set(db):
     print("Reference set contains {} bounces".format(len(refBounces)))
 
     # testBounces = db.query(Bounce).filter(Bounce.ref_or_test == "test", Bounce.skill_name != 'Landing').all()
-    testBounces = db.query(Bounce).filter(Bounce.angles != None, Bounce.skill_name != 'Landing').all()
+    testBounces = db.query(Bounce).filter(Bounce.angles != None, Bounce.code_name != None, Bounce.skill_name != 'Landing'
+                                          , Bounce.code_name != 'RUI'
+                                          , Bounce.code_name != 'FUB'
+                                          , Bounce.code_name != 'FFR'
+                                          , Bounce.code_name != 'BHA'
+                                          , Bounce.code_name != 'CDY'
+                                          , Bounce.code_name != 'LBK'
+                                          , Bounce.code_name != 'F0R'
+                                          , Bounce.code_name != 'R0F'
+                                          ).all()
     print("Test set contains {} bounces".format(len(testBounces)))
 
     # Do tariff
@@ -184,7 +200,7 @@ def get_reference_set(db):
     # Get all bounces that have pose in this level
     refBounces = db.query(Bounce).filter(
         # Bounce.angles != None,
-        Bounce.ref_or_test == 'ref',
+        Bounce.ref_or_test == 'ref',  # excludes bounces with too few samples
         # Bounce.angles_count > 18,
         # Bounce.routine_id != thisRoutineId,  # will be none
         # Bounce.skill_name != 'Straight Bounce',
@@ -330,11 +346,12 @@ def accuracy_of_bounces(db, bounces):
     accuracyIgnoringSomiShape = (correctIgnoringShapeCount / float(bounceCount)) * 100
     accuracyIgnoringStraddlePike = (ignoreStraddlePikeCount / float(bounceCount)) * 100
     tariffDifference = abs(actualTariff - estimatedTariff)
+    tariffAccuracy = 100 - ((tariffDifference / actualTariff) * 100)
     print("Accuracy: {:.1f}%. Ignoring Straddle/Pike {:.1f}%. Ignoring somi shape {:.1f}%".format(accuracy, accuracyIgnoringStraddlePike, accuracyIgnoringSomiShape))
     print("Actual tariff: {:.1f}, Estimated tariff: {:.1f}, difference: {:.1f}, "
-          "average tariff error {:.1f} in range {:.1f} to {:.1f}, average % error {:.1f}%"
+          "average tariff error {:.1f} in range {:.1f} to {:.1f}, average accuracy {:.1f}%"
           .format(actualTariff, estimatedTariff, tariffDifference,
-                  tariffDifference / float(bounceCount), minTariff, maxTariff, (tariffDifference / actualTariff) * 100))
+                  tariffDifference / float(bounceCount), minTariff, maxTariff, tariffAccuracy))
 
     return accuracy, accuracyIgnoringSomiShape, tariffDifference
 
@@ -366,19 +383,23 @@ def accuracy_per_skill(db):
     print(accuracySorted)
     print('wait')
 
+
 #     (u'Back Half', 0.0), (u'Rudolph / Rudi', 0.0), (u'Landing', 0.0), (u'Full Front', 0.0), (u'Front Drop', 0.0), (u'Cody', 0.0), (u'To Feet from Front', 20.0), (u'Half Twist Jump', 22.22222222222222), (u'Half Twist to Seat Drop', 30.0), (u'Lazy Back', 33.33333333333333), (u'Full Twist Jump', 36.84210526315789), (u'To Feet from Back', 42.857142857142854), (u'Full Back', 50.0), (u'Half Twist to Feet from Back', 53.84615384615385), (u'Front S/S', 63.63636363636363), (u'Barani', 71.15384615384616), (u'Straddle Jump', 71.42857142857143), (u'Barani Ball Out', 71.42857142857143), (u'To Feet from Seat', 72.72727272727273), (u'Seat Drop', 76.92307692307693), (u'Crash Dive', 77.77777777777779), (u'Back Drop', 80.0), (u'Pike Jump', 82.5), (u'Back S/S', 85.52631578947368), (u'Half Twist to Feet from Seat', 87.5), (u'Tuck Jump', 93.10344827586206), (u'Straight Bounce', 96.85314685314685), (u'Back S/S to Seat', 100.0), (u'Swivel Hips/Seat Half Twist to Seat Drop', 100.0)]
 
 #
 # Visualise the errors.
 #
-def plot_tariff_confusion_matrix(tariff_matches):
+def plot_tariff_confusion_matrix(db):
+    tariff_matches = db.query(TariffMatches).all()
+    from matplotlib import pyplot as plt
+    import pandas as pd
     def plot_confusion_matrix(df_confusion, title='Confusion matrix'):
         # from matplotlib import rcParams
         # rcParams.update({'figure.autolayout': True})
         # http://stackoverflow.com/questions/24521296/matplotlib-function-conventions-subplots-vs-one-figure
 
         fig, ax = plt.subplots()
-        fig.set_size_inches(6.4, 6)
+        fig.set_size_inches(6.6, 4.6)
         # ax.set_title(title)
 
         cmap = matplotlib.cm.get_cmap('Greys')
@@ -395,9 +416,9 @@ def plot_tariff_confusion_matrix(tariff_matches):
 
         fig.tight_layout(pad=0)
 
-        imgName = consts.confImgPath + "confusion_matrix.pdf"
-        print("Writing image to {}".format(imgName))
-        plt.savefig(imgName)
+        # imgName = consts.thesisImgPath + "confusion_matrix.pdf"
+        # print("Writing image to {}".format(imgName))
+        # plt.savefig(imgName)
 
         plt.show()
         return

@@ -35,7 +35,7 @@ def save_cropped_frames(db, routine, frames, suffix=None):
         hullLengths = [frame_data.hull_max_length for frame_data in frames]
         # plt.plot(hullLengths, label="Hull Length", color="blue")
 
-        cropLength = helper_funcs.get_crop_length(hullLengths) + 10
+        cropLength = helper_funcs.get_crop_length(hullLengths)
         routine.crop_length = cropLength
         db.commit()
 

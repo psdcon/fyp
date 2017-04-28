@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from helpers import consts
 from helpers.db_declarative import Bounce
 from libs.peakdetect import peakdetect
 
@@ -65,17 +66,33 @@ def calculate_bounces(routine):
     # maxima, minima = peakdetect(y, x, lookahead=5, delta=10)
 
     # Plot bounce heights
-    if routine.id == 26:
-        peaks = maxima + minima  # concat the two
+    if True:
+        # peaks = maxima + minima  # concat the two
+        peaks = minima  # concat the two
         peaks_x = [pt['x'] for pt in peaks]
         peaks_y = [pt['y'] for pt in peaks]
 
-        plt.figure("Bounce Peaks")
-        plt.title("Height")
-        plt.plot(x, y, color="g")
-        plt.plot(peaks_x, peaks_y, 'r+')
+        fig, ax = plt.subplots(figsize=(8.8, 3))
+        # plt.figure("Bounce Peaks")
+        # plt.title("Height")
+        l2 = plt.scatter(np.array(peaks_x) / 30., np.array(peaks_y), c='C3', marker='o', label="Max Trampoline\nDisplacement")
+        l1, = plt.plot(x / 30., y, c='C2', label="Athlete Height")
+        l3 = plt.axhline(routine.video_height - routine.trampoline_top, c="C0", label="Trampoline Top")
         plt.ylabel('Height (Pixels)')
-        plt.show(block=True)
+        plt.xlabel('Time (s)')
+        plt.legend()
+        # fig.legend((l2, l1, l3), ("Max Trampoline\nDisplacement", "Athlete Height", "Trampoline Top"))
+        fig.tight_layout(pad=0)
+        x0, x1, y0, y1 = plt.axis()
+        plt.axis((x0,
+                  x1 + 1,
+                  y0 - 15,
+                  y1))
+        imgName = consts.thesisImgPath + "segment_bounces.pdf"
+        print("Writing image to {}".format(imgName))
+        plt.savefig(imgName)
+        plt.show(block=False)
+        pass
 
     bounces = []
     i = 0

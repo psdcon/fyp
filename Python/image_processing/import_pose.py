@@ -89,7 +89,7 @@ def import_monocap_preds_2d(db, routine):
     # Calculate all the angles
     framesAngles = calc_angles.angles_from_poses(poses, maxShoulderWidth, False)
     # Add the angles to db
-    for frame, angles in zip(frames, framesAngles):
+    for frame, angles in zip(frames, zip(*framesAngles)):
         frame.angles = helper_funcs.round_list_floats_into_str(angles, 1)
     db.flush()
 

@@ -20,7 +20,7 @@ comps = [
 levels = [
     'Novice',
     'Intermediate',
-    'Intervanced',
+    'Inter-advanced',
     'Advanced',
     'Elite',
     'Elite Pro',

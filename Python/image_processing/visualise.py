@@ -32,8 +32,11 @@ def play_bounce(db, bounce_id, show_pose=True, show_full=False):
 
 
 def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_full=False):
+    # temp
+    saveReportImages = False
+
     waitTime = 40
-    playOneFrame = False
+    goOneFrame = False
     paused = False
     prevBounceName = ''
 
@@ -46,7 +49,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
     # f.canvas.set_window_title(routine.prettyName())
 
     while True:
-        if playOneFrame or not paused:
+        if goOneFrame or not paused:
 
             _ret, frame = cap.read()
 
@@ -73,22 +76,24 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
                 pose = np.array(json.loads(frame_data.pose))
                 # Show full frame
                 if show_full:
-                    cv2.putText(frame, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX,
-                                0.4, (255, 255, 255))
                     for p_idx in range(14):
                         pose_x = int((cx - routine.padding) + pose[0, p_idx])
                         pose_y = int((cy - routine.padding) + pose[1, p_idx])
                         color = consts.poseColors[calc_angles.pose_aliai['hourglass'][p_idx]][1]
                         cv2.circle(frame, (pose_x, pose_y), 5, color, thickness=cv2.FILLED)
+                    cv2.putText(frame, '{}'.format(frame_data.frame_num), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     cv2.imshow('HG Smooth', frame)
 
                 # Show cropped
                 else:
                     frameCropped = frame[y1:y2, x1:x2]
                     frameCropped = cv2.resize(frameCropped, (256, 256))
+                    frameCropped = _draw_pose_on_frame(pose, frameCropped)
+                    if saveReportImages:  # p (print). Saves image for the report
+                        cv2.imwrite(consts.thesisImgPath + "viz_pose.png", frameCropped)
+                        print("wait")
                     cv2.putText(frameCropped, '{}'.format(prevBounceName), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                     cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
-                    frameCropped = _draw_pose_on_frame(pose, frameCropped)
                     cv2.imshow(routine.prettyName(), frameCropped)
 
             else:
@@ -103,17 +108,17 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
                     frameCropped = frame[y1:y2, x1:x2]
                     cv2.imshow(routine.prettyName(), frameCropped)
 
-            if playOneFrame:
-                playOneFrame = False
+            if goOneFrame:
+                goOneFrame = False
 
         k = cv2.waitKey(waitTime) & 0xff
         if k == ord('k'):  # play pause
             paused = not paused
         elif k == ord('j'):  # prev frame
-            playOneFrame = True
+            goOneFrame = True
             cap.set(cv2.CAP_PROP_POS_FRAMES, cap.get(cv2.CAP_PROP_POS_FRAMES) - 2)
         elif k == ord('l'):  # next frame
-            playOneFrame = True
+            goOneFrame = True
         elif k == ord('.'):  # speed up
             waitTime -= 5
             print(waitTime)
@@ -124,7 +129,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
             num = k - ord('0')
             frameToJumpTo = (cap.get(cv2.CAP_PROP_FRAME_COUNT) / 10) * num
             cap.set(cv2.CAP_PROP_POS_FRAMES, frameToJumpTo)
-            playOneFrame = True
+            goOneFrame = True
         elif k == ord('\n') or k == ord('\r'):  # return/enter key
             cv2.destroyAllWindows()
             break
@@ -132,18 +137,27 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
             print("Exiting...")
             exit()
 
-        elif k == ord('p'):
-            thisBounce.shape = 'Pike'
-            db.commit()
-            print('Changed shape to Pike')
-        elif k == ord('t'):
-            thisBounce.shape = 'Tuck'
-            db.commit()
-            print('Changed shape to Tuck')
-        elif k == ord('s'):
-            thisBounce.shape = 'Straight'
-            db.commit()
-            print('Changed shape to Straight')
+        # elif k == ord('p'):
+        #     thisBounce.shape = 'Pike'
+        #     db.commit()
+        #     print('Changed shape to Pike')
+        # elif k == ord('t'):
+        #     thisBounce.shape = 'Tuck'
+        #     db.commit()
+        #     print('Changed shape to Tuck')
+        # elif k == ord('s'):
+        #     thisBounce.shape = 'Straight'
+        #     db.commit()
+        #     print('Changed shape to Straight')
+
+
+        if saveReportImages:
+            saveReportImages = False
+
+        if k == ord('p'):
+            saveReportImages = True
+            if paused:
+                goOneFrame = True
 
 
 # For comparing the track of two skills. Ideally this would be n rather than 2
@@ -546,7 +560,8 @@ def _plot_angles_6x2(axes, framesInEachAngle):
 
 
 def plot_angles_1x6_save_image(bounce):
-    imgName = "{path}{filename}_angles.jpg".format(path=consts.bouncesRootPath, filename=bounce.id)
+    # imgName = "{path}{filename}_angles.jpg".format(path=consts.bouncesRootPath, filename=bounce.id)
+    imgName = "{path}{filename}_angles.pdf".format(path=consts.thesisImgPath, filename=bounce.id)
     # if os.path.exists(imgName):
     #     print('File exists: {}'.format(imgName))
     #     return
@@ -559,7 +574,7 @@ def plot_angles_1x6_save_image(bounce):
     framesInEachAngle = framesInEachAngle[:, :30]
     framesInEachAngle = np.delete(framesInEachAngle, 8, 0)  # delete "head" angle
     numFrames = len(framesInEachAngle[0])
-    xTicks = np.arange(numFrames)
+    xTicks = np.arange(numFrames) / 30.
 
     # indexOrders = [0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]
     # indexOrders = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11]
@@ -579,7 +594,7 @@ def plot_angles_1x6_save_image(bounce):
     twistHandle, = axes[5].plot(xTicks, framesInEachAngle[11], c='green', label="Twist Angle")
     axes[5].yaxis.grid(True)
 
-    # Place a legend to the right of this smaller subplot.
+    # Place a legend to the right
     plt.legend(handles=[rHandle, lHandle, torsoHandle, twistHandle], bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
     # Add labels
@@ -591,18 +606,18 @@ def plot_angles_1x6_save_image(bounce):
     axes[0].set_ylim([0, 180])
     # axes[0].set_xlim([0, 1])
     axes[0].yaxis.set_ticks([0, 45, 90, 135, 180])
-    # axes[0].xaxis.set_ticks([.5, 1])
+    axes[0].xaxis.set_ticks([.5, 1])
     # ax.xaxis.set_ticks([0, 60, 120, 180])
     # ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
 
-    # axes[0].set_ylabel('Angle (deg)')
-    # fig.text(0.5, 0.01, 'Time (s)', ha='center')
+    axes[0].set_ylabel('Angle (deg)')
+    fig.text(0.5, 0.01, 'Time (s)', ha='center')
 
     # fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances)), fontsize=16)
     # fig.legend((b1Handle, b2Handle), (bounce1.skill_name, bounce2.skill_name))
     fig.tight_layout(pad=0)
-    # fig.subplots_adjust(bottom=.2, right=0.82)  # make room for xlabel and legend
-    fig.subplots_adjust(right=0.877)  # make room for legend
+    fig.subplots_adjust(bottom=.2, right=0.877)  # make room for xlabel and legend
+    # fig.subplots_adjust(right=0.877)  # make room for legend
 
     print("Writing image to {}".format(imgName))
     plt.savefig(imgName)

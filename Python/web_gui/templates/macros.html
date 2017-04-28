@@ -43,6 +43,7 @@
 
 
 {# Imported into fyp.py /judge/<> #}
+{#TODO Use url_for for hover images #}
 {% macro deduction_category_html(index, category, description=None) %}
     <div class="js-deduction_category clearfix">
 
@@ -58,18 +59,18 @@
                 </label>
 
                 {% if category == 'arms_twist_half_full' %}
-                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_half_full_0.0.jpg'>">
+                    <label data-toggle="tooltip" title="<img src='/static/images/judging/arms_twist_half_full_0.0.jpg'>">
                         <input type="radio" name="arms_twist_half_full-{{ index }}" value="0.0"> 0.0
                     </label>
-                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_half_full_0.1.jpg'>">
+                    <label data-toggle="tooltip" title="<img src='/static/images/judging/arms_twist_half_full_0.1.jpg'>">
                         <input type="radio" name="arms_twist_half_full-{{ index }}" value="0.1"> 0.1
                     </label>
 
                 {% elif category == 'arms_twist_over_full' %}
-                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_rudi_plus_0.0.jpg'>">
+                    <label data-toggle="tooltip" title="<img src='/static/images/judging/arms_twist_rudi_plus_0.0.jpg'>">
                         <input type="radio" name="arms_twist_over_full-{{ index }}" value="0.0"> 0.0
                     </label>
-                    <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/arms_twist_rudi_plus_0.1.jpg'>" data-oldtitle="Arms >90&deg;">
+                    <label data-toggle="tooltip" title="<img src='/static/images/judging/arms_twist_rudi_plus_0.1.jpg'>" data-oldtitle="Arms >90&deg;">
                         <input type="radio" name="arms_twist_over_full-{{ index }}" value="0.1"> 0.1
                     </label>
 
@@ -92,7 +93,7 @@
 
         {% elif category == 'body' %}
             Body
-            <span class="pull-right" data-toggle="tooltip" title="<img src='/fyp/static/images/judging/position_of_body.jpg'>">
+            <span class="pull-right" data-toggle="tooltip" title="<img src='/static/images/judging/position_of_body.jpg'>">
                 <label title="If you make a mistake">
                     <input type="radio" name="body-{{ index }}" value="0.0"> 0.0
                 </label>
@@ -107,13 +108,13 @@
         {% elif category == 'angle_with_horizontal' %}
             Legs with Horizontal
             <span class="pull-right">
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/horz_0.0.jpg'>" data-oldtitle=">=90&deg;">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/horz_0.0.jpg'>" data-oldtitle=">=90&deg;">
                     <input type="radio" name="legs_horz-{{ index }}" value="0.0"> 0.0
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/horz_0.1.jpg'>" data-oldtitle=">65&deg; <90&deg;">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/horz_0.1.jpg'>" data-oldtitle=">65&deg; <90&deg;">
                     <input type="radio" name="legs_horz-{{ index }}" value="0.1"> 0.1
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/horz_0.2.jpg'>" data-oldtitle=">45&deg; <65&deg;">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/horz_0.2.jpg'>" data-oldtitle=">45&deg; <65&deg;">
                     <input type="radio" name="legs_horz-{{ index }}" value="0.2"> 0.2
                 </label>
             </span>
@@ -141,16 +142,16 @@
 
             Opening in Somersault
             <span class="pull-right">
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.0.jpg'>" data-oldtitle="Use if you made a mistake">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/opening_{{ landingPosition }}_0.0.jpg'>" data-oldtitle="Use if you made a mistake">
                     <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.0"> 0.0
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.1.jpg'>" data-oldtitle="bet 1 &amp; 2 o'clock">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/opening_{{ landingPosition }}_0.1.jpg'>" data-oldtitle="bet 1 &amp; 2 o'clock">
                     <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.1"> 0.1
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.2.jpg'>" data-oldtitle="bet 2 &amp; 3 o'clock">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/opening_{{ landingPosition }}_0.2.jpg'>" data-oldtitle="bet 2 &amp; 3 o'clock">
                     <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.2"> 0.2
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/opening_{{ landingPosition }}_0.3.jpg'>" data-oldtitle="after 3/no opening">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/opening_{{ landingPosition }}_0.3.jpg'>" data-oldtitle="after 3/no opening">
                     <input type="radio" name="opening_timing_{{ landingPosition }}-{{ index }}" value="0.3"> 0.3
                 </label>
             </span>
@@ -172,13 +173,13 @@
 
             {#Not disableded by default because straight s/s wont have kick out and it would be-a-pain/not-make-sense to have to click 0.0 to be able to deduct that.#}
             <span class="pull-right">
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/after_opening_{{ landingPosition }}_pike_0.0.jpg'>" data-oldtitle-feet-front="bet 2 &amp; 3 o'clock" data-oldtitle-back="bet 3 &amp; 4:30 o'clock">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/after_opening_{{ landingPosition }}_pike_0.0.jpg'>" data-oldtitle-feet-front="bet 2 &amp; 3 o'clock" data-oldtitle-back="bet 3 &amp; 4:30 o'clock">
                     <input type="radio" name="after_opening_{{ landingPosition }}_pike-{{ index }}" value="0.0"> <span class="js-val">0.0</span>
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/after_opening_{{ landingPosition }}_pike_0.1.jpg'>" data-oldtitle-feet-front="bet 2 &amp; 3 o'clock" data-oldtitle-back="bet 3 &amp; 4:30 o'clock">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/after_opening_{{ landingPosition }}_pike_0.1.jpg'>" data-oldtitle-feet-front="bet 2 &amp; 3 o'clock" data-oldtitle-back="bet 3 &amp; 4:30 o'clock">
                     <input type="radio" name="after_opening_{{ landingPosition }}_pike-{{ index }}" value="0.1"> <span class="js-val">0.1</span>
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/after_opening_{{ landingPosition }}_pike_0.2.jpg'>" data-oldtitle-feet-front="bet 12 &amp; 2 o'clock" data-oldtitle-back="bet 12 &amp; 3 o'clock">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/after_opening_{{ landingPosition }}_pike_0.2.jpg'>" data-oldtitle-feet-front="bet 12 &amp; 2 o'clock" data-oldtitle-back="bet 12 &amp; 3 o'clock">
                     <input type="radio" name="after_opening_{{ landingPosition }}_pike-{{ index }}" value="0.2"> <span class="js-val">0.2</span>
                 </label>
             </span>
@@ -186,10 +187,10 @@
         {% elif category == 'twist_timing' %}
             End of Twist
             <span class="pull-right">
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/twist_0.0.jpg'>">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/twist_0.0.jpg'>">
                     <input type="radio" name="twist_timing-{{ index }}" value="0.0"> 0.0
                 </label>
-                <label data-toggle="tooltip" title="<img src='/fyp/static/images/judging/twist_0.1.jpg'>">
+                <label data-toggle="tooltip" title="<img src='/static/images/judging/twist_0.1.jpg'>">
                     <input type="radio" name="twist_timing-{{ index }}" value="0.1"> 0.1
                 </label>
             </span>
