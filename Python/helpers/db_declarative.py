@@ -94,7 +94,7 @@ class Routine(Base):
     def getTrampolineTouches(self):
         from helpers import helper_funcs
         trampolineTouches = array([frame.trampoline_touch for frame in self.frames])
-        trampolineTouches = helper_funcs.trim_touches(trampolineTouches)
+        trampolineTouches = helper_funcs.trim_touches_by_2(trampolineTouches)
         return trampolineTouches
 
     def getScore(self, contributor):
@@ -179,6 +179,8 @@ class Frame(Base):
     trampoline_touch = Column(INTEGER)
     pose = Column(TEXT)
     angles = Column(TEXT)
+    pose_unfiltered = Column(TEXT)
+    angles_unfiltered = Column(TEXT)
 
     routine = relationship("Routine", back_populates='frames')
     bounce = relationship("Bounce", back_populates='frames')
@@ -218,6 +220,7 @@ class Bounce(Base):
     end_height = Column(INTEGER)
 
     angles = Column(TEXT)
+    angles_unfiltered = Column(TEXT)
     angles_count = Column(INTEGER)
     match_count = Column(INTEGER)
     ref_or_test = Column(TEXT)

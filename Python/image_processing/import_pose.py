@@ -109,3 +109,57 @@ def import_monocap_preds_2d(db, routine):
 
     print("Pose Imported")
     return
+
+
+# Written to allow comparision of pose before an d after filtering.
+# Does it make much difference... the moment of truth... :/
+def import_pose_unfiltered(db, routine):
+    suffix = "_blur_dark_0.6"
+    preds_file = h5py.File(routine.getAsDirPath(suffix) + 'hg_preds_2d.h5', 'r')
+    preds = preds_file.get('hg_preds_2d')
+
+    frames = []
+    poses = []
+    maxShoulderWidth = 0
+    pjls = calc_angles.pose_aliai['hourglass']  # poseJointLabels
+    for frame in routine.frames:
+        frameNumKey = '{0:04}'.format(frame.frame_num)
+        try:
+            pose = preds[frameNumKey].value.T
+        except KeyError:
+            continue
+        frame.pose_unfiltered = helper_funcs.round_list_floats_into_str(pose.tolist(), 1)
+
+        poses.append(pose)
+        frames.append(frame)
+
+        # Get the distances between the shoulders
+        lspt = calc_angles.pose_2_pt(pose, pjls.index('lshoulder'))
+        rspt = calc_angles.pose_2_pt(pose, pjls.index('rshoulder'))
+        shoulderWidth = np.linalg.norm(lspt - rspt)
+        if shoulderWidth > maxShoulderWidth:
+            maxShoulderWidth = shoulderWidth
+    db.flush()
+
+    # Calculate all the angles
+    framesAngles = calc_angles.angles_from_poses(poses, maxShoulderWidth, False)
+    # Add the angles to db
+    for frame, angles in zip(frames, zip(*framesAngles)):
+        frame.angles_unfiltered = helper_funcs.round_list_floats_into_str(angles, 1)
+    db.flush()
+
+    # Update bounces with their angles
+    for bounce in routine.bounces:
+        anglesInEachFrame = [json.loads(frame.angles_unfiltered) for frame in bounce.frames if frame.angles_unfiltered is not None]
+        if not anglesInEachFrame:
+            continue
+        framesInEachAngle = zip(*anglesInEachFrame)  # * = transpose. > list = 13*frame_numbers
+
+        bounce.angles_unfiltered = json.dumps(framesInEachAngle)
+        # bounce.angles_count = len(framesInEachAngle[0])
+
+    # routine.has_pose = 1
+
+    db.commit()
+
+    print("Imported rough hourglass pose")

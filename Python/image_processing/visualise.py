@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import re
-from itertools import chain
 
 import cv2
 import matplotlib.pyplot as plt
@@ -162,40 +161,9 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
 
 # For comparing the track of two skills. Ideally this would be n rather than 2
 def play_frames_of_2_bounces(db, bounce1, bounce2):
-    print("\nCreating angle comparison plot")
-    # Create plot
-    fig, axes = plt.subplots(nrows=6, ncols=2, sharex=True, sharey=True)
+    # Plot angles for this bounce
+    # plot_angles_6x2(bounce1, bounce2)
 
-    b1Angles = np.array(json.loads(bounce1.angles))
-    b1Angles = np.delete(b1Angles, 8, 0)  # delete "head" angle
-    numFrames = len(b1Angles[0])
-
-    # Prepare b2 angles
-    b2Angles = json.loads(bounce2.angles)
-    b2Angles = np.delete(b2Angles, 8, 0)  # delete "head" angle
-    b2ResampAngles = np.array([signal.resample(ang, numFrames) for ang in b2Angles])
-
-    # Get distances for label
-    distances = [np.sum(np.absolute(np.subtract(ang1, ang2))) for ang1, ang2 in zip(b1Angles, b2ResampAngles)]
-
-    b1Handle = _plot_angles_6x2(axes, b1Angles)
-    b2Handle = _plot_angles_6x2(axes, b2ResampAngles)
-
-    # Add labels
-    labels = list(calc_angles.extended_angle_keys)  # make a copy
-    labels.remove('Head')
-    for ax, label, dist in zip(axes.flat, labels, distances):
-        ax.set_ylim([0, 180])
-        ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
-        ax.set_title("{} ({:.0f})".format(label, dist))
-
-    fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances)), fontsize=16)
-    fig.legend((b1Handle, b2Handle), (bounce1.skill_name, bounce2.skill_name))
-    fig.tight_layout()
-
-    plt.show(block=False)
-
-    #
     print("Starting video")
     play_frames_of_2(db, bounce1.routine, bounce2.routine,
                      bounce1.start_frame, bounce1.end_frame,
@@ -251,7 +219,7 @@ def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, star
                 # if pose is None, skip showing this frame
                 try:
                     pose1 = np.array(json.loads(frame_data1.pose))
-                    pose2 = np.array(json.loads(frame_data2.pose))
+                    pose2 = np.array(json.loads(frame_data2.pose_unfiltered))
                 except TypeError:
                     continue
 
@@ -462,77 +430,106 @@ def compare_pose_tracking_techniques(routine):
 #
 # Matplotlib Plots for various datas.
 #
-def plot_height(routine):
-    print("\nStarting plotting...")
-    f, axarr = plt.subplots(4, sharex=True)
+def plot_twist(routine):
+    nones = np.repeat(None, calc_angles.num_angles)
+    angles = np.array([np.array(json.loads(frame.angles)) if frame.angles else nones for frame in routine.frames])
+    twist = angles[:, -1]
 
-    # Plot bounce heights
-    x_frames = [frame.frame_num / routine.video_fps for frame in routine.frames]
-    y_travel = [frame.center_pt_x for frame in routine.frames]
-    y_height = [routine.video_height - frame.center_pt_y for frame in routine.frames]
+    plt.plot(range(len(angles)), twist)
+    plt.show()
 
-    # List inside list gets flattened
-    peaks_x = list(chain.from_iterable((bounce.start_time, bounce.apex_frame / routine.video_fps) for bounce in routine.bounces))
-    peaks_x.append(routine.bounces[-1].end_time)
-    peaks_y = list(chain.from_iterable((bounce.start_height, bounce.apex_height) for bounce in routine.bounces))
-    peaks_y.append(routine.bounces[-1].end_height)
-    # peaks_y = [routine.video_height - p for p in peaks_y]
 
-    axarr[0].set_title("Height")
-    axarr[0].plot(x_frames, y_height, color="g")
-    axarr[0].plot(peaks_x, peaks_y, 'r+')
-    axarr[0].set_ylabel('Height (Pixels)')
+def plot_3d(routine):
+    poses = np.array([np.array(json.loads(frame.pose)) for frame in routine.frames if frame.pose])
+    poses = poses[::5]
 
-    # Plot bounce travel
-    axarr[1].set_title("Travel")
-    axarr[1].set_ylabel('Rightwardness (Pixels)')
-    axarr[1].plot(x_frames, y_travel, color="g")
-    axarr[1].axhline(y=routine.trampoline_center, xmin=0, xmax=1000, c="blue")
-    axarr[1].axhline(y=routine.trampoline_center + 80, xmin=0, xmax=1000, c="red")
-    axarr[1].axhline(y=routine.trampoline_center - 80, xmin=0, xmax=1000, c="red")
-
-    # Ellipse angles
-    x_frames = np.array([frame.frame_num / routine.video_fps for frame in routine.frames])
-    y_angle = np.array([frame.ellipse_angle for frame in routine.frames])
-    # Changes angles
-    y_angle = np.unwrap(y_angle, discont=90, axis=0)
-
-    axarr[2].plot(x_frames, y_angle, color="g")
-    axarr[2].set_title("Angle")
-    axarr[2].set_ylabel('Angle (deg)')
-
-    # Ellipse lengths
-    y_major = np.array([frame.ellipse_len_major for frame in routine.frames])
-    y_minor = np.array([frame.ellipse_len_minor for frame in routine.frames])
-
-    # axarr[3].scatter(x_frames, y_major, color="g")
-    # axarr[3].scatter(x_frames, y_minor, color='b')
-    # axarr[3].set_ylim([0, 300])
-    # axarr[3].set_title("Ellipse Axes Length")
-    # axarr[3].set_ylabel('Length')
-    # axarr[3].set_xlabel('Time (s)')
-
-    axarr[3].plot(x_frames, y_major / y_minor, color="g")
-    axarr[3].set_title("Ellipse Axes Ratio")
-    axarr[3].set_ylabel('Length Ratio')
-    axarr[3].set_xlabel('Time (s)')
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    y = range(len(poses))
+    for i in range(calc_angles.num_angles):
+        x = poses[:, 0, i]
+        z = poses[:, 1, i]
+        ax.plot(x, y, z)
+    # ax.legend()
 
     plt.show()
 
 
-# Called by play_frames_of_2_bounces
-def _plot_angles_6x2(axes, framesInEachAngle):
-    # angles = []
-    # xTicks = []
-    # for frame in frames:
-    #     if frame.angles:
-    #         xTicks.append(frame.frame_num)
-    #         angles.append(np.array(json.loads(frame.angles)))
-    #         # else:
-    #         #     angles.append(None)
-    # anglesInEachFrame = np.array(angles)
-    # framesInEachAngle = anglesInEachFrame.T
 
+# Called by play_frames_of_2_bounces
+def plot_angles_6x2(bounce1, bounce2):
+    print("\nCreating angle comparison plot")
+    # Create plot
+    fig, axes = plt.subplots(nrows=6, ncols=2, sharex=True, sharey=True)
+
+    b1Angles = np.array(json.loads(bounce1.angles))
+    b1Angles = np.delete(b1Angles, 8, 0)  # delete "head" angle
+    numFrames = len(b1Angles[0])
+
+    # Prepare b2 angles
+    b2Angles = json.loads(bounce2.angles)
+    b2Angles = np.delete(b2Angles, 8, 0)  # delete "head" angle
+    b2ResampAngles = np.array([signal.resample(ang, numFrames) for ang in b2Angles])
+
+    # Get distances for label
+    distances = [np.sum(np.absolute(np.subtract(ang1, ang2))) for ang1, ang2 in zip(b1Angles, b2ResampAngles)]
+
+    b1Handle = _plot_angles_on_axis(axes, b1Angles)
+    b2Handle = _plot_angles_on_axis(axes, b2ResampAngles)
+
+    # Add labels
+    labels = list(calc_angles.extended_angle_keys)  # make a copy
+    labels.remove('Head')
+    for ax, label, dist in zip(axes.flat, labels, distances):
+        ax.set_ylim([0, 180])
+        ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
+        ax.set_title("{} ({:.0f})".format(label, dist))
+
+    fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances)), fontsize=16)
+    fig.legend((b1Handle, b2Handle), (bounce1.skill_name, bounce2.skill_name))
+    fig.tight_layout()
+
+    plt.show(block=False)
+
+
+# Compare filter vs unfiltered pose
+def plot_angles_6x2_filtering_effect(bounce1):
+    print("\nCreating angle comparison plot")
+    # Create plot
+    fig, axes = plt.subplots(nrows=2, ncols=6, sharex=True, sharey=True)
+
+    b1Angles = np.array(json.loads(bounce1.angles))
+    b1Angles = np.delete(b1Angles, 8, 0)  # delete "head" angle
+
+    b2Angles = np.array(json.loads(bounce1.angles_unfiltered))
+    b2Angles = np.delete(b2Angles, 8, 0)  # delete "head" angle
+
+    # Get distances_sad for label
+    distances_sad = [np.sum(np.absolute(np.subtract(ang1, ang2))) for ang1, ang2 in zip(b1Angles, b2Angles)]
+
+    axes = axes.T  # reshapes the array of axes so that things are plotted sensibly (rights on top, lefts on bottom)
+    b1Handle = _plot_angles_on_axis(axes, b1Angles)
+    b2Handle = _plot_angles_on_axis(axes, b2Angles)
+
+    # Add labels
+    labels = list(calc_angles.extended_angle_keys)  # make a copy
+    labels.remove('Head')
+    for ax, label, dist in zip(axes.flat, labels, distances_sad):
+        ax.set_ylim([0, 180])
+        # ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
+        ax.yaxis.set_ticks([0, 90, 180])
+        # ax.set_title("{} ({:.0f})".format(label, dist))
+        ax.set_title("{}".format(label))
+
+    # fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances_sad)), fontsize=16)
+    fig.suptitle("Angle Comparison", fontsize=16)
+    fig.legend((b1Handle, b2Handle), ('Filtered', 'Unfiltered'))
+    # fig.tight_layout()
+
+    plt.show()
+
+
+def _plot_angles_on_axis(axes, framesInEachAngle):
     """[
         "Right elbow",
         "Left elbow",

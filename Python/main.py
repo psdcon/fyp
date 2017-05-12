@@ -3,7 +3,6 @@ from __future__ import print_function
 import cv2
 
 from helpers.db_declarative import Routine, getDb
-from image_processing import import_pose
 # https://github.com/opencv/opencv/issues/6055
 from image_processing.track import track_gymnast
 
@@ -17,8 +16,13 @@ def main():
     #
     # bounce = db.query(Bounce).filter(Bounce.id == 1520).one()
     # bounce = db.query(Bounce).filter(Bounce.id == 1551).one()
+    # bounce = db.query(Bounce).filter(Bounce.id == 1870).one()  # me gopro tuck jump
     # plot_angles_1x6_save_image(bounce)
     # skill_into_filmstrip(bounce)
+    # plot_angles_6x2_filtering_effect(bounce)
+    # play_frames_of_2_bounces(db, bounce, bounce)
+
+    # exit()
 
     # judge_skill(db)
 
@@ -28,24 +32,30 @@ def main():
     #     db.commit()
     #     chose_reference_skills(db, i)
     #     tariff_bounces_test_set(db)
+    # Tariff Routines
     # routines = db.query(Routine).filter(Routine.use == 1, Routine.has_pose == 1).all()
     # tariff_many_routines(db, routines)
     # tariff_bounces_test_set(db)
 
     # Thesis
-    routine = db.query(Routine).filter(Routine.id == 1).one()
+    # routine = db.query(Routine).filter(Routine.id == 1).one()
+    # routine = db.query(Routine).filter(Routine.id == 129).one()  # high res #1
+    routine = db.query(Routine).filter(Routine.id == 127).one()  # first gopro
+    # plot_twist(routine)
+    # plot_3d(routine)
     # routine = db.query(Routine).filter(Routine.id == 82).one()  # colm
     # routine = db.query(Routine).filter(Routine.id == 89).one()  # cian
     # detect_trampoline(db, routine)
     track_gymnast(db, routine)
     # calculate_bounces(routine)
     # play_frames(db, routine)
+    # import_pose_unfiltered(db, routine)
 
     exit()
 
     # Execute
     routines = db.query(Routine).filter(Routine.use == 1, Routine.id >= 89).order_by(Routine.level).all()
-    for routine in routines:
+    for i, routine in enumerate(routines):
         print(routine)
 
         # for i, routine in enumerate(routines):
@@ -88,8 +98,8 @@ def main():
         #     # Plot
         #     visualise.plot_data(routine)
 
-        if not routine.hasFramesSaved('_blur_dark_0.6'):
-            import_pose.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
+        # if not routine.hasFramesSaved('_blur_dark_0.6'):
+        #     import_pose.save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
         # else:
         # image_processing.visualise.compare_pose_tracking_techniques(routine)
 

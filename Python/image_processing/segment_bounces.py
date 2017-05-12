@@ -3,6 +3,7 @@ import numpy as np
 
 from helpers import consts
 from helpers.db_declarative import Bounce
+from helpers.helper_funcs import trim_touches_by_1
 from libs.peakdetect import peakdetect
 
 
@@ -58,6 +59,9 @@ def calculate_bounces(routine):
     print("Segmenting bounces")
     x = np.array([frame.frame_num for frame in routine.frames])
     y = np.array([routine.video_height - frame.center_pt_y for frame in routine.frames])
+    trampolineTouches = [frame.trampoline_touch for frame in routine.frames]
+    trampolineTouchesInv = [0 if touch == 1 else 1 for touch in trampolineTouches]
+    trampolineTouchesInv = trim_touches_by_1(trampolineTouchesInv)
 
     pc = np.percentile(y, 5)
     delta = pc - np.min(y)
@@ -72,22 +76,23 @@ def calculate_bounces(routine):
         peaks_x = [pt['x'] for pt in peaks]
         peaks_y = [pt['y'] for pt in peaks]
 
+        phase_flight = np.ma.array(y, mask=trampolineTouches)
+        phase_contact = np.ma.array(y, mask=trampolineTouchesInv)
+
         fig, ax = plt.subplots(figsize=(8.8, 3))
         # plt.figure("Bounce Peaks")
         # plt.title("Height")
-        l2 = plt.scatter(np.array(peaks_x) / 30., np.array(peaks_y), c='C3', marker='o', label="Max Trampoline\nDisplacement")
-        l1, = plt.plot(x / 30., y, c='C2', label="Athlete Height")
-        l3 = plt.axhline(routine.video_height - routine.trampoline_top, c="C0", label="Trampoline Top")
+        plt.scatter(np.array(peaks_x) / 30., np.array(peaks_y), c='C3', marker='o', label="Max Trampoline\nDisplacement")
+        plt.plot(x / 30., phase_flight, c='C2', label="Flight Phase")
+        plt.plot(x / 30., phase_contact, ':', c='C0', label="Contact Phase")
+        plt.axhline(routine.video_height - routine.trampoline_top, c="C0", label="Trampoline Top")
         plt.ylabel('Height (Pixels)')
         plt.xlabel('Time (s)')
         plt.legend()
-        # fig.legend((l2, l1, l3), ("Max Trampoline\nDisplacement", "Athlete Height", "Trampoline Top"))
         fig.tight_layout(pad=0)
+        # Make room for legend
         x0, x1, y0, y1 = plt.axis()
-        plt.axis((x0,
-                  x1 + 1,
-                  y0 - 15,
-                  y1))
+        plt.axis((x0, x1 + 1, y0 - 15, y1))
         imgName = consts.thesisImgPath + "segment_bounces.pdf"
         print("Writing image to {}".format(imgName))
         plt.savefig(imgName)

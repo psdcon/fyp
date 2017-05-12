@@ -9,15 +9,16 @@ import cv2
 
 import helpers.consts
 from helpers import consts
-from helpers import gen_thumbs
 from helpers import helper_funcs
 from helpers.db_declarative import getDb, Routine
+from image_processing import output_images
 
 
 def main():
     # videoSize = "720x480"  # This is not 16:9, which the videos are recorded in...
     # https://pacoup.com/2011/06/12/list-of-true-169-resolutions/
-    videoSize = "896x504"  # divisible by 8
+    # videoSize = "896x504"  # divisible by 8
+    videoSize = "1280x720"  # divisible by 8
     # videoSize = "960x540"  # half 1080p
     # videoSize = "1024x576"  #
 
@@ -92,7 +93,7 @@ def add_routine(originalFilePath, routineFullPath):
         db.commit()
         print("Routine addded:", routineFullPath)
 
-        gen_thumbs.generate_thumbnail(routine)
+        output_images.generate_thumbnail(routine)
 
     except sqlite3.IntegrityError:
         print("Routine already in db:", routineFullPath)

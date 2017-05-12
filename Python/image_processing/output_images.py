@@ -49,7 +49,7 @@ def save_cropped_frames(db, routine, frames, suffix=None):
     # plt.show(block=False)
 
     trampolineTouches = np.array([frame.trampoline_touch for frame in routine.frames])
-    trampolineTouches = helper_funcs.trim_touches(trampolineTouches)
+    trampolineTouches = helper_funcs.trim_touches_by_2(trampolineTouches)
 
     personMasks = helper_funcs.load_zipped_pickle(routine.personMasksPath())
 

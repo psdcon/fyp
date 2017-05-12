@@ -154,7 +154,7 @@ def round_list_floats_into_str(mList, precision):
     return json.dumps(json.loads(json.dumps(mList), parse_float=lambda x: round(float(x), precision)))
 
 
-def trim_touches(trampoline_touches):
+def trim_touches_by_2(trampoline_touches):
     touchTransitions = np.diff(trampoline_touches)
     for i in range(len(touchTransitions)):
         thisTransition = touchTransitions[i]
@@ -164,6 +164,17 @@ def trim_touches(trampoline_touches):
         elif thisTransition < 0:  # spike down
             trampoline_touches[i] = 0
             trampoline_touches[i - 1] = 0
+    return trampoline_touches
+
+
+def trim_touches_by_1(trampoline_touches):
+    touchTransitions = np.diff(trampoline_touches)
+    for i in range(len(touchTransitions)):
+        thisTransition = touchTransitions[i]
+        if thisTransition > 0:  # spike up
+            trampoline_touches[i + 1] = 0
+        elif thisTransition < 0:  # spike down
+            trampoline_touches[i] = 0
     return trampoline_touches
 
 

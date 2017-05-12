@@ -83,7 +83,7 @@ def tariff_many_routines(db, routines):
         # Do tariff
         tariff(db, routine.bounces, refBounces)
         # Print accuracy
-        accuracy_of_bounces(db, routine)
+        accuracy_of_bounces(db, routine.bounces)
 
     timeTaken = time.time() - startTime
     print("")
