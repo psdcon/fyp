@@ -135,19 +135,31 @@ def plot_skill_bar_charts(db):
 
 def print_list_of_skills(db):
     sql = text("""
-      SELECT
-          skill_name,
-          count(1) AS cnt,
-          (SELECT code FROM skills WHERE skills.name = bounces.skill_name) AS code,
-          (SELECT tariff FROM skills WHERE skills.name = bounces.skill_name) AS tariff,
-          (SELECT id FROM skills WHERE skills.name = bounces.skill_name) AS sort_id
-      FROM bounces WHERE skill_name NOTNULL AND angles NOTNULL GROUP BY skill_name ORDER BY sort_id
+         SELECT skill_name, shape, code_name, count(*) AS count, 
+        (SELECT tariff FROM skills WHERE skills.name = bounces.skill_name) AS tariff,
+        (SELECT shape_bonus FROM skills WHERE skills.name = bounces.skill_name) AS shape_bonus,
+        (SELECT id FROM skills WHERE skills.name = bounces.skill_name) AS sort_id
+         FROM bounces WHERE angles NOTNULL AND code_name NOTNULL AND skill_name != "landing" GROUP BY skill_name, shape
+         ORDER BY sort_id
       """)
-    results = db.execute(sql)
-    results = list(results)
-    for res in results:
-        # name count code_name tariff
-        print("{name} & {code} & {tariff} & {count}\\\\".format(name=res[0], count=res[1], code=res[2].upper(), tariff=res[3]))
+    result = db.execute(sql)
+    from collections import namedtuple
+    Row = namedtuple('Row', result.keys())
+    rows = [Row(*r) for r in result.fetchall()]
+    count = 0
+    for row in rows:
+        if row.shape:
+            row = row._replace(skill_name='{} ({})'.format(row.skill_name, row.shape))
+            row = row._replace(code_name='{}{}'.format(row.code_name, row.shape[0].lower()))
+            if row.shape != 'Tuck':
+                row = row._replace(tariff=row.tariff + row.shape_bonus)
+        if row.count < 10:
+            print("{name} & {code} & {tariff} & {count}*\\\\".format(name=row.skill_name, count=row.count, code=row.code_name, tariff=row.tariff))
+        else:
+            print("{name} & {code} & {tariff} & {count}\\\\".format(name=row.skill_name, count=row.count, code=row.code_name, tariff=row.tariff))
+        count += row.count
+    print(count)
+    print()
 
 
 def skill_into_filmstrip(bounce):
@@ -192,3 +204,23 @@ def skill_into_filmstrip(bounce):
     ret = cv2.imwrite(imgName, filmStrip)
     if not ret:
         print("Couldn't write image {}\nAbort!".format(imgName))
+
+
+def data_for_guenole(db):
+    import json
+
+    bounces = db.query(Bounce).filter(Bounce.angles != None, Bounce.code_name != None, Bounce.skill_name != None, Bounce.skill_name!='Landing').all()
+    angles = []
+    labels = []
+    for bounce in bounces:
+        angle_seq = json.loads(bounce.angles)
+        del angle_seq[9]
+        angles.append(angle_seq)
+        labels.append(bounce.shapedSkillName())
+    data = [
+        angles,
+        labels
+    ]
+    print(data)
+    with open('skills_data.json', 'w') as f:
+        json.dump(data, f)

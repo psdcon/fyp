@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import cv2
 
-from helpers.db_declarative import Routine, getDb
+from helpers.db_declarative import Routine, getDb, Performer
 # https://github.com/opencv/opencv/issues/6055
 from image_processing.track import track_gymnast
 
@@ -11,6 +11,13 @@ cv2.ocl.setUseOpenCL(False)
 
 def main():
     db = getDb()
+
+    # routines = db.query(Routine).filter(Routine.use == 1).all()
+    # bounces_count = 0
+    # for routine in routines:
+    #     bounces_count += len(routine.bounces)
+    # print("Average num bounces per routine is {}".format(bounces_count/len(routines)))
+    # exit()
     # plot_tariff_confusion_matrix(db)
     # plot_skill_bar_charts(db)
     #
@@ -27,11 +34,26 @@ def main():
     # judge_skill(db)
 
     # Tariff
-    # for i in range(6, 7):
+    # for i in range(1, 7):
     #     db.execute("DELETE FROM tariff_matches")
     #     db.commit()
-    #     chose_reference_skills(db, i)
+    #     set_reference_skills(db, i)
     #     tariff_bounces_test_set(db)
+    # tariff_epochs(db)
+
+    # open_epoch_save_data()
+    # print_list_of_skills(db)
+
+    # Convert names to performers
+    routines = db.query(Routine).filter(Routine.performer_id != None).all()
+    for routine in routines:
+        perf = routine.performer
+        if perf.sex is not None and perf.sex != routine.sex:
+            print('Mismatch')
+        perf.sex = routine.sex
+    db.commit()
+    exit()
+
     # Tariff Routines
     # routines = db.query(Routine).filter(Routine.use == 1, Routine.has_pose == 1).all()
     # tariff_many_routines(db, routines)
@@ -47,6 +69,9 @@ def main():
     # routine = db.query(Routine).filter(Routine.id == 89).one()  # cian
     # detect_trampoline(db, routine)
     track_gymnast(db, routine)
+    # save_cropped_frames(db, routine, routine.frames)
+    # play_monocap_imgs(routine)
+    # play_frames(db, routine)
     # calculate_bounces(routine)
     # play_frames(db, routine)
     # import_pose_unfiltered(db, routine)

@@ -88,9 +88,9 @@
                         {#                    #}
                         {#                        <hr>#}
                         <div class="btn-group" role="group" aria-label="Pose">
-                            <button type="button" class="btn btn-secondary btn-sm" data-action="track">Track</button>
-                            <button type="button" class="btn btn-secondary btn-sm" data-action="segment_bounces">Bounces</button>
-                            <button type="button" class="btn btn-secondary btn-sm" data-action="save_frames">Frames</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-action="track" title="Track Athlete">Track</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-action="segment_bounces" title="Segment Bounces">Bounces</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-action="save_frames" title="Export Cropped Frames">Frames</button>
                         </div>
                         <div class="btn-group" role="group" aria-label="Pose">
                             <button type="button" class="btn btn-secondary btn-sm" {% if routine.has_pose %}disabled{% endif %} data-action="import_pose">Import Pose</button>
@@ -100,6 +100,14 @@
                         <div class="btn-group" role="group" aria-label="Visualise">
                             <button type="button" class="btn btn-outline-primary btn-sm" {% if not routine.has_pose %}disabled{% endif %} data-action="play_pose">Vis Pose</button>
                             <button type="button" class="btn btn-outline-primary btn-sm" data-action="play_monocap">Vis Monocap</button>
+                        </div>
+
+                        <hr>
+
+                        <div class="namer">
+                            Name: {{ routine.persons_name }} <br>
+                            <input type="text" class="namer_input">
+                            <button type="button" class="btn btn-secondary btn-sm js-namer">Save Name</button>
                         </div>
 
                     </div>

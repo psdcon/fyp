@@ -1,1 +1,0 @@
-@pyuic5 -x demo.ui -o demo.py

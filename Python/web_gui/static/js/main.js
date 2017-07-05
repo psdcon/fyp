@@ -207,10 +207,33 @@ var RoutinesGUIControls = {
         });
     },
     handleAction: function () {
-        var action = $(this).data('action');
         var routineId = $(this).closest('.card').data('routineid');
 
-        if (action == 'delete_pose') {
+        if ($(this).hasClass('js-namer')){
+            var name = $(this).siblings('.namer_input').val();
+
+            // Send to server
+            $.post({
+                url: SCRIPT_ROOT + "/namer",
+                data: "&routine_id=" + routineId
+                + "&name=" + name,
+                dataType: "text",
+                success: function (data) {
+                    if (data.length === 0) {
+                        $(this).text('Saved')
+                    }
+                    else {
+                        alert(data);
+                        console.log(data);
+                    }
+                }
+            });
+            return
+        }
+
+        var action = $(this).data('action');
+
+        if (action === 'delete_pose') {
             isSure = confirm('Are you sure you want to detele the pose on this routine?');
             if (!isSure) {
                 // Don't do anything

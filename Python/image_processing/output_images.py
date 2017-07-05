@@ -53,6 +53,11 @@ def save_cropped_frames(db, routine, frames, suffix=None):
 
     personMasks = helper_funcs.load_zipped_pickle(routine.personMasksPath())
 
+    # Create videos
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'DIB ')
+    frameCroppedVid = cv2.VideoWriter(consts.videosRootPath + 'savedFrames.avi', fourcc, 30.0, (256, 256))
+
     cap = helper_funcs.open_video(routine.path)
     frame = []
     for i, frame_data in enumerate(frames):
@@ -75,17 +80,17 @@ def save_cropped_frames(db, routine, frames, suffix=None):
             x1, x2, y1, y2 = helper_funcs.crop_points_constrained(routine.video_height, routine.video_width, cx, cy, cropLength)
             frameCropped = frame[y1:y2, x1:x2]
         frameCropped = cv2.resize(frameCropped, (256, 256))
+        frameCroppedVid.write(frameCropped)
 
         # cv2.imshow('Track ', frameCropped)
         # k = cv2.waitKey(50) & 0xff
 
         imgName = routineDirPath + "frame_{0:04}.png".format(frame_data.frame_num)
         # print("Writing frame to {}".format(imgName))
-        cv2.imwrite(imgName, frameCropped)
+        # cv2.imwrite(imgName, frameCropped)
 
     # Done
     cap.release()
-    db.commit()
     print("Done saving frames")
 
 

@@ -88,14 +88,20 @@ def index():
     percentCompletes['bouncePose'] = int((counts['bouncesJudgeableUsePose'] / float(counts['bouncesJudgeableUse'])) * 100)
     percentCompletes['bouncesJudged'] = int((counts['bouncesUsePoseJudgedOld'] / float(counts['bouncesJudgeableUsePose'])) * 100)
 
-    return render_template('home.html', title='FYP', counts=counts, percentCompletes=percentCompletes)
+    return render_template('home.html', title='FYP Home', counts=counts, percentCompletes=percentCompletes)
 
 
 @app.route('/gui_routines')
 def gui_routines():
     # routines = db.query(Routine).filter(or_(Routine.use == 1, Routine.use == None)).order_by(Routine.level).all()
     # routines = db.query(Routine).filter(Routine.use == 1).order_by(Routine.level).all()
-    routines = db.query(Routine).filter(Routine.use == 1, Routine.level != None).order_by(Routine.level).all()
+    # routines = db.query(Routine).filter(Routine.use == 1, Routine.level != None).order_by(Routine.level).all()
+    routine_ids = db.execute(text("""SELECT routine_id
+        FROM bounces
+        WHERE angles NOTNULL AND code_name NOTNULL AND skill_name NOTNULL
+        GROUP BY routine_id""")).fetchall()
+    routine_ids = [r_id[0] for r_id in routine_ids]
+    routines = db.query(Routine).filter(Routine.id.in_(routine_ids)).all()
 
     for i, routine in enumerate(routines):
         routine.index = i + 1
@@ -108,7 +114,7 @@ def gui_routines():
         routine.poseStatuses = helper_funcs.get_pose_statuses(routine.getPoseDirPaths(), routine.name)
         routine.numBounces = len(routine.bounces)
 
-    return render_template('gui_routines.html', title='List of Routines', routines=routines)
+    return render_template('gui_routines.html', title='Routines', routines=routines)
 
 
 @app.route('/gui_bounces')
@@ -128,6 +134,8 @@ def gui_bounces():
 
         bouncesRenderingInfo = []
         for i, bounce in enumerate(bounces):
+            if bounce.id == 15:
+                continue
             deduction_value, deduction_categories = bounce.getNewDeduction()
             # if deduction_value is None:  # do nothing if no deductions
             #     continue
@@ -171,7 +179,7 @@ def routines_list():
         routine.thumbPath = 'images/thumbs/{}.jpg'.format(routine.id)
         routine.broken = routine.isBroken(db)
 
-    return render_template('routines_list.html', title='List of Routines', routines=routines)
+    return render_template('routines_list.html', title='Annotate', routines=routines)
 
 
 #
@@ -455,8 +463,8 @@ def ajax_exec_routine_action():
         save_cropped_frames(db, routine, routine.frames, '_blur_dark_0.6')
 
     elif action == 'play_monocap':
-        from image_processing.visualise import compare_pose_tracking_techniques
-        compare_pose_tracking_techniques(routine)
+        from image_processing.visualise import play_monocap_imgs
+        play_monocap_imgs(routine)
         # threading.Thread(target=visualise.compare_pose_tracking_techniques, args=(routine,)).start()
 
     elif action == 'play_pose':
@@ -482,6 +490,19 @@ def ajax_exec_routine_action():
         print('Delete saved')
     else:
         return 'Action "{}" not found'.format(action)
+
+    return ''
+
+
+@app.route('/namer', methods=['POST'])
+def ajax_routine_namer():
+    print(request.values)
+    name = request.values.get('name')
+    routine_id = int(request.values.get('routine_id'))
+    routine = db.query(Routine).filter(Routine.id == routine_id).one()
+
+    routine.persons_name = name
+    db.commit()
 
     return ''
 

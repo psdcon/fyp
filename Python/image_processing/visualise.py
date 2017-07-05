@@ -1,5 +1,8 @@
 from __future__ import print_function
 
+import glob
+import json
+import os
 import re
 
 import cv2
@@ -8,14 +11,14 @@ import numpy as np
 from scipy import signal
 from sqlalchemy.orm.exc import NoResultFound
 
-from helpers import helper_funcs
-from helpers.db_declarative import *
-#
-# Functions for playing videos
-#
+from helpers import helper_funcs, consts
+from helpers.db_declarative import Bounce, Frame
 from image_processing import calc_angles
 
 
+#
+# Functions for playing videos
+#
 def _draw_pose_on_frame(pose, frame):
     for p_idx in range(16):
         color = consts.poseColors[calc_angles.pose_aliai['hourglass'][p_idx]][1]
@@ -47,6 +50,8 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
     # f, axarr = plt.subplots(12, sharex=True)
     # f.canvas.set_window_title(routine.prettyName())
 
+    fourcc = cv2.VideoWriter_fourcc(*'DIB ')
+    frameCroppedVid = cv2.VideoWriter(consts.videosRootPath + 'posedCropped.avi', fourcc, 30.0, (256, 256))
     while True:
         if goOneFrame or not paused:
 
@@ -54,6 +59,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
 
             # Loop forever
             if cap.get(cv2.CAP_PROP_POS_FRAMES) >= end_frame:
+                break
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
             try:
@@ -91,8 +97,9 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
                     if saveReportImages:  # p (print). Saves image for the report
                         cv2.imwrite(consts.thesisImgPath + "viz_pose.png", frameCropped)
                         print("wait")
-                    cv2.putText(frameCropped, '{}'.format(prevBounceName), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
-                    cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    # cv2.putText(frameCropped, '{}'.format(prevBounceName), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    # cv2.putText(frameCropped, '{}'.format(frame_data.frame_num), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                    frameCroppedVid.write(frameCropped)
                     cv2.imshow(routine.prettyName(), frameCropped)
 
             else:
@@ -150,13 +157,7 @@ def play_frames(db, routine, start_frame=1, end_frame=-1, show_pose=True, show_f
         #     print('Changed shape to Straight')
 
 
-        if saveReportImages:
-            saveReportImages = False
-
-        if k == ord('p'):
-            saveReportImages = True
-            if paused:
-                goOneFrame = True
+        # if saveRepo rame = True
 
 
 # For comparing the track of two skills. Ideally this would be n rather than 2
@@ -312,7 +313,7 @@ def play_frames_of_2(db, routine1, routine2, start_frame1=1, end_frame1=-1, star
 
 
 # Play matlab images like a video
-def compare_pose_tracking_techniques(routine):
+def play_monocap_imgs(routine):
     # Get all folders that have __ suffixes.
     # Load all the smoothed_frame_xxx.png matlab pose files in these folders
 
@@ -356,9 +357,14 @@ def compare_pose_tracking_techniques(routine):
     waitTime = 80
     playOneFrame = False
     paused = False
-    scaleFactor = 0.5
+    scaleFactor = 1
     resizeWidth = int(1630 * scaleFactor)
     resizeHeight = int(400 * scaleFactor)
+
+    # Create videos
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'DIB ')
+    frameCroppedVid = cv2.VideoWriter(consts.videosRootPath + 'monocap.avi', fourcc, 30.0, (resizeWidth, resizeHeight))
 
     frames = np.zeros(shape=(resizeHeight * techniqueCount, resizeWidth, 3), dtype=np.uint8)  # (h * 3, w, CV_8UC3);
     while 1:
@@ -390,10 +396,11 @@ def compare_pose_tracking_techniques(routine):
                     # Black frame
                     # frame = np.zeros((resizeHeight, resizeWidth, 3), np.uint8)
 
-                cv2.putText(frame, label, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
+                # cv2.putText(frame, label, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255))
                 frames[resizeHeight * techniqueIndex:resizeHeight * (techniqueIndex + 1), 0:resizeWidth] = frame
 
             cv2.imshow(routine.prettyName(), frames)
+            frameCroppedVid.write(frames)
             frameNumberPtr += 1
             if playOneFrame:
                 playOneFrame = False
@@ -420,6 +427,7 @@ def compare_pose_tracking_techniques(routine):
             exit()
 
         if frameNumberPtr >= len(frameNumbers):
+            break
             frameNumberPtr = 0
             imageListPtrs = [0 for _ in range(len(imagesLists))]
 
@@ -453,7 +461,6 @@ def plot_3d(routine):
     # ax.legend()
 
     plt.show()
-
 
 
 # Called by play_frames_of_2_bounces
@@ -496,7 +503,7 @@ def plot_angles_6x2(bounce1, bounce2):
 def plot_angles_6x2_filtering_effect(bounce1):
     print("\nCreating angle comparison plot")
     # Create plot
-    fig, axes = plt.subplots(nrows=2, ncols=6, sharex=True, sharey=True)
+    fig, axes = plt.subplots(nrows=2, ncols=6, figsize=(15, 5), sharex=True, sharey=True)
 
     b1Angles = np.array(json.loads(bounce1.angles))
     b1Angles = np.delete(b1Angles, 8, 0)  # delete "head" angle
@@ -518,13 +525,20 @@ def plot_angles_6x2_filtering_effect(bounce1):
         ax.set_ylim([0, 180])
         # ax.yaxis.set_ticks([0, 30, 60, 90, 120, 150, 180])
         ax.yaxis.set_ticks([0, 90, 180])
+        ax.xaxis.set_ticks([.5, 1])
         # ax.set_title("{} ({:.0f})".format(label, dist))
         ax.set_title("{}".format(label))
 
     # fig.suptitle("Angle Comparison (Total Error: {:.0f})".format(sum(distances_sad)), fontsize=16)
-    fig.suptitle("Angle Comparison", fontsize=16)
-    fig.legend((b1Handle, b2Handle), ('Filtered', 'Unfiltered'))
-    # fig.tight_layout()
+    # fig.suptitle("Angle Comparison", fontsize=16)
+    fig.text(0.5, 0.01, 'Time (s)', ha='center')
+    fig.text(0.08, 0.5, 'Angle (deg)', va='center', rotation=90)
+
+    fig.legend((b1Handle, b2Handle), ('Filtered', 'Unfiltered'), loc=7)
+    # , bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    # fig.tight_layout(pad=0)
+    # fig.subplots_adjust(bottom=.1, right=0.89)  # make room for xlabel and legend
+    fig.subplots_adjust(right=0.89)  # make room for xlabel and legend
 
     plt.show()
 
@@ -551,7 +565,7 @@ def _plot_angles_on_axis(axes, framesInEachAngle):
 
     # Plot angles
     for jointAngles, ax in zip(framesInEachAngle, axes.flat):
-        handle, = ax.plot(range(numFrames), jointAngles)
+        handle, = ax.plot(np.arange(numFrames) / 30., jointAngles)
 
     return handle
 
@@ -788,3 +802,36 @@ def plot_angles_1x6_save_image(bounce):
 #         diff = np.diff([y_mat[i], y_hg[i]], axis=0)
 #         plt.plot(diff[0])
 #     plt.show()
+
+
+def plot_confusion_matrix(df_confusion):
+    from matplotlib import cm
+
+    # from matplotlib import rcParams
+    # rcParams.update({'figure.autolayout': True})
+    # http://stackoverflow.com/questions/24521296/matplotlib-function-conventions-subplots-vs-one-figure
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(4.8, 4.6)
+    # ax.set_title(title)
+
+    cmap = cm.get_cmap('Greys')
+    im = ax.matshow(df_confusion, cmap=cmap)  # imshow
+    # fig.colorbar(im, orientation='horizontal')
+
+    tick_marks = np.arange(len(df_confusion.columns))
+    # plt.xticks(tick_marks, df_confusion.columns, rotation='vertical', verticalalignment='top')
+    plt.xticks(tick_marks, df_confusion.columns, rotation='vertical', family='monospace')
+    plt.yticks(tick_marks, df_confusion.index, family='monospace')
+    ax.xaxis.set_ticks_position('bottom')
+    ax.set_ylabel(df_confusion.index.name)
+    ax.set_xlabel(df_confusion.columns.name)
+
+    fig.tight_layout(pad=0)
+
+    imgName = consts.imvipImgPath + "confusion_matrix.pdf"
+    print("Writing image to {}".format(imgName))
+    plt.savefig(imgName)
+
+    plt.show()
+    return

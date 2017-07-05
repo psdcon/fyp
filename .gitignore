@@ -3,5 +3,11 @@ Files
 *.lnk
 *.pyc
 
+# Ignore Images
+*.jpg
+*.gif
+*.png
+
 msc/
 python/.idea/
+Python/guenole/

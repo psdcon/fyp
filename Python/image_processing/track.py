@@ -2,6 +2,7 @@ import json
 
 import cv2
 import numpy as np
+import time
 
 from helpers import consts
 from helpers import helper_funcs
@@ -129,10 +130,7 @@ def getPersonContour(fgMaskPrevPersonOverlap, contours):
     return personContourConcat, personContours, prevPersonFgMask
 
 
-def highlightPerson(frame, personMask, cx, cy, cropLength):
-    # Get boundary
-    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(frame.shape[0], frame.shape[1], cx, cy, cropLength)
-
+def highlightPerson(frame, personMask, cx, cy, cropLength, frameBlurDarkVid):
     # Dilate the mask
     kernel = np.ones((3, 3), np.uint8)
     personMask = cv2.dilate(personMask, kernel, iterations=3)
@@ -158,6 +156,10 @@ def highlightPerson(frame, personMask, cx, cy, cropLength):
     # Add the two together
     personRevealed = cv2.add(darkBgHole, personRevealed)
 
+    frameBlurDarkVid.write(personRevealed)
+
+    # Get boundary
+    x1, x2, y1, y2 = helper_funcs.crop_points_constrained(frame.shape[0], frame.shape[1], cx, cy, cropLength)
     return personRevealed[y1:y2, x1:x2]
 
 
@@ -245,13 +247,15 @@ def track_gymnast(db, routine):
     # Create videos
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'DIB ')
+    frameOriginalOut = cv2.VideoWriter(consts.videosRootPath + 'framesOriginal.avi', fourcc, 30.0, (capWidth, capHeight))
+    frameBlurDarkVid = cv2.VideoWriter(consts.videosRootPath + 'framesBlurDark.avi', fourcc, 30.0, (capWidth, capHeight))
     fgMaskOut = cv2.VideoWriter(consts.videosRootPath + 'fgMask.avi', fourcc, 30.0, (capWidth, capHeight))
     frameFgMaskMorphedOut = cv2.VideoWriter(consts.videosRootPath + 'frameFgMaskMorphed.avi', fourcc, 30.0, (capWidth, capHeight))
     frameFgMaskMorphedCroppedOut = cv2.VideoWriter(consts.videosRootPath + 'frameFgMaskMorphedCropped.avi', fourcc, 30.0, (capWidth, capHeight))
     bgModelOut = cv2.VideoWriter(consts.videosRootPath + 'bgModel.avi', fourcc, 30.0, (capWidth, capHeight))
     biggestContourOut = cv2.VideoWriter(consts.videosRootPath + 'biggestContour.avi', fourcc, 30.0, (capWidth, capHeight))
     biggestContourWithHullOut = cv2.VideoWriter(consts.videosRootPath + 'biggestContourWithHull.avi', fourcc, 30.0, (capWidth, capHeight))
-    frameWithHullOut = cv2.VideoWriter(consts.videosRootPath + 'frameWithHull.avi', fourcc, 30.0, (capWidth, capHeight))
+    frameWithHullOut = cv2.VideoWriter(consts.videosRootPath + 'frameWithHull&CoM.avi', fourcc, 30.0, (capWidth, capHeight))
 
     # For masking to the right and left of the trampoline
     maskLeftBorder = int(routine.trampoline_center - (trampoline.calcTrampolineEnds(routine.trampoline_width) / 2))
@@ -281,21 +285,23 @@ def track_gymnast(db, routine):
     print("Press ENTER to finish, and ESC/'q' to quit")
 
     lastContours = None  # used to remember last contour if area goes too small
+    start_t = time.time()
     while 1:
         if goOneFrame or not paused:
 
             _ret, frame = cap.read()
+            # frameOriginalOut.write(frame)
 
             # TODO if mask is really noisy (area is large/ high num contours), could increase the learning rate?
             # frame = cv2.bitwise_and(frame, frame, mask=maskAboveTrmpl)
             frameFgMask = pKNN.apply(frame)
-            fgMaskOut.write(frameFgMask)
+            # fgMaskOut.write(frameFgMask)
 
             # Crop fg mask detail to be ROI (region of interest) above the trampoline
             frameFgMaskMorphed = erode_dilate(frameFgMask)
-            frameFgMaskMorphedOut.write(frameFgMaskMorphed)
+            # frameFgMaskMorphedOut.write(frameFgMaskMorphed)
             frameFgMaskMorphed = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=maskAboveTrmpl)
-            frameFgMaskMorphedCroppedOut.write(frameFgMaskMorphed)
+            # frameFgMaskMorphedCroppedOut.write(frameFgMaskMorphed)
 
             # Create mask of the common regions in this and in the prevPersonFgMask
             fgMaskPrevPersonOverlap = cv2.bitwise_and(frameFgMaskMorphed, frameFgMaskMorphed, mask=prevPersonFgMask)
@@ -303,7 +309,7 @@ def track_gymnast(db, routine):
             if visualise:
                 # Show current background model
                 bgModel = pKNN.getBackgroundImage()
-                bgModelOut.write(bgModel)
+                # bgModelOut.write(bgModel)
                 processVisImgs[0:resizeHeight, 0:resizeWidth] = cv2.resize(bgModel, (resizeWidth, resizeHeight))
                 cv2.putText(processVisImgs, 'Background Model', (10, 20), font, 0.4, (255, 255, 255))
                 # Show fg mask
@@ -311,7 +317,6 @@ def track_gymnast(db, routine):
                 cv2.line(frameFgMask4Vis, (0, int(routine.trampoline_top * scalingFactor)), (resizeWidth, int(routine.trampoline_top * scalingFactor)), (0, 255, 0), 1)
                 cv2.putText(frameFgMask4Vis, 'Foreground Mask', (10, 20), font, 0.4, (255, 255, 255))
                 processVisImgs[resizeHeight * 1:resizeHeight * 2, resizeWidth * 0:resizeWidth * 1] = frameFgMask4Vis
-
 
             # Find contours in masked image
             _img, contours, _hierarchy = cv2.findContours(np.copy(frameFgMaskMorphed), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -337,15 +342,14 @@ def track_gymnast(db, routine):
                 # Draw the biggest one in red
                 for contour in personContours:
                     cv2.drawContours(biggestContour, [contour], 0, (0, 0, 255), cv2.FILLED)
-                biggestContourOut.write(biggestContour)
+                # biggestContourOut.write(biggestContour)
 
                 # Draw the outline of the convex blobHull for the person
                 cv2.drawContours(biggestContour, [blobHull], 0, (0, 255, 0), 2)
-                biggestContourWithHullOut.write(biggestContour)
+                # biggestContourWithHullOut.write(biggestContour)
 
                 frameWithHull = np.copy(frame)
                 cv2.drawContours(frameWithHull, [blobHull], 0, (0, 255, 0), 2)
-                frameWithHullOut.write(frameWithHull)
 
                 # Resize and show it
                 biggestContour = cv2.resize(biggestContour, (resizeWidth, resizeHeight))
@@ -385,16 +389,22 @@ def track_gymnast(db, routine):
                     finerPersonMask4Vis = cv2.resize(finerPersonMask4Vis, (resizeWidth, resizeHeight))
                     cv2.imshow('finerPersonMask4Vis', finerPersonMask4Vis)
 
+                    if touchingTrmpl:
+                        cv2.line(frameWithHull, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 255, 0), 3)
+                    else:
+                        cv2.line(frameWithHull, (0, routine.trampoline_top), (routine.video_width, routine.trampoline_top), (0, 0, 255), 3)
+                    cv2.circle(frameWithHull, (cx, cy), 5, (0, 0, 255), -1)
+                    # cv2.imshow("frameWithHull", frameWithHull)
+                    # frameWithHullOut.write(frameWithHull)
+
                     # Show person drawing the center of mass
-                    cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
+                    # cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)
                     # cropLength = helper_funcs.getCropLength(hullLengths.values())
-                    trackedPerson = highlightPerson(frame, finerPersonMask, cx, cy, 250)
+                    trackedPerson = highlightPerson(frame, finerPersonMask, cx, cy, 250, frameBlurDarkVid)
                     trackedPerson = cv2.resize(trackedPerson, (256, 256))
                     cv2.imshow("Track", trackedPerson)
             else:
                 print("Skipping center point. Couldn't find moment")
-            # else:
-            #     print("Skipping everything. Couldn't find contours")
 
             # End stuff
             if visualise:
@@ -456,8 +466,17 @@ def track_gymnast(db, routine):
         if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
             break
 
+        # Calc fps
+        end_t = time.time()
+        time_taken = end_t - start_t
+        start_t = end_t
+        if time_taken != 0:
+            fps = 1. / time_taken
+        print('Loop fps: {}'.format(fps))
+
+
     cap.release()
-    fgMaskOut.release()
+    # fgMaskOut.release()
     cv2.destroyAllWindows()
 
     return centerPoints, hullLengths, trampolineTouches, personMasks

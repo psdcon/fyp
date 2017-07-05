@@ -28,6 +28,7 @@ class Routine(Base):
 
     id = Column(INTEGER, primary_key=True)
     path = Column(TEXT, nullable=False, unique=True)
+    performer_id = Column(INTEGER, ForeignKey('performers.id'))
     use = Column(INTEGER)
     crop_length = Column(INTEGER)  # padding (in pixels) from the center point
     note = Column(TEXT)
@@ -42,12 +43,11 @@ class Routine(Base):
     trampoline_width = Column(INTEGER)
     original_path = Column(TEXT, unique=True)
     has_pose = Column(INTEGER)
-    sex = Column(TEXT)
-    persons_name = Column(TEXT)
 
     frames = relationship("Frame", back_populates='routine')
     bounces = relationship("Bounce", back_populates='routine')
     judgements = relationship("Judgement", back_populates='routine')
+    performer = relationship("Performer", back_populates='routines')
 
     def __init__(self, path, original_path, competition, video_height, video_width, video_fps, frame_count):
         self.path = path
@@ -259,6 +259,30 @@ class Bounce(Base):
     def isJudgeable(self):
         return self.skill_name != "Straight Bounce"  # and self.skill_name != "Broken"
 
+    def shapedSkillName(self):
+        if self.shape is not None:
+            return u"{} {}".format(self.skill_name, self.shape)
+        else:
+            return self.skill_name
+
+    def shapedCodeName(self):
+        if self.shape is not None:
+            return "{}{}".format(self.code_name, self.shape[0].lower())
+        else:
+            return "{} ".format(self.code_name)
+
+    def getSkillSortId(self, db):
+        if self.skill_name == "Straight Bounce":
+            return 0
+        # skill = db.query(Skill).filter_by(Skill.name == self.skill_name).one()
+        sort_id = db.query(Skill.id).filter(Skill.name == self.skill_name).one()[0]
+        if self.shape:
+            if self.shape == 'Pike':
+                sort_id += 0.1
+            elif self.shape == 'Straight':
+                sort_id += 0.2
+        return sort_id
+
     # Used in segment bounces to set up the frame to bounce relationship
     def getFrames(self, db):
         return db.query(Frame).filter(
@@ -421,3 +445,19 @@ class Reference(Base):
     name = Column(TEXT)
 
     bounce = relationship("Bounce")
+
+
+class Performer(Base):
+    __tablename__ = 'performers'
+
+    id = Column(INTEGER, primary_key=True)
+    name = Column(TEXT, nullable=False, unique=True)
+    sex = Column(TEXT)
+
+    routines = relationship("Routine", back_populates='performer')
+
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return "Perf(id=%r, name=%r, sex=%r)" % (self.id, self.name, self.sex)
